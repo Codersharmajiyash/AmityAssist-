@@ -30,12 +30,43 @@ class TestRouterNlp:
 
 
 class TestLifecycleChatRoutes:
+    def test_greeting_gets_helpful_reaction(self, client):
+        session_id = _verify_student(client, "STU001")
+
+        response = client.post(
+            "/api/chat/message",
+            json={"session_id": session_id, "message": "hello"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["state"] == "ASK_REASON"
+        assert data["intent"] == "help"
+        assert "hello" in data["reply"].lower()
+
+    def test_out_of_context_message_gets_guidance(self, client):
+        session_id = _verify_student(client, "STU001")
+
+        response = client.post(
+            "/api/chat/message",
+            json={"session_id": session_id, "message": "write me a movie review"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["state"] == "ASK_REASON"
+        assert data["intent"] == "help"
+        assert "student workflow" in data["reply"].lower()
+
     def test_academic_query_returns_profile_snapshot(self, client):
         session_id = _verify_student(client, "STU001")
 
         response = client.post(
             "/api/chat/message",
-            json={"session_id": session_id, "message": "voice: meri attendance aur cgpa batao"},
+            json={
+                "session_id": session_id,
+                "message": "voice: meri attendance aur cgpa batao",
+            },
         )
 
         assert response.status_code == 200
@@ -51,7 +82,10 @@ class TestLifecycleChatRoutes:
 
         response = client.post(
             "/api/chat/message",
-            json={"session_id": session_id, "message": "Which scholarship am I eligible for?"},
+            json={
+                "session_id": session_id,
+                "message": "Which scholarship am I eligible for?",
+            },
         )
 
         assert response.status_code == 200
@@ -65,7 +99,10 @@ class TestLifecycleChatRoutes:
 
         response = client.post(
             "/api/chat/message",
-            json={"session_id": session_id, "message": "show exam result and backpaper status"},
+            json={
+                "session_id": session_id,
+                "message": "show exam result and backpaper status",
+            },
         )
 
         assert response.status_code == 200
@@ -92,7 +129,10 @@ class TestLifecycleChatRoutes:
 
         description = client.post(
             "/api/chat/message",
-            json={"session_id": session_id, "message": "Course registration is blocked on the portal."},
+            json={
+                "session_id": session_id,
+                "message": "Course registration is blocked on the portal.",
+            },
         )
         assert description.json()["state"] == "GRIEVANCE_CONFIRM"
 
@@ -117,7 +157,10 @@ class TestLifecycleChatRoutes:
 
         response = client.post(
             "/api/chat/message",
-            json={"session_id": session_id, "message": "I want to withdraw and calculate my refund"},
+            json={
+                "session_id": session_id,
+                "message": "I want to withdraw and calculate my refund",
+            },
         )
 
         assert response.status_code == 200

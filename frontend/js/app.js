@@ -8,6 +8,9 @@ const state = {
     course: null,
     profile: null,
     conversationState: null,
+    latestBotReply: "",
+    recognition: null,
+    isListening: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -26,6 +29,20 @@ const charCount = $("char-count");
 const sendBtn = $("send-btn");
 const quickReplies = $("quick-replies");
 const themeToggle = $("theme-toggle");
+const logoutBtn = $("logout-btn");
+const backpaperForm = $("backpaper-form");
+const backpaperExam = $("backpaper-exam");
+const backpaperStatus = $("backpaper-status");
+const scholarshipList = $("scholarship-list");
+const grievanceForm = $("grievance-form");
+const grievanceDescription = $("grievance-description");
+const documentForm = $("document-form");
+const fileUpload = $("file-upload");
+const documentSubmit = $("document-submit");
+const documentStatus = $("document-status");
+const voiceListenBtn = $("voice-listen-btn");
+const voiceSpeakBtn = $("voice-speak-btn");
+const voiceStatus = $("voice-status");
 
 function escapeHtml(str) {
     const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
@@ -129,6 +146,132 @@ async function fetchStudentNotices(studentId) {
     return res.json();
 }
 
+async function apiJson(path, options = {}) {
+    const res = await fetch(`${API_BASE}${path}`, options);
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error (${res.status})`);
+    }
+    return res.json();
+}
+
+async function fetchExams(studentId) {
+    return apiJson(`/api/student/exams?student_id=${encodeURIComponent(studentId)}`);
+}
+
+async function fetchScholarships(studentId) {
+    return apiJson(`/api/student/scholarships?student_id=${encodeURIComponent(studentId)}`);
+}
+
+async function fetchGrievances(studentId) {
+    return apiJson(`/api/student/grievances?student_id=${encodeURIComponent(studentId)}`);
+}
+
+function statusClass(status) {
+    const normalized = String(status || "pending").toLowerCase();
+    if (["pass", "approved", "verified", "clean", "paid", "resolved"].includes(normalized)) return "record-pill--good";
+    if (["fail", "f", "fraud_detected", "rejected", "error"].includes(normalized)) return "record-pill--danger";
+    return "record-pill--pending";
+}
+
+function renderExams(exams) {
+    $("academics-count").textContent = exams.length;
+    const eligible = exams.filter((exam) => !exam.grade || ["F", "D"].includes(String(exam.grade).toUpperCase()));
+
+    if (!exams.length) {
+        $("exam-results").innerHTML = `<p class="muted">No exam records found for this student.</p>`;
+    } else {
+        $("exam-results").innerHTML = exams.map((exam) => `
+          <article class="record-item">
+            <div>
+              <span class="record-item__meta">${escapeHtml(exam.exam_date || "Date pending")}</span>
+              <h3>${escapeHtml(exam.subject_name || "Subject")}</h3>
+              <p>${escapeHtml(exam.subject_code || "Code pending")} - ${escapeHtml(exam.exam_type || "Exam")}</p>
+            </div>
+            <div class="record-item__side">
+              <span class="record-pill ${statusClass(exam.grade)}">Grade ${escapeHtml(exam.grade || "Pending")}</span>
+              <span class="record-pill ${statusClass(exam.backpaper_status)}">${escapeHtml(exam.backpaper_status || "No backpaper")}</span>
+            </div>
+          </article>
+        `).join("");
+    }
+
+    if (!eligible.length) {
+        backpaperExam.innerHTML = `<option value="">No eligible backpapers</option>`;
+        backpaperExam.disabled = true;
+    } else {
+        backpaperExam.disabled = false;
+        backpaperExam.innerHTML = `<option value="">Choose a subject</option>` + eligible.map((exam) => (
+            `<option value="${exam.id}">${escapeHtml(exam.subject_name)} (${escapeHtml(exam.grade || "Pending")})</option>`
+        )).join("");
+    }
+}
+
+function renderScholarships(schemes) {
+    $("scholarship-count").textContent = schemes.length;
+    const eligibleCount = schemes.filter((scheme) => scheme.eligible).length;
+    $("scholarship-readiness").textContent = `${eligibleCount} Eligible`;
+    $("scholarship-readiness-copy").textContent = eligibleCount
+        ? "One-click applications are enabled for eligible schemes."
+        : "No schemes match your current CGPA threshold.";
+
+    if (!schemes.length) {
+        scholarshipList.innerHTML = `<p class="muted">No scholarship schemes are currently published.</p>`;
+        return;
+    }
+
+    scholarshipList.innerHTML = schemes.map((scheme) => {
+        const alreadyApplied = Boolean(scheme.application_status);
+        const disabled = !scheme.eligible || alreadyApplied;
+        const label = alreadyApplied ? `Status: ${scheme.application_status}` : (scheme.eligible ? "Apply Now" : "Not Eligible");
+        return `
+          <article class="record-item">
+            <div>
+              <span class="record-item__meta">Minimum CGPA ${escapeHtml(scheme.eligibility_cgpa)}</span>
+              <h3>${escapeHtml(scheme.name)}</h3>
+              <p>${escapeHtml(scheme.description || "Scholarship details available through student welfare.")}</p>
+            </div>
+            <div class="record-item__side">
+              <span class="record-pill ${scheme.eligible ? "record-pill--good" : "record-pill--pending"}">${scheme.eligible ? "Eligible" : "Review"}</span>
+              <button class="btn btn--compact" type="button" data-scholarship-id="${scheme.id}" ${disabled ? "disabled" : ""}>${escapeHtml(label)}</button>
+            </div>
+          </article>
+        `;
+    }).join("");
+}
+
+function renderGrievances(items) {
+    $("grievance-count").textContent = items.length;
+    if (!items.length) {
+        $("grievance-timeline").innerHTML = `<p class="muted">No grievances filed yet.</p>`;
+        return;
+    }
+
+    $("grievance-timeline").innerHTML = items.map((item) => `
+      <article class="timeline-item">
+        <div class="timeline-item__dot"></div>
+        <div>
+          <span class="record-item__meta">${escapeHtml(item.timestamp || "Submitted")}</span>
+          <h3>${escapeHtml(item.category)} - ${escapeHtml(item.status || "pending")}</h3>
+          <p>${escapeHtml(item.description)}</p>
+          ${item.resolution ? `<p class="timeline-item__resolution">${escapeHtml(item.resolution)}</p>` : ""}
+        </div>
+      </article>
+    `).join("");
+}
+
+async function loadLifecycleModules() {
+    if (!state.studentId) return;
+    const [exams, scholarships, grievances] = await Promise.all([
+        fetchExams(state.studentId),
+        fetchScholarships(state.studentId),
+        fetchGrievances(state.studentId),
+    ]);
+    renderExams(exams);
+    renderScholarships(scholarships);
+    renderGrievances(grievances);
+}
+
 async function verifyStudent(payload) {
     const res = await fetch(`${API_BASE}/api/auth/verify`, {
         method: "POST",
@@ -204,6 +347,8 @@ verifyForm.addEventListener("submit", async (e) => {
         renderStudentBadge(data.student_name, data.course);
         renderDashboard(state.profile);
         fetchStudentNotices(state.studentId).then(renderNotices).catch(() => renderNotices([]));
+        loadLifecycleModules().catch((err) => console.error("[Lifecycle Load Error]", err));
+        document.body.classList.remove("auth-view");
 
         if (data.has_existing_request) {
             $("status-content").innerHTML = `
@@ -238,6 +383,48 @@ function setVerifyLoading(loading) {
     verifyBtn.querySelector(".btn__spinner").hidden = !loading;
 }
 
+function logoutSession() {
+    if (state.recognition && state.isListening) {
+        state.recognition.stop();
+    }
+    if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+    }
+
+    state.isVerified = false;
+    state.sessionId = null;
+    state.studentId = null;
+    state.studentName = null;
+    state.course = null;
+    state.profile = null;
+    state.conversationState = null;
+    state.latestBotReply = "";
+
+    verifyForm.reset();
+    clearVerifyError();
+    studentBadge.innerHTML = "";
+    messagesEl.innerHTML = "";
+    quickReplies.hidden = true;
+    hideTyping();
+
+    messageInput.disabled = false;
+    messageInput.placeholder = "Ask about CGPA, attendance, scholarship, hostel, or withdrawal...";
+    messageInput.value = "";
+    messageInput.style.height = "auto";
+    sendBtn.disabled = true;
+    updateCharCount();
+
+    backpaperStatus.textContent = "";
+    $("grievance-status").textContent = "";
+    documentStatus.textContent = "";
+    $("ocr-results").innerHTML = `<p class="muted">OCR fields and warnings will appear after upload.</p>`;
+    fileUpload.value = "";
+
+    document.body.classList.add("auth-view");
+    switchTab("verify-screen", null);
+    studentIdInput.focus();
+}
+
 function showVerifyError(msg) {
     verifyError.hidden = false;
     verifyError.textContent = msg;
@@ -265,6 +452,10 @@ function appendMessage({ role, text, intent, sentiment }) {
         return;
     }
 
+    if (isBot) {
+        state.latestBotReply = text;
+    }
+
     const initials = isBot ? "AI" : escapeHtml((state.studentName || "?").charAt(0).toUpperCase());
     let metaHtml = "";
 
@@ -289,6 +480,130 @@ function appendMessage({ role, text, intent, sentiment }) {
     messagesEl.appendChild(wrapper);
     scrollToBottom();
 }
+
+backpaperForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.studentId) return;
+    const examId = Number(backpaperExam.value);
+    if (!examId) {
+        backpaperStatus.textContent = "Choose an eligible exam first.";
+        return;
+    }
+
+    backpaperStatus.textContent = "Registering backpaper...";
+    try {
+        const data = await apiJson("/api/student/backpaper", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ student_id: state.studentId, exam_id: examId }),
+        });
+        backpaperStatus.textContent = data.message;
+        renderExams(await fetchExams(state.studentId));
+    } catch (err) {
+        backpaperStatus.textContent = err.message;
+    }
+});
+
+scholarshipList.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-scholarship-id]");
+    if (!btn || !state.studentId) return;
+    btn.disabled = true;
+    btn.textContent = "Applying...";
+    try {
+        await apiJson("/api/student/scholarships/apply", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ student_id: state.studentId, scholarship_id: Number(btn.dataset.scholarshipId) }),
+        });
+        renderScholarships(await fetchScholarships(state.studentId));
+    } catch (err) {
+        btn.textContent = err.message;
+    }
+});
+
+grievanceForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.studentId) return;
+    const description = grievanceDescription.value.trim();
+    if (description.length < 5) {
+        $("grievance-status").textContent = "Please enter at least 5 characters.";
+        return;
+    }
+
+    $("grievance-status").textContent = "Submitting grievance...";
+    try {
+        const data = await apiJson("/api/student/grievances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                student_id: state.studentId,
+                category: $("grievance-category").value,
+                description,
+            }),
+        });
+        $("grievance-status").textContent = data.message;
+        grievanceDescription.value = "";
+        renderGrievances(await fetchGrievances(state.studentId));
+    } catch (err) {
+        $("grievance-status").textContent = err.message;
+    }
+});
+
+function renderOcrResults(data) {
+    const ocr = data.ocr_data || {};
+    const warnings = data.fraud_flags || [];
+    $("ocr-results").innerHTML = `
+      <div class="ocr-header">
+        <span class="record-pill ${statusClass(data.overall_status)}">${escapeHtml(data.overall_status)}</span>
+        <span class="record-pill ${statusClass(data.verification_status)}">${escapeHtml(data.verification_status)}</span>
+      </div>
+      <dl class="ocr-fields">
+        <div><dt>Name</dt><dd>${escapeHtml(ocr.extracted_name || "-")}</dd></div>
+        <div><dt>Student ID</dt><dd>${escapeHtml(ocr.extracted_student_id || "-")}</dd></div>
+        <div><dt>Document</dt><dd>${escapeHtml(ocr.document_type || "-")}</dd></div>
+        <div><dt>Confidence</dt><dd>${Math.round(Number(ocr.confidence_score || 0) * 100)}%</dd></div>
+        <div><dt>Image Quality</dt><dd>${Math.round(Number(ocr.image_quality_score || 0) * 100)}%</dd></div>
+        <div><dt>Signature</dt><dd>${ocr.signature_detected ? "Detected" : "Missing"}</dd></div>
+      </dl>
+      <div class="fraud-box ${warnings.length ? "fraud-box--warn" : "fraud-box--clean"}">
+        <strong>${warnings.length ? "Fraud warnings" : "Fraud screening clean"}</strong>
+        <p>${escapeHtml(warnings.join("; ") || "No tampering, duplicate, or quality warnings detected.")}</p>
+      </div>
+    `;
+}
+
+documentForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!state.studentId) return;
+    if (!fileUpload.files.length) {
+        documentStatus.textContent = "Choose a PDF, JPG, or PNG document.";
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("student_id", state.studentId);
+    formData.append("file", fileUpload.files[0]);
+
+    documentSubmit.disabled = true;
+    documentStatus.textContent = "Scanning document...";
+    $("scan-preview").classList.add("scan-preview--active");
+
+    try {
+        await new Promise((resolve) => setTimeout(resolve, 650));
+        const data = await apiJson("/api/documents/upload", {
+            method: "POST",
+            body: formData,
+        });
+        documentStatus.textContent = data.message;
+        renderOcrResults(data);
+        fileUpload.value = "";
+    } catch (err) {
+        documentStatus.textContent = err.message;
+    } finally {
+        documentSubmit.disabled = false;
+        $("scan-preview").classList.remove("scan-preview--active");
+    }
+});
 
 function scrollToBottom() {
     requestAnimationFrame(() => {
@@ -420,8 +735,91 @@ themeToggle.addEventListener("click", () => {
     setTheme(next);
 });
 
+logoutBtn.addEventListener("click", () => {
+    logoutSession();
+});
+
+function setVoiceStatus(text) {
+    voiceStatus.textContent = text;
+}
+
+function setupVoiceControls() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const speechSupported = "speechSynthesis" in window;
+
+    if (!SpeechRecognition) {
+        voiceListenBtn.disabled = true;
+        setVoiceStatus("Voice input unavailable");
+    } else {
+        state.recognition = new SpeechRecognition();
+        state.recognition.lang = "en-IN";
+        state.recognition.interimResults = false;
+        state.recognition.continuous = false;
+
+        state.recognition.addEventListener("start", () => {
+            state.isListening = true;
+            voiceListenBtn.setAttribute("aria-pressed", "true");
+            voiceListenBtn.textContent = "Stop";
+            setVoiceStatus("Listening...");
+        });
+
+        state.recognition.addEventListener("result", (event) => {
+            const transcript = Array.from(event.results)
+                .map((result) => result[0]?.transcript || "")
+                .join(" ")
+                .trim();
+            if (!transcript) return;
+            messageInput.value = transcript;
+            updateCharCount();
+            setVoiceStatus("Transcript ready");
+            if (state.sessionId) {
+                sendMessage(transcript);
+            }
+        });
+
+        state.recognition.addEventListener("end", () => {
+            state.isListening = false;
+            voiceListenBtn.setAttribute("aria-pressed", "false");
+            voiceListenBtn.textContent = "Mic";
+            if (voiceStatus.textContent === "Listening...") setVoiceStatus("Voice ready");
+        });
+
+        state.recognition.addEventListener("error", () => {
+            setVoiceStatus("Voice input blocked");
+        });
+    }
+
+    if (!speechSupported) {
+        voiceSpeakBtn.disabled = true;
+        if (!SpeechRecognition) setVoiceStatus("Voice unavailable");
+    }
+}
+
+voiceListenBtn.addEventListener("click", () => {
+    if (!state.recognition) return;
+    if (state.isListening) {
+        state.recognition.stop();
+    } else {
+        state.recognition.start();
+    }
+});
+
+voiceSpeakBtn.addEventListener("click", () => {
+    if (!("speechSynthesis" in window)) return;
+    const text = state.latestBotReply || "Verify your identity, then ask Amity Advisor for help.";
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.rate = 0.96;
+    utterance.onstart = () => setVoiceStatus("Speaking...");
+    utterance.onend = () => setVoiceStatus("Voice ready");
+    utterance.onerror = () => setVoiceStatus("Speech blocked");
+    window.speechSynthesis.speak(utterance);
+});
+
 (function init() {
     setTheme("light");
     updateCharCount();
+    setupVoiceControls();
     studentIdInput.focus();
 })();

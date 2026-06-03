@@ -87,7 +87,7 @@ _ROUTER_KEYWORDS: dict[str, list[str]] = {
     "academics": [
         "academic", "academics", "cgpa", "gpa", "attendance", "performance",
         "semester", "course", "subject", "marks", "kitna cgpa", "attendance bata",
-        "padhai", "class",
+        "padhai", "class", "profile", "student info", "my info", "student details",
     ],
     "scholarships": [
         "scholarship", "fellowship", "merit", "fee waiver", "eligible",

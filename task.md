@@ -22,13 +22,13 @@ We will execute the development of AmityAssist in 6 structured phases. We will v
     - `[x]` Update `frontend/index.html` structure with the new widgets: personalized welcome, circular academic progress, fee outstanding, hostel allocation status, and targeted notices.
     - `[x]` Implement client-side theme toggling and tab navigation.
     - `[x]` Verify UI rendering and basic styling.
-- `[ ]` Phase 5: Student Lifecycle View Modules & Voice AI
-    - `[ ]` Implement Academics tab (exam results and backpaper registration form).
-    - `[ ]` Implement Scholarship Hub tab (scheme discovery and one-click application).
-    - `[ ]` Implement Grievance Desk tab (timeline status tracker).
-    - `[ ]` Implement Document AI simulation panel (scanning overlay, OCR field results, and fraud warnings).
-    - `[ ]` Add voice synthesis and transcription (Web Speech API) inside floating widget.
-    - `[ ]` Verify mock document upload, voice toggle, and forms submittal.
+- `[x]` Phase 5: Student Lifecycle View Modules & Voice AI
+    - `[x]` Implement Academics tab (exam results and backpaper registration form).
+    - `[x]` Implement Scholarship Hub tab (scheme discovery and one-click application).
+    - `[x]` Implement Grievance Desk tab (timeline status tracker).
+    - `[x]` Implement Document AI simulation panel (scanning overlay, OCR field results, and fraud warnings).
+    - `[x]` Add voice synthesis and transcription (Web Speech API) inside floating widget.
+    - `[x]` Verify mock document upload, voice toggle, and forms submittal.
 - `[ ]` Phase 6: Multi-Role Staff Portal & E2E Verification
     - `[ ]` Design and implement Staff Portal tab (approval center, grievance responses, and document audit records).
     - `[ ]` Hook up staff portal buttons to backend endpoints.

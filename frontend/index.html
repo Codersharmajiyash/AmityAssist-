@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body>
+<body class="auth-view">
   <div class="bg-canvas" aria-hidden="true"></div>
 
   <div class="app-shell">
@@ -31,16 +31,28 @@
           <span class="nav-icon" aria-hidden="true">01</span>
           Dashboard
         </a>
-        <a href="#" class="sidebar__nav-item" onclick="switchTab('chat-screen', this)" id="nav-chat">
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('academics-screen', this)" id="nav-academics">
           <span class="nav-icon" aria-hidden="true">02</span>
+          Academics
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('scholarship-screen', this)" id="nav-scholarship">
+          <span class="nav-icon" aria-hidden="true">03</span>
+          Scholarships
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('grievance-screen', this)" id="nav-grievance">
+          <span class="nav-icon" aria-hidden="true">04</span>
+          Grievance Desk
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('chat-screen', this)" id="nav-chat">
+          <span class="nav-icon" aria-hidden="true">05</span>
           AI Advisor
         </a>
         <a href="#" class="sidebar__nav-item" onclick="switchTab('status-screen', this)" id="nav-status">
-          <span class="nav-icon" aria-hidden="true">03</span>
+          <span class="nav-icon" aria-hidden="true">06</span>
           Request Status
         </a>
         <a href="#" class="sidebar__nav-item" onclick="switchTab('document-screen', this)" id="nav-document">
-          <span class="nav-icon" aria-hidden="true">04</span>
+          <span class="nav-icon" aria-hidden="true">07</span>
           Document Center
         </a>
       </nav>
@@ -66,6 +78,7 @@
             <span class="theme-toggle__track"><span class="theme-toggle__thumb"></span></span>
             <span class="theme-toggle__text">Dark</span>
           </button>
+          <button id="logout-btn" type="button" class="btn btn--compact btn--logout" aria-label="Log out from current session">Logout</button>
         </div>
       </header>
 
@@ -170,6 +183,99 @@
         </div>
       </section>
 
+      <section id="academics-screen" class="screen module-screen" aria-label="Academics" hidden>
+        <div class="module-grid">
+          <article class="glass-card module-card module-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Academics</p>
+                <h2>Exam Results</h2>
+              </div>
+              <span id="academics-count" class="count-pill">0</span>
+            </div>
+            <div id="exam-results" class="records-list">
+              <p class="muted">Verify to load exam results and backpaper status.</p>
+            </div>
+          </article>
+
+          <article class="glass-card module-card">
+            <p class="eyebrow">Backpaper</p>
+            <h2>Registration Form</h2>
+            <form id="backpaper-form" class="module-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="backpaper-exam">Eligible subject</label>
+                <select id="backpaper-exam" class="form-input" required>
+                  <option value="">Load eligible exams</option>
+                </select>
+              </div>
+              <button class="btn btn--primary btn--full" type="submit">Register Backpaper</button>
+              <p id="backpaper-status" class="form-status" aria-live="polite"></p>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section id="scholarship-screen" class="screen module-screen" aria-label="Scholarship Hub" hidden>
+        <div class="module-grid">
+          <article class="glass-card module-card module-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Scholarship Hub</p>
+                <h2>Scheme Discovery</h2>
+              </div>
+              <span id="scholarship-count" class="count-pill">0</span>
+            </div>
+            <div id="scholarship-list" class="records-list">
+              <p class="muted">Verify to discover eligible scholarship schemes.</p>
+            </div>
+          </article>
+          <article class="glass-card module-card highlight-card">
+            <p class="eyebrow">Readiness</p>
+            <h2 id="scholarship-readiness">Pending</h2>
+            <p id="scholarship-readiness-copy" class="utility-copy">Eligibility and applications will appear after verification.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="grievance-screen" class="screen module-screen" aria-label="Grievance Desk" hidden>
+        <div class="module-grid">
+          <article class="glass-card module-card">
+            <p class="eyebrow">Grievance Desk</p>
+            <h2>Raise a Ticket</h2>
+            <form id="grievance-form" class="module-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="grievance-category">Category</label>
+                <select id="grievance-category" class="form-input" required>
+                  <option value="academic">Academic</option>
+                  <option value="fee">Fee</option>
+                  <option value="hostel">Hostel</option>
+                  <option value="exam">Exam</option>
+                  <option value="scholarship">Scholarship</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="grievance-description">Description</label>
+                <textarea id="grievance-description" class="form-input module-textarea" minlength="5" maxlength="2000" placeholder="Describe the issue for the concerned office." required></textarea>
+              </div>
+              <button class="btn btn--primary btn--full" type="submit">Submit Grievance</button>
+              <p id="grievance-status" class="form-status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="glass-card module-card module-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Timeline</p>
+                <h2>Status Tracker</h2>
+              </div>
+              <span id="grievance-count" class="count-pill">0</span>
+            </div>
+            <div id="grievance-timeline" class="timeline">
+              <p class="muted">Your submitted grievances will appear here.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section id="chat-screen" class="screen chat-screen" aria-label="AI advisor conversation" hidden>
         <header class="chat-header">
           <div class="chat-header__bot">
@@ -213,18 +319,41 @@
       </section>
 
       <section id="document-screen" class="screen utility-screen" aria-label="Document Verification" hidden>
-        <div class="glass-card utility-card">
-          <p class="eyebrow">Document Center</p>
-          <h2>Upload Documents</h2>
-          <p class="utility-copy">Upload medical certificates, ID proof, or supporting files for staff review. Document AI simulation arrives in Phase 5.</p>
-          <div class="form-group">
-            <input type="file" id="file-upload" class="form-input" accept=".pdf,.jpg,.jpeg,.png" />
-          </div>
-          <button class="btn btn--primary btn--full" onclick="document.getElementById('file-upload').value = ''; alert('Document uploaded successfully for review!')">Secure Upload</button>
+        <div class="document-grid">
+          <article class="glass-card utility-card">
+            <p class="eyebrow">Document AI</p>
+            <h2>Upload & Scan</h2>
+            <p class="utility-copy">Upload medical certificates, ID proof, or supporting files for OCR extraction and mock fraud screening.</p>
+            <form id="document-form" class="module-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="file-upload">Document file</label>
+                <input type="file" id="file-upload" class="form-input" accept=".pdf,.jpg,.jpeg,.png" required />
+              </div>
+              <button id="document-submit" class="btn btn--primary btn--full" type="submit">Secure Upload</button>
+              <p id="document-status" class="form-status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="glass-card scan-card">
+            <div class="scan-preview" id="scan-preview" aria-label="Document scanning preview">
+              <div class="scan-preview__paper">
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <div id="scan-beam" class="scan-preview__beam"></div>
+            </div>
+            <div id="ocr-results" class="ocr-results">
+              <p class="muted">OCR fields and warnings will appear after upload.</p>
+            </div>
+          </article>
         </div>
       </section>
     </main>
   </div>
+
+  <aside class="voice-widget" aria-label="Voice AI controls">
+    <button id="voice-listen-btn" class="voice-widget__button" type="button" aria-label="Start voice transcription" aria-pressed="false">Mic</button>
+    <button id="voice-speak-btn" class="voice-widget__button" type="button" aria-label="Read latest advisor reply">Speak</button>
+    <span id="voice-status" class="voice-widget__status" aria-live="polite">Voice ready</span>
+  </aside>
 
   <script src="js/app.js"></script>
 </body>
