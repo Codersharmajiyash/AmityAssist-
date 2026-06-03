@@ -22,7 +22,13 @@ from typing import Optional
 
 from ..database.connection import get_connection
 from ..models.schemas import ChatResponse
-from .nlp_service import classify_intent, detect_language, is_voice_command, route_intent, score_sentiment
+from .nlp_service import (
+    classify_intent,
+    detect_language,
+    is_voice_command,
+    route_intent,
+    score_sentiment,
+)
 
 # ---------------------------------------------------------------------------
 # In-memory session registry  {session_id: SessionData}
@@ -116,14 +122,58 @@ _SUGGESTIONS: dict[str, str] = {
     ),
 }
 
-_POSITIVE_SIGNALS = {"yes", "yeah", "yep", "sure", "ok", "okay", "agree", "please", "try", "interested", "help"}
-_NEGATIVE_SIGNALS = {"no", "nope", "nah", "none", "still", "withdraw", "proceed", "want to leave", "decided"}
+_POSITIVE_SIGNALS = {
+    "yes",
+    "yeah",
+    "yep",
+    "sure",
+    "ok",
+    "okay",
+    "agree",
+    "please",
+    "try",
+    "interested",
+    "help",
+}
+_NEGATIVE_SIGNALS = {
+    "no",
+    "nope",
+    "nah",
+    "none",
+    "still",
+    "withdraw",
+    "proceed",
+    "want to leave",
+    "decided",
+}
 _GRIEVANCE_CATEGORIES = {"academic", "fee", "hostel", "exam", "scholarship"}
+_GREETING_SIGNALS = {
+    "hi",
+    "hello",
+    "hey",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "namaste",
+}
+_GREETING_SIGNALS = {
+    "hello",
+    "hi",
+    "hey",
+    "hii",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "namaste",
+    "namaskar",
+    "hola",
+}
 
 
 # ---------------------------------------------------------------------------
 # Persistence helpers
 # ---------------------------------------------------------------------------
+
 
 def _log_message(
     student_id: str,
@@ -159,6 +209,43 @@ def _fetch_student(student_id: str) -> Optional[dict]:
     return dict(row) if row else None
 
 
+def _is_greeting(raw_message: str) -> bool:
+    lower = raw_message.lower().strip()
+    cleaned = lower.strip(" .,!?\t\r\n")
+    return cleaned in _GREETING_SIGNALS or any(
+        cleaned.startswith(f"{item} ") for item in _GREETING_SIGNALS
+    )
+
+
+def _handle_greeting(session: dict, language: str, voice: bool) -> ChatResponse:
+    student_id = session["student_id"]
+    student = _fetch_student(student_id)
+    prefix = _language_prefix(language, voice)
+    name = student["name"].split()[0] if student else "there"
+    reply = (
+        f"{prefix}Hello {name}. I can help with your CGPA, attendance, exams, "
+        "scholarships, grievances, documents, hostel, fee status, notices, "
+        "internships, or withdrawal/refund questions."
+    )
+    _log_message(student_id, reply, "bot", "help", "positive")
+    return ChatResponse(
+        reply=reply, state="ROUTED", intent="help", sentiment="positive"
+    )
+
+
+def _handle_out_of_scope(session: dict, language: str, voice: bool) -> ChatResponse:
+    student_id = session["student_id"]
+    prefix = _language_prefix(language, voice)
+    reply = (
+        f"{prefix}I am designed for AmityAssist student portal support, so I cannot help much with that topic here. "
+        "Ask me about CGPA, attendance, exams, backpapers, scholarships, grievances, documents, hostel, fee dues, notices, internships, or withdrawal support."
+    )
+    _log_message(student_id, reply, "bot", "unknown", "neutral")
+    return ChatResponse(
+        reply=reply, state="ROUTED", intent="unknown", sentiment="neutral"
+    )
+
+
 def _fetch_exam_summary(student_id: str) -> list[dict]:
     conn = get_connection()
     rows = conn.execute(
@@ -170,7 +257,9 @@ def _fetch_exam_summary(student_id: str) -> list[dict]:
 
 def _fetch_scholarship_summary(student_id: str, cgpa: float) -> list[dict]:
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM scholarships ORDER BY eligibility_cgpa DESC").fetchall()
+    rows = conn.execute(
+        "SELECT * FROM scholarships ORDER BY eligibility_cgpa DESC"
+    ).fetchall()
     applied = conn.execute(
         "SELECT scholarship_id, status FROM scholarship_applications WHERE student_id = ?",
         (student_id,),
@@ -210,7 +299,9 @@ def _fetch_internships(cgpa: float) -> list[dict]:
     return internships
 
 
-def _find_named_item(items: list[dict], raw_message: str, name_key: str = "name") -> Optional[dict]:
+def _find_named_item(
+    items: list[dict], raw_message: str, name_key: str = "name"
+) -> Optional[dict]:
     lower = raw_message.lower()
     for item in items:
         name = str(item.get(name_key, "")).lower()
@@ -299,16 +390,43 @@ def _language_prefix(language: str, voice: bool) -> str:
 def _is_lifecycle_query(raw_message: str, voice: bool) -> bool:
     lower = raw_message.lower()
     command_markers = (
-        "show", "which", "eligible", "status", "file", "register", "apply",
-        "admit card", "datesheet", "backpaper", "back paper", "cgpa",
-        "attendance", "bata", "batao", "help", "complaint", "grievance",
-        "result", "notice", "fee", "fees", "hostel", "document", "upload",
-        "internship", "placement", "apply", "room", "dues",
+        "show",
+        "which",
+        "eligible",
+        "status",
+        "file",
+        "register",
+        "apply",
+        "admit card",
+        "datesheet",
+        "backpaper",
+        "back paper",
+        "cgpa",
+        "attendance",
+        "bata",
+        "batao",
+        "help",
+        "complaint",
+        "grievance",
+        "result",
+        "notice",
+        "fee",
+        "fees",
+        "hostel",
+        "document",
+        "upload",
+        "internship",
+        "placement",
+        "apply",
+        "room",
+        "dues",
     )
     return voice or any(marker in lower for marker in command_markers)
 
 
-def _route_lifecycle_message(session: dict, raw_message: str, language: str, voice: bool) -> Optional[ChatResponse]:
+def _route_lifecycle_message(
+    session: dict, raw_message: str, language: str, voice: bool
+) -> Optional[ChatResponse]:
     student_id = session["student_id"]
     routed_intent = route_intent(raw_message)
     sentiment = score_sentiment(raw_message)
@@ -319,6 +437,21 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
         return None
     if not _is_lifecycle_query(raw_message, voice):
         return None
+    if routed_intent == "fees":
+        lower = raw_message.lower()
+        withdrawal_fee_markers = (
+            "cannot afford",
+            "can't afford",
+            "cant afford",
+            "unable to pay",
+            "withdraw",
+            "withdrawal",
+            "leave",
+            "quit",
+            "drop out",
+        )
+        if any(marker in lower for marker in withdrawal_fee_markers):
+            return None
 
     if routed_intent == "help":
         reply = (
@@ -328,7 +461,9 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
             "for eligible scholarships, and register eligible back papers after confirmation."
         )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "academics" and student:
         reply = (
@@ -338,7 +473,9 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
             "For back papers or admit cards, ask about exams."
         )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "exams":
         exams = _fetch_exam_summary(student_id)
@@ -348,7 +485,10 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
             upcoming = [exam for exam in exams if exam["grade"] is None]
             backpapers = [exam for exam in exams if exam["grade"] in ("F", "D")]
             selected = _find_named_item(backpapers, raw_message, "subject_name")
-            wants_register = any(word in raw_message.lower() for word in ("register", "apply", "book", "submit"))
+            wants_register = any(
+                word in raw_message.lower()
+                for word in ("register", "apply", "book", "submit")
+            )
             if selected and wants_register:
                 session["pending_exam_id"] = selected["id"]
                 session["state"] = "BACKPAPER_CONFIRM"
@@ -357,39 +497,60 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
                     f"({selected['subject_code']}). Type CONFIRM to register it, or CANCEL."
                 )
                 _log_message(student_id, reply, "bot", routed_intent, sentiment)
-                return ChatResponse(reply=reply, state="CONFIRM", intent=routed_intent, sentiment=sentiment)
+                return ChatResponse(
+                    reply=reply,
+                    state="CONFIRM",
+                    intent=routed_intent,
+                    sentiment=sentiment,
+                )
 
             lines = []
             if upcoming:
                 next_exam = upcoming[0]
-                lines.append(f"Next exam: {next_exam['subject_name']} on {next_exam['exam_date']}.")
+                lines.append(
+                    f"Next exam: {next_exam['subject_name']} on {next_exam['exam_date']}."
+                )
             if backpapers:
                 names = ", ".join(exam["subject_name"] for exam in backpapers[:3])
-                lines.append(f"Back-paper eligible subjects: {names}. Say 'register backpaper for subject name' to start.")
+                lines.append(
+                    f"Back-paper eligible subjects: {names}. Say 'register backpaper for subject name' to start."
+                )
             if not lines:
-                lines.append("All listed exam records are completed with no pending back-paper action.")
+                lines.append(
+                    "All listed exam records are completed with no pending back-paper action."
+                )
             reply = prefix + " ".join(lines)
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "scholarships" and student:
         schemes = _fetch_scholarship_summary(student_id, float(student["cgpa"]))
         eligible = [scheme for scheme in schemes if scheme["eligible"]]
-        wants_apply = any(word in raw_message.lower() for word in ("apply", "submit", "register"))
+        wants_apply = any(
+            word in raw_message.lower() for word in ("apply", "submit", "register")
+        )
         selected = _find_named_item(eligible, raw_message)
         if wants_apply and selected:
             reply = prefix + _apply_scholarship(student_id, selected)
             _log_message(student_id, reply, "bot", routed_intent, sentiment)
-            return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+            return ChatResponse(
+                reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+            )
         if wants_apply and len(eligible) == 1:
             reply = prefix + _apply_scholarship(student_id, eligible[0])
             _log_message(student_id, reply, "bot", routed_intent, sentiment)
-            return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+            return ChatResponse(
+                reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+            )
         if wants_apply and len(eligible) > 1:
             names = ", ".join(scheme["name"] for scheme in eligible)
             reply = f"{prefix}You are eligible for multiple schemes: {names}. Please say which one you want to apply for."
             _log_message(student_id, reply, "bot", routed_intent, sentiment)
-            return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+            return ChatResponse(
+                reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+            )
         if eligible:
             names = ", ".join(scheme["name"] for scheme in eligible)
             reply = (
@@ -397,13 +558,17 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
                 "Say 'apply for scheme name' and I can submit it from chat."
             )
         else:
-            minimum = min(scheme["eligibility_cgpa"] for scheme in schemes) if schemes else 0
+            minimum = (
+                min(scheme["eligibility_cgpa"] for scheme in schemes) if schemes else 0
+            )
             reply = (
                 f"{prefix}Your current CGPA is {student['cgpa']}. "
                 f"The lowest listed scholarship threshold is {minimum}."
             )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "fees" and student:
         due = float(student.get("fee_due") or 0)
@@ -415,7 +580,9 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
         else:
             reply = f"{prefix}Your fee status is {student['fee_status']}. There are no outstanding dues on your profile."
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "hostel" and student:
         reply = (
@@ -423,7 +590,9 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
             "If this is incorrect or you need a room change, say 'file hostel complaint' and I will file a grievance."
         )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "notices" and student:
         notices = _fetch_notices(student)
@@ -432,11 +601,17 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
                 f"{notice['title']} ({notice['category']}): {notice['content']}"
                 for notice in notices[:3]
             ]
-            reply = prefix + "Here are your latest targeted notices:\n- " + "\n- ".join(lines)
+            reply = (
+                prefix
+                + "Here are your latest targeted notices:\n- "
+                + "\n- ".join(lines)
+            )
         else:
             reply = f"{prefix}No targeted notices are currently available for your branch and semester."
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "internships" and student:
         internships = _fetch_internships(float(student["cgpa"]))
@@ -448,11 +623,17 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
                 f"{item['title']} at {item['company']} - stipend {item['stipend']}, deadline {item['deadline']}"
                 for item in pool[:3]
             ]
-            reply = prefix + f"Based on CGPA {student['cgpa']}, these {label} match your profile:\n- " + "\n- ".join(lines)
+            reply = (
+                prefix
+                + f"Based on CGPA {student['cgpa']}, these {label} match your profile:\n- "
+                + "\n- ".join(lines)
+            )
         else:
             reply = f"{prefix}I could not find internship postings right now."
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "documents":
         reply = (
@@ -460,7 +641,9 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
             "After upload, Document AI simulation checks OCR fields, image quality, duplicate risk, signature/stamp presence, and fraud flags."
         )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment
+        )
 
     if routed_intent == "grievances":
         session["state"] = "GRIEVANCE_CATEGORY"
@@ -469,7 +652,12 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
             "Choose one category: academic, fee, hostel, exam, or scholarship."
         )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
-        return ChatResponse(reply=reply, state="GRIEVANCE_CATEGORY", intent=routed_intent, sentiment=sentiment)
+        return ChatResponse(
+            reply=reply,
+            state="GRIEVANCE_CATEGORY",
+            intent=routed_intent,
+            sentiment=sentiment,
+        )
 
     return None
 
@@ -481,34 +669,62 @@ def _handle_grievance_state(session: dict, raw_message: str) -> ChatResponse:
     normalised = raw_message.lower().strip()
 
     if state == "GRIEVANCE_CATEGORY":
-        category = next((item for item in _GRIEVANCE_CATEGORIES if item in normalised), None)
+        category = next(
+            (item for item in _GRIEVANCE_CATEGORIES if item in normalised), None
+        )
         if category is None:
             reply = "Please choose one category: academic, fee, hostel, exam, or scholarship."
             _log_message(student_id, reply, "bot", "grievances", sentiment)
-            return ChatResponse(reply=reply, state="GRIEVANCE_CATEGORY", intent="grievances", sentiment=sentiment)
+            return ChatResponse(
+                reply=reply,
+                state="GRIEVANCE_CATEGORY",
+                intent="grievances",
+                sentiment=sentiment,
+            )
         session["grievance_category"] = category
         session["state"] = "GRIEVANCE_DESCRIPTION"
-        reply = f"Got it: {category}. Please describe the issue in one or two sentences."
+        reply = (
+            f"Got it: {category}. Please describe the issue in one or two sentences."
+        )
         _log_message(student_id, reply, "bot", "grievances", sentiment)
-        return ChatResponse(reply=reply, state="GRIEVANCE_DESCRIPTION", intent="grievances", sentiment=sentiment)
+        return ChatResponse(
+            reply=reply,
+            state="GRIEVANCE_DESCRIPTION",
+            intent="grievances",
+            sentiment=sentiment,
+        )
 
     if state == "GRIEVANCE_DESCRIPTION":
         if len(raw_message.strip()) < 5:
             reply = "Please add a little more detail so the right office can act on it."
             _log_message(student_id, reply, "bot", "grievances", sentiment)
-            return ChatResponse(reply=reply, state="GRIEVANCE_DESCRIPTION", intent="grievances", sentiment=sentiment)
+            return ChatResponse(
+                reply=reply,
+                state="GRIEVANCE_DESCRIPTION",
+                intent="grievances",
+                sentiment=sentiment,
+            )
         session["grievance_description"] = raw_message.strip()
         session["state"] = "GRIEVANCE_CONFIRM"
         reply = "I have the grievance details. Type CONFIRM to file it, or CANCEL to discard it."
         _log_message(student_id, reply, "bot", "grievances", sentiment)
-        return ChatResponse(reply=reply, state="GRIEVANCE_CONFIRM", intent="grievances", sentiment=sentiment)
+        return ChatResponse(
+            reply=reply,
+            state="GRIEVANCE_CONFIRM",
+            intent="grievances",
+            sentiment=sentiment,
+        )
 
     if state == "GRIEVANCE_CONFIRM":
         if raw_message.strip().upper() == "CONFIRM":
             conn = get_connection()
             conn.execute(
                 "INSERT INTO grievances (student_id, category, description) VALUES (?, ?, ?)",
-                (student_id, session["grievance_category"], session["grievance_description"]),
+                (
+                    student_id,
+                    session["grievance_category"],
+                    session["grievance_description"],
+                ),
             )
             conn.commit()
             session["state"] = "ASK_REASON"
@@ -516,19 +732,36 @@ def _handle_grievance_state(session: dict, raw_message: str) -> ChatResponse:
             session["grievance_description"] = None
             reply = "Your grievance has been filed successfully. You will receive a response within 3 working days."
             _log_message(student_id, reply, "bot", "grievances", sentiment)
-            return ChatResponse(reply=reply, state="RESOLVED", intent="grievances", sentiment=sentiment)
+            return ChatResponse(
+                reply=reply, state="RESOLVED", intent="grievances", sentiment=sentiment
+            )
         if raw_message.strip().upper() == "CANCEL":
             session["state"] = "ASK_REASON"
             session["grievance_category"] = None
             session["grievance_description"] = None
             reply = "Grievance filing cancelled. No record was created."
             _log_message(student_id, reply, "bot", "grievances", sentiment)
-            return ChatResponse(reply=reply, state="ASK_REASON", intent="grievances", sentiment=sentiment)
+            return ChatResponse(
+                reply=reply,
+                state="ASK_REASON",
+                intent="grievances",
+                sentiment=sentiment,
+            )
         reply = "Please type CONFIRM to file the grievance, or CANCEL to discard it."
         _log_message(student_id, reply, "bot", "grievances", sentiment)
-        return ChatResponse(reply=reply, state="GRIEVANCE_CONFIRM", intent="grievances", sentiment=sentiment)
+        return ChatResponse(
+            reply=reply,
+            state="GRIEVANCE_CONFIRM",
+            intent="grievances",
+            sentiment=sentiment,
+        )
 
-    return ChatResponse(reply="Invalid grievance state.", state="INVALID", intent="grievances", sentiment=sentiment)
+    return ChatResponse(
+        reply="Invalid grievance state.",
+        state="INVALID",
+        intent="grievances",
+        sentiment=sentiment,
+    )
 
 
 def _handle_backpaper_state(session: dict, raw_message: str) -> ChatResponse:
@@ -538,27 +771,38 @@ def _handle_backpaper_state(session: dict, raw_message: str) -> ChatResponse:
 
     if normalised == "CONFIRM":
         exam_id = session.get("pending_exam_id")
-        reply = _register_backpaper(exam_id) if exam_id else "I could not find a pending back-paper registration."
+        reply = (
+            _register_backpaper(exam_id)
+            if exam_id
+            else "I could not find a pending back-paper registration."
+        )
         session["pending_exam_id"] = None
         session["state"] = "ASK_REASON"
         _log_message(student_id, reply, "bot", "exams", sentiment)
-        return ChatResponse(reply=reply, state="ASK_REASON", intent="exams", sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ASK_REASON", intent="exams", sentiment=sentiment
+        )
 
     if normalised == "CANCEL":
         session["pending_exam_id"] = None
         session["state"] = "ASK_REASON"
         reply = "Back-paper registration cancelled. No exam record was changed."
         _log_message(student_id, reply, "bot", "exams", sentiment)
-        return ChatResponse(reply=reply, state="ASK_REASON", intent="exams", sentiment=sentiment)
+        return ChatResponse(
+            reply=reply, state="ASK_REASON", intent="exams", sentiment=sentiment
+        )
 
     reply = "Please type CONFIRM to register the back paper, or CANCEL to discard it."
     _log_message(student_id, reply, "bot", "exams", sentiment)
-    return ChatResponse(reply=reply, state="CONFIRM", intent="exams", sentiment=sentiment)
+    return ChatResponse(
+        reply=reply, state="CONFIRM", intent="exams", sentiment=sentiment
+    )
 
 
 # ---------------------------------------------------------------------------
 # Core FSM
 # ---------------------------------------------------------------------------
+
 
 def process_message(session_id: str, raw_message: str) -> ChatResponse:
     """
@@ -591,19 +835,46 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
     if state == "BACKPAPER_CONFIRM":
         return _handle_backpaper_state(session, raw_message)
 
+    if state == "ASK_REASON" and _is_greeting(raw_message):
+        reply = (
+            "Hello! I am here to help with your student activities. "
+            "You can ask about CGPA, attendance, exams, scholarships, grievances, "
+            "documents, fees, hostel status, internships, or withdrawals."
+        )
+        _log_message(student_id, reply, "bot", "help", "positive")
+        return ChatResponse(
+            reply=reply, state="ASK_REASON", intent="help", sentiment="positive"
+        )
+
     if state == "SUGGEST":
-        routed_response = _route_lifecycle_message(session, raw_message, language, voice)
+        routed_response = _route_lifecycle_message(
+            session, raw_message, language, voice
+        )
         if routed_response is not None:
             return routed_response
 
     # ── State: ASK_REASON ────────────────────────────────────────────────────
     if state == "ASK_REASON":
-        routed_response = _route_lifecycle_message(session, raw_message, language, voice)
+        routed_response = _route_lifecycle_message(
+            session, raw_message, language, voice
+        )
         if routed_response is not None:
             return routed_response
 
         intent = classify_intent(raw_message)
+        routed_intent = route_intent(raw_message)
         sentiment = score_sentiment(raw_message)
+
+        if intent == "unclear" and routed_intent == "unknown":
+            reply = (
+                "I could not map that to a supported student workflow yet. "
+                "Please ask about academics, scholarships, grievances, documents, "
+                "fees, hostel, internships, or withdrawal help."
+            )
+            _log_message(student_id, reply, "bot", "help", sentiment)
+            return ChatResponse(
+                reply=reply, state="ASK_REASON", intent="help", sentiment=sentiment
+            )
 
         session["intent"] = intent
         session["reason"] = raw_message
@@ -633,11 +904,30 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
     elif state == "SUGGEST":
         intent = session.get("intent") or "unclear"
         sentiment = score_sentiment(raw_message)
+        routed_intent = route_intent(raw_message)
+        withdrawal_intent = classify_intent(raw_message)
         tokens = set(raw_message.lower().split())
 
         wants_alternative = bool(tokens & _POSITIVE_SIGNALS) and not bool(
             tokens & {"withdraw", "still", "proceed", "leave", "quit"}
         )
+        explicit_decline = bool(tokens & _NEGATIVE_SIGNALS)
+
+        if (
+            routed_intent == "unknown"
+            and withdrawal_intent == "unclear"
+            and not wants_alternative
+            and not explicit_decline
+        ):
+            bot_reply = (
+                "I am not able to help with that topic yet. "
+                "Please ask about student workflows like academics, scholarships, grievances, "
+                "documents, fees, hostel, internships, or withdrawal support."
+            )
+            _log_message(student_id, bot_reply, "bot", "help", sentiment)
+            return ChatResponse(
+                reply=bot_reply, state="SUGGEST", intent="help", sentiment=sentiment
+            )
 
         if wants_alternative:
             invalidate_session(session_id)
@@ -649,7 +939,9 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
                 "Is there anything else I can help you with today?"
             )
             _log_message(student_id, bot_reply, "bot", intent, sentiment)
-            return ChatResponse(reply=bot_reply, state="RESOLVED", intent=intent, sentiment=sentiment)
+            return ChatResponse(
+                reply=bot_reply, state="RESOLVED", intent=intent, sentiment=sentiment
+            )
 
         else:
             session["state"] = "CONFIRM"
@@ -671,7 +963,9 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
                     f"INR {refund['fee_due']:,.0f} dues adjusted)."
                 )
             _log_message(student_id, bot_reply, "bot", intent, sentiment)
-            return ChatResponse(reply=bot_reply, state="CONFIRM", intent=intent, sentiment=sentiment)
+            return ChatResponse(
+                reply=bot_reply, state="CONFIRM", intent=intent, sentiment=sentiment
+            )
 
     # ── State: CONFIRM ───────────────────────────────────────────────────────
     elif state == "CONFIRM":
@@ -710,7 +1004,9 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
                 "Is there anything else I can help you with today?"
             )
             _log_message(student_id, bot_reply, "bot", intent, sentiment)
-            return ChatResponse(reply=bot_reply, state="ASK_REASON", intent=intent, sentiment=sentiment)
+            return ChatResponse(
+                reply=bot_reply, state="ASK_REASON", intent=intent, sentiment=sentiment
+            )
 
         else:
             bot_reply = (
@@ -719,7 +1015,9 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
                 "or **CANCEL** to abort."
             )
             _log_message(student_id, bot_reply, "bot")
-            return ChatResponse(reply=bot_reply, state="CONFIRM", intent=intent, sentiment=sentiment)
+            return ChatResponse(
+                reply=bot_reply, state="CONFIRM", intent=intent, sentiment=sentiment
+            )
 
     # ── Guard: session already closed ────────────────────────────────────────
     else:

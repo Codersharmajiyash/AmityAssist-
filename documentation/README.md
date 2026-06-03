@@ -1,221 +1,156 @@
-# UniAssist — Secure AI-Powered Student Withdrawal Chatbot
+# AmityAssist
 
-A production-quality, full-stack chatbot system for managing student withdrawal requests at an educational institution. Built with FastAPI (Python) and a premium vanilla JS/CSS frontend.
+AmityAssist is a student lifecycle management portal for Amity-style university workflows. It combines a FastAPI backend, SQLite seed data, a vanilla HTML/CSS/JS dashboard, student lifecycle modules, document OCR simulation, and a voice-enabled AI advisor.
 
----
+## Current Status
+
+Completed through Phase 5:
+
+- Expanded student lifecycle database and seed data.
+- Student and staff backend routes for profiles, notices, exams, scholarships, grievances, documents, and chat.
+- Conversational AI routing for academics, scholarships, exams, grievances, withdrawals, Hinglish/Hindi/English prompts, and refund estimates.
+- Glassmorphic student dashboard.
+- Student lifecycle view modules:
+  - Academics tab with exam results and backpaper registration.
+  - Scholarship Hub with scheme discovery and one-click application.
+  - Grievance Desk with ticket form and timeline tracker.
+  - Document AI panel with scan animation, OCR fields, and fraud warnings.
+  - Floating voice widget using the browser Web Speech API.
 
 ## Quick Start
 
-### Prerequisites
-- Python 3.10 or higher
-- `pip` package manager
+Run these commands from:
+
+```powershell
+c:\Users\WINDOWS 11\OneDrive\Desktop\AMITYASSIST\AmityAssist-
+```
 
 ### 1. Install Dependencies
-```bash
-cd c:\Users\HP\ANtiAgentBuilding
-pip install -r backend/requirements.txt
+
+```powershell
+pip install -r backend\requirements.txt
 ```
 
-### 2. Start the Backend Server
-```bash
-uvicorn backend.main:app --reload
-```
-Server starts at **http://localhost:8000**  
-Interactive API docs: **http://localhost:8000/api/docs**
+### 2. Start Backend
 
-### 3. Open the Frontend
-Open `frontend/index.html` directly in your browser.
-
-### 4. Run the Test Suite
-```bash
-pytest -v
+```powershell
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
----
+Backend URL:
 
-## Sample Student Credentials (for testing)
-
-| Student ID | Name             | Email                      | Course                   |
-|------------|------------------|----------------------------|--------------------------|
-| STU001     | Aisha Malik      | aisha.malik@uni.edu        | Computer Science         |
-| STU002     | Rahul Sharma     | rahul.sharma@uni.edu       | Electrical Engineering   |
-| STU003     | Priya Nair       | priya.nair@uni.edu         | Business Administration  |
-| STU004     | James Osei       | james.osei@uni.edu         | Data Science             |
-| STU005     | Fatima Al-Hassan | fatima.alhassan@uni.edu    | Biotechnology            |
-| STU006     | Chen Wei         | chen.wei@uni.edu           | Mechanical Engineering   |
-| STU007     | Sofia Gonzalez   | sofia.gonzalez@uni.edu     | Psychology               |
-| STU008     | Amara Diallo     | amara.diallo@uni.edu       | Architecture             |
-| STU009     | Lucas Ferreira   | lucas.ferreira@uni.edu     | Civil Engineering        |
-| STU010     | Mei Lin          | mei.lin@uni.edu            | Pharmacy                 |
-
----
-
-## System Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Browser                               │
-│   frontend/index.html + css/styles.css + js/app.js          │
-│   - Verify screen → Chat screen                              │
-│   - XSS-safe rendering via escapeHtml()                      │
-│   - Session token held in memory only                        │
-└────────────────────┬────────────────────────────────────────┘
-                     │ HTTP/JSON (localhost:8000)
-┌────────────────────▼────────────────────────────────────────┐
-│                  FastAPI Backend                              │
-│                                                              │
-│  POST /api/auth/verify   →  routes/auth.py                   │
-│  POST /api/chat/message  →  routes/chat.py                   │
-│  GET  /api/health        →  main.py                          │
-│                                                              │
-│  Middleware stack (applied to every request):                │
-│   ├── CORSMiddleware                                         │
-│   ├── SecurityHeadersMiddleware (X-Frame, CSP, etc.)         │
-│   └── SlowAPI rate limiter (5/min auth, 20/min chat)         │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────────┐
-│               Services Layer                                  │
-│                                                              │
-│  nlp_service.py   — keyword intent + polarity sentiment      │
-│  chat_service.py  — FSM: ASK_REASON→SUGGEST→CONFIRM→DONE    │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────────┐
-│              SQLite Database (database/chatbot.db)            │
-│                                                              │
-│   students             — pre-seeded, 10 records              │
-│   conversations        — every message logged                │
-│   withdrawal_requests  — submitted requests                  │
-└─────────────────────────────────────────────────────────────┘
+```text
+http://127.0.0.1:8000
 ```
 
----
+API docs:
+
+```text
+http://127.0.0.1:8000/api/docs
+```
+
+### 3. Start Frontend
+
+Use a localhost frontend server instead of opening the file directly. This is important for browser voice permissions.
+
+```powershell
+cd frontend
+python -m http.server 5500 --bind 127.0.0.1
+```
+
+Open:
+
+```text
+http://127.0.0.1:5500/index.html
+```
+
+## Login / UI Behavior
+
+The app starts with only the verification screen visible. The sidebar, topbar dashboard shell, module navigation, and voice widget appear only after successful student verification.
+
+Demo login:
+
+```text
+Student ID: STU001
+```
+
+You can also use seeded institutional email addresses.
+
+## Voice System
+
+The floating voice widget appears after login.
+
+- `Mic`: starts browser speech transcription and sends the transcript to AI Advisor when a session is active.
+- `Speak`: reads the latest AI Advisor reply aloud.
+
+Notes:
+
+- Use Chrome or Edge for the best Web Speech API support.
+- Microphone access requires browser permission.
+- Run the frontend from `http://127.0.0.1:5500/index.html`; raw `file://` pages may block or limit voice behavior.
+
+## Test Suite
+
+Run:
+
+```powershell
+python -m pytest
+```
+
+Expected current result:
+
+```text
+59 passed
+```
+
+## Main Endpoints
+
+```text
+POST /api/auth/verify
+POST /api/chat/message
+GET  /api/student/profile
+GET  /api/student/notices
+GET  /api/student/exams
+POST /api/student/backpaper
+GET  /api/student/scholarships
+POST /api/student/scholarships/apply
+GET  /api/student/grievances
+POST /api/student/grievances
+POST /api/documents/upload
+GET  /api/health
+```
 
 ## Project Structure
 
-```
-ANtiAgentBuilding/
-├── backend/
-│   ├── main.py                  # FastAPI app entry point
-│   ├── requirements.txt
-│   ├── database/
-│   │   ├── connection.py        # Thread-local SQLite connection
-│   │   └── seed.py              # Schema + sample data
-│   ├── models/
-│   │   └── schemas.py           # Pydantic v2 request/response schemas
-│   ├── services/
-│   │   ├── nlp_service.py       # Intent classifier + sentiment scorer
-│   │   └── chat_service.py      # Conversation FSM
-│   ├── routes/
-│   │   ├── auth.py              # POST /api/auth/verify
-│   │   └── chat.py              # POST /api/chat/message
-│   ├── middleware/
-│   │   └── security.py          # Security headers middleware
-│   └── tests/
-│       ├── conftest.py
-│       ├── test_auth.py         # 10 tests (2 validation rounds)
-│       ├── test_nlp.py          # 12 tests (2 validation rounds)
-│       ├── test_chat.py         # 9 tests  (2 validation rounds)
-│       └── test_db.py           # 8 tests  (2 validation rounds)
-├── frontend/
-│   ├── index.html
-│   ├── css/styles.css
-│   └── js/app.js
-├── database/
-│   └── chatbot.db               # Auto-created on first run
-├── documentation/
-│   └── README.md
-└── pytest.ini
+```text
+AmityAssist-/
+  backend/
+    main.py
+    database/
+    middleware/
+    models/
+    routes/
+    services/
+    tests/
+  database/
+    chatbot.db
+  documentation/
+    README.md
+  frontend/
+    index.html
+    css/styles.css
+    js/app.js
+  task.md
+  pytest.ini
 ```
 
----
+## Phase 6 Next
 
-## Security Model
+Phase 6 is the staff portal and end-to-end verification phase:
 
-| Threat | Mitigation |
-|--------|-----------|
-| SQL Injection | Parameterised queries (`?` placeholders) throughout; Pydantic whitelist validators |
-| XSS | `escapeHtml()` on all user text before DOM insertion; CSP header restricts inline scripts |
-| Clickjacking | `X-Frame-Options: DENY` on every response |
-| MIME Sniffing | `X-Content-Type-Options: nosniff` |
-| Brute Force | SlowAPI rate limiter: 5 req/min on auth, 20 req/min on chat |
-| Data Leakage | Identical error message for "not found" and "server error" (prevents enumeration) |
-| Session Hijacking | `secrets.token_urlsafe(32)` session tokens; stored in-process memory only |
-| Oversized Payloads | Field-level `max_length` enforced both client-side and by Pydantic |
-
----
-
-## Conversation Flow
-
-```
-Student Opens App
-      │
-      ▼
-[Verification Screen]
-  Enter ID or Email
-      │
-      ├─ INVALID → Generic error (no data leak)
-      │
-      └─ VALID ──▶ [Chat Screen — ASK_REASON]
-                        │
-                        ▼
-                   Student describes reason
-                   (NLP classifies intent + sentiment)
-                        │
-                        ▼
-                   [SUGGEST] — Bot offers alternatives
-                        │
-                        ├─ Student accepts → RESOLVED (session ends)
-                        │
-                        └─ Student declines ──▶ [CONFIRM]
-                                                   │
-                              ├─ "CONFIRM" ──▶ Withdrawal created → DONE
-                              └─ "CANCEL"  ──▶ Back to ASK_REASON
-```
-
----
-
-## API Reference
-
-### `POST /api/auth/verify`
-Verify a student's identity.
-
-**Request:**
-```json
-{ "student_id": "STU001" }
-// or
-{ "email": "aisha.malik@uni.edu" }
-```
-
-**Response (success):**
-```json
-{
-  "verified": true,
-  "session_id": "<secure-token>",
-  "student_name": "Aisha Malik",
-  "course": "Computer Science",
-  "message": "Welcome back, Aisha!"
-}
-```
-
----
-
-### `POST /api/chat/message`
-Send a message in an active session.
-
-**Request:**
-```json
-{ "session_id": "<token>", "message": "I cannot afford my fees" }
-```
-
-**Response:**
-```json
-{
-  "reply": "💡 We understand financial pressure...",
-  "state": "SUGGEST",
-  "intent": "financial",
-  "sentiment": "negative",
-  "withdrawal_submitted": false
-}
-```
+- Staff Portal tab.
+- Approval center.
+- Grievance responses.
+- Document audit records.
+- Staff portal API actions.
+- Full client-server walkthrough.
