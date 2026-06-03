@@ -41,6 +41,8 @@ def create_session(student_id: str) -> str:
         "reason": None,
         "grievance_category": None,
         "grievance_description": None,
+        "pending_scholarship_id": None,
+        "pending_exam_id": None,
         "created_at": datetime.utcnow(),
     }
     return session_id
@@ -184,6 +186,75 @@ def _fetch_scholarship_summary(student_id: str, cgpa: float) -> list[dict]:
     return result
 
 
+def _fetch_notices(student: dict) -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute(
+        """SELECT * FROM notices
+           WHERE (target_branch = 'ALL' OR target_branch = ?)
+             AND (target_semester = 0 OR target_semester = ?)
+           ORDER BY timestamp DESC, id DESC
+           LIMIT 5""",
+        (student["branch"], student["semester"]),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _fetch_internships(cgpa: float) -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM internships ORDER BY deadline ASC").fetchall()
+    internships = []
+    for row in rows:
+        item = dict(row)
+        item["eligible"] = cgpa >= row["required_cgpa"]
+        internships.append(item)
+    return internships
+
+
+def _find_named_item(items: list[dict], raw_message: str, name_key: str = "name") -> Optional[dict]:
+    lower = raw_message.lower()
+    for item in items:
+        name = str(item.get(name_key, "")).lower()
+        compact_words = [word for word in name.split() if len(word) > 2]
+        if name and (name in lower or any(word in lower for word in compact_words)):
+            return item
+    return None
+
+
+def _apply_scholarship(student_id: str, scholarship: dict) -> str:
+    conn = get_connection()
+    existing = conn.execute(
+        "SELECT status FROM scholarship_applications WHERE student_id = ? AND scholarship_id = ?",
+        (student_id, scholarship["id"]),
+    ).fetchone()
+    if existing:
+        return f"You have already applied for {scholarship['name']}. Current status: {existing['status']}."
+
+    conn.execute(
+        "INSERT INTO scholarship_applications (student_id, scholarship_id, status) VALUES (?, ?, 'pending')",
+        (student_id, scholarship["id"]),
+    )
+    conn.commit()
+    return f"Application submitted for {scholarship['name']}. Status: pending review."
+
+
+def _register_backpaper(exam_id: int) -> str:
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM examinations WHERE id = ?", (exam_id,)).fetchone()
+    if not row:
+        return "I could not find that back-paper record."
+    if row["grade"] not in ("F", "D", None):
+        return f"Back-paper registration is not applicable for {row['subject_name']}."
+    if row["backpaper_status"] in ("registered", "paid"):
+        return f"{row['subject_name']} is already {row['backpaper_status']} for back-paper processing."
+
+    conn.execute(
+        "UPDATE examinations SET backpaper_status = 'registered' WHERE id = ?",
+        (exam_id,),
+    )
+    conn.commit()
+    return f"Back-paper registration created for {row['subject_name']}. Fee payment is pending."
+
+
 def _calculate_refund(student: dict) -> dict:
     enrolled = datetime.fromisoformat(student["enrolled_date"])
     days_enrolled = max((datetime.utcnow() - enrolled).days, 0)
@@ -231,7 +302,8 @@ def _is_lifecycle_query(raw_message: str, voice: bool) -> bool:
         "show", "which", "eligible", "status", "file", "register", "apply",
         "admit card", "datesheet", "backpaper", "back paper", "cgpa",
         "attendance", "bata", "batao", "help", "complaint", "grievance",
-        "result",
+        "result", "notice", "fee", "fees", "hostel", "document", "upload",
+        "internship", "placement", "apply", "room", "dues",
     )
     return voice or any(marker in lower for marker in command_markers)
 
@@ -251,8 +323,9 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
     if routed_intent == "help":
         reply = (
             f"{prefix}I can help with academics, exams, scholarships, grievances, "
-            "withdrawals, refund estimates, notices, and document support. "
-            "Tell me what you need in English, Hindi, Hinglish, or by voice."
+            "withdrawals, refund estimates, notices, fee dues, hostel status, "
+            "internships, and document support. I can also file grievances, apply "
+            "for eligible scholarships, and register eligible back papers after confirmation."
         )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
         return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
@@ -274,13 +347,25 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
         else:
             upcoming = [exam for exam in exams if exam["grade"] is None]
             backpapers = [exam for exam in exams if exam["grade"] in ("F", "D")]
+            selected = _find_named_item(backpapers, raw_message, "subject_name")
+            wants_register = any(word in raw_message.lower() for word in ("register", "apply", "book", "submit"))
+            if selected and wants_register:
+                session["pending_exam_id"] = selected["id"]
+                session["state"] = "BACKPAPER_CONFIRM"
+                reply = (
+                    f"{prefix}I can register your back paper for {selected['subject_name']} "
+                    f"({selected['subject_code']}). Type CONFIRM to register it, or CANCEL."
+                )
+                _log_message(student_id, reply, "bot", routed_intent, sentiment)
+                return ChatResponse(reply=reply, state="CONFIRM", intent=routed_intent, sentiment=sentiment)
+
             lines = []
             if upcoming:
                 next_exam = upcoming[0]
                 lines.append(f"Next exam: {next_exam['subject_name']} on {next_exam['exam_date']}.")
             if backpapers:
                 names = ", ".join(exam["subject_name"] for exam in backpapers[:3])
-                lines.append(f"Back-paper eligible subjects: {names}.")
+                lines.append(f"Back-paper eligible subjects: {names}. Say 'register backpaper for subject name' to start.")
             if not lines:
                 lines.append("All listed exam records are completed with no pending back-paper action.")
             reply = prefix + " ".join(lines)
@@ -290,11 +375,26 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
     if routed_intent == "scholarships" and student:
         schemes = _fetch_scholarship_summary(student_id, float(student["cgpa"]))
         eligible = [scheme for scheme in schemes if scheme["eligible"]]
+        wants_apply = any(word in raw_message.lower() for word in ("apply", "submit", "register"))
+        selected = _find_named_item(eligible, raw_message)
+        if wants_apply and selected:
+            reply = prefix + _apply_scholarship(student_id, selected)
+            _log_message(student_id, reply, "bot", routed_intent, sentiment)
+            return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        if wants_apply and len(eligible) == 1:
+            reply = prefix + _apply_scholarship(student_id, eligible[0])
+            _log_message(student_id, reply, "bot", routed_intent, sentiment)
+            return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+        if wants_apply and len(eligible) > 1:
+            names = ", ".join(scheme["name"] for scheme in eligible)
+            reply = f"{prefix}You are eligible for multiple schemes: {names}. Please say which one you want to apply for."
+            _log_message(student_id, reply, "bot", routed_intent, sentiment)
+            return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
         if eligible:
             names = ", ".join(scheme["name"] for scheme in eligible)
             reply = (
                 f"{prefix}Based on CGPA {student['cgpa']}, you are eligible for: {names}. "
-                "Use the Scholarship Hub to apply or say the scheme name."
+                "Say 'apply for scheme name' and I can submit it from chat."
             )
         else:
             minimum = min(scheme["eligibility_cgpa"] for scheme in schemes) if schemes else 0
@@ -302,6 +402,63 @@ def _route_lifecycle_message(session: dict, raw_message: str, language: str, voi
                 f"{prefix}Your current CGPA is {student['cgpa']}. "
                 f"The lowest listed scholarship threshold is {minimum}."
             )
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "fees" and student:
+        due = float(student.get("fee_due") or 0)
+        if due > 0:
+            reply = (
+                f"{prefix}Your fee status is {student['fee_status']} with outstanding dues of "
+                f"INR {due:,.0f}. Clearing dues may be required for admit card or withdrawal processing."
+            )
+        else:
+            reply = f"{prefix}Your fee status is {student['fee_status']}. There are no outstanding dues on your profile."
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "hostel" and student:
+        reply = (
+            f"{prefix}Hostel status: {student['hostel_status']}. "
+            "If this is incorrect or you need a room change, say 'file hostel complaint' and I will file a grievance."
+        )
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "notices" and student:
+        notices = _fetch_notices(student)
+        if notices:
+            lines = [
+                f"{notice['title']} ({notice['category']}): {notice['content']}"
+                for notice in notices[:3]
+            ]
+            reply = prefix + "Here are your latest targeted notices:\n- " + "\n- ".join(lines)
+        else:
+            reply = f"{prefix}No targeted notices are currently available for your branch and semester."
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "internships" and student:
+        internships = _fetch_internships(float(student["cgpa"]))
+        eligible = [item for item in internships if item["eligible"]]
+        pool = eligible or internships
+        if pool:
+            label = "eligible internships" if eligible else "available internships"
+            lines = [
+                f"{item['title']} at {item['company']} - stipend {item['stipend']}, deadline {item['deadline']}"
+                for item in pool[:3]
+            ]
+            reply = prefix + f"Based on CGPA {student['cgpa']}, these {label} match your profile:\n- " + "\n- ".join(lines)
+        else:
+            reply = f"{prefix}I could not find internship postings right now."
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "documents":
+        reply = (
+            f"{prefix}You can upload ID proof, medical certificates, and withdrawal support files in the Document Center. "
+            "After upload, Document AI simulation checks OCR fields, image quality, duplicate risk, signature/stamp presence, and fraud flags."
+        )
         _log_message(student_id, reply, "bot", routed_intent, sentiment)
         return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
 
@@ -374,6 +531,31 @@ def _handle_grievance_state(session: dict, raw_message: str) -> ChatResponse:
     return ChatResponse(reply="Invalid grievance state.", state="INVALID", intent="grievances", sentiment=sentiment)
 
 
+def _handle_backpaper_state(session: dict, raw_message: str) -> ChatResponse:
+    student_id = session["student_id"]
+    sentiment = score_sentiment(raw_message)
+    normalised = raw_message.strip().upper()
+
+    if normalised == "CONFIRM":
+        exam_id = session.get("pending_exam_id")
+        reply = _register_backpaper(exam_id) if exam_id else "I could not find a pending back-paper registration."
+        session["pending_exam_id"] = None
+        session["state"] = "ASK_REASON"
+        _log_message(student_id, reply, "bot", "exams", sentiment)
+        return ChatResponse(reply=reply, state="ASK_REASON", intent="exams", sentiment=sentiment)
+
+    if normalised == "CANCEL":
+        session["pending_exam_id"] = None
+        session["state"] = "ASK_REASON"
+        reply = "Back-paper registration cancelled. No exam record was changed."
+        _log_message(student_id, reply, "bot", "exams", sentiment)
+        return ChatResponse(reply=reply, state="ASK_REASON", intent="exams", sentiment=sentiment)
+
+    reply = "Please type CONFIRM to register the back paper, or CANCEL to discard it."
+    _log_message(student_id, reply, "bot", "exams", sentiment)
+    return ChatResponse(reply=reply, state="CONFIRM", intent="exams", sentiment=sentiment)
+
+
 # ---------------------------------------------------------------------------
 # Core FSM
 # ---------------------------------------------------------------------------
@@ -405,6 +587,14 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
 
     if state in {"GRIEVANCE_CATEGORY", "GRIEVANCE_DESCRIPTION", "GRIEVANCE_CONFIRM"}:
         return _handle_grievance_state(session, raw_message)
+
+    if state == "BACKPAPER_CONFIRM":
+        return _handle_backpaper_state(session, raw_message)
+
+    if state == "SUGGEST":
+        routed_response = _route_lifecycle_message(session, raw_message, language, voice)
+        if routed_response is not None:
+            return routed_response
 
     # ── State: ASK_REASON ────────────────────────────────────────────────────
     if state == "ASK_REASON":
