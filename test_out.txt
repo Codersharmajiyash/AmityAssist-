@@ -1,0 +1,172 @@
+﻿python : C:\Users\HP\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfr
+a8p0\LocalCache\local-packages\Python313\site-packages\pytest_asyncio\plugin.py:207: 
+PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" 
+is unset.
+At line:1 char:1
++ python -m pytest -v --tb=short 2>&1 | Out-File -FilePath test_out.txt ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\HP\App...cope" is unset.:String) [] 
+   , RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. 
+Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures 
+to function scope. Set the default fixture loop scope explicitly in order to avoid 
+unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", 
+"module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts =============================
+platform win32 -- Python 3.13.12, pytest-8.3.5, pluggy-1.6.0 -- C:\Users\HP\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\HP\ANtiAgentBuilding
+configfile: pytest.ini
+testpaths: backend/tests
+plugins: anyio-4.11.0, asyncio-0.25.3
+asyncio: mode=Mode.AUTO, asyncio_default_fixture_loop_scope=None
+collecting ... collected 45 items
+
+backend/tests/test_auth.py::TestStudentVerification::test_valid_student_id_returns_session PASSED [  2%]
+backend/tests/test_auth.py::TestStudentVerification::test_valid_email_returns_session PASSED [  4%]
+backend/tests/test_auth.py::TestStudentVerification::test_invalid_student_id_returns_unverified PASSED [  6%]
+backend/tests/test_auth.py::TestStudentVerification::test_invalid_email_returns_unverified PASSED [  8%]
+backend/tests/test_auth.py::TestStudentVerification::test_no_credentials_returns_422 PASSED [ 11%]
+backend/tests/test_auth.py::TestStudentVerificationSecurity::test_sql_injection_in_student_id_rejected PASSED [ 13%]
+backend/tests/test_auth.py::TestStudentVerificationSecurity::test_sql_injection_via_email_field_safe PASSED [ 15%]
+backend/tests/test_auth.py::TestStudentVerificationSecurity::test_oversized_student_id_rejected PASSED [ 17%]
+backend/tests/test_auth.py::TestStudentVerificationSecurity::test_case_insensitive_student_id FAILED [ 20%]
+backend/tests/test_auth.py::TestStudentVerificationSecurity::test_response_never_exposes_email PASSED [ 22%]
+backend/tests/test_chat.py::TestFullWithdrawalFlow::test_step1_ask_reason_state FAILED [ 24%]
+backend/tests/test_chat.py::TestFullWithdrawalFlow::test_step2_decline_alternatives_moves_to_confirm FAILED [ 26%]
+backend/tests/test_chat.py::TestFullWithdrawalFlow::test_step3_confirm_submits_withdrawal FAILED [ 28%]
+backend/tests/test_chat.py::TestFullWithdrawalFlow::test_withdrawal_record_stored_in_db FAILED [ 31%]
+backend/tests/test_chat.py::TestCancelAndGuardFlows::test_cancel_at_confirm_stage_resets_to_ask_reason FAILED [ 33%]
+backend/tests/test_chat.py::TestCancelAndGuardFlows::test_invalid_session_returns_401 PASSED [ 35%]
+backend/tests/test_chat.py::TestCancelAndGuardFlows::test_invalid_confirm_keyword_stays_at_confirm FAILED [ 37%]
+backend/tests/test_chat.py::TestCancelAndGuardFlows::test_accept_alternatives_resolves_session FAILED [ 40%]
+backend/tests/test_chat.py::TestCancelAndGuardFlows::test_empty_message_rejected_by_schema FAILED [ 42%]
+backend/tests/test_db.py::TestSeedData::test_ten_students_seeded PASSED  [ 44%]
+backend/tests/test_db.py::TestSeedData::test_student_stu001_exists PASSED [ 46%]
+backend/tests/test_db.py::TestSeedData::test_all_students_have_unique_emails PASSED [ 48%]
+backend/tests/test_db.py::TestSeedData::test_init_db_is_idempotent PASSED [ 51%]
+backend/tests/test_db.py::TestDirectDbOperations::test_conversation_record_written PASSED [ 53%]
+backend/tests/test_db.py::TestDirectDbOperations::test_withdrawal_request_record_written PASSED [ 55%]
+backend/tests/test_db.py::TestDirectDbOperations::test_invalid_sender_rejected_by_check_constraint PASSED [ 57%]
+backend/tests/test_db.py::TestDirectDbOperations::test_foreign_key_constraint_blocks_orphan PASSED [ 60%]
+backend/tests/test_nlp.py::TestIntentClassification::test_financial_intent PASSED [ 62%]
+backend/tests/test_nlp.py::TestIntentClassification::test_academic_intent PASSED [ 64%]
+backend/tests/test_nlp.py::TestIntentClassification::test_personal_intent PASSED [ 66%]
+backend/tests/test_nlp.py::TestIntentClassification::test_health_intent PASSED [ 68%]
+backend/tests/test_nlp.py::TestIntentClassification::test_career_intent PASSED [ 71%]
+backend/tests/test_nlp.py::TestIntentClassification::test_unclear_intent_returns_unclear PASSED [ 73%]
+backend/tests/test_nlp.py::TestIntentClassificationEdgeCases::test_mixed_financial_academic PASSED [ 75%]
+backend/tests/test_nlp.py::TestIntentClassificationEdgeCases::test_uppercase_input PASSED [ 77%]
+backend/tests/test_nlp.py::TestIntentClassificationEdgeCases::test_single_keyword PASSED [ 80%]
+backend/tests/test_nlp.py::TestIntentClassificationEdgeCases::test_empty_string_returns_unclear PASSED [ 82%]
+backend/tests/test_nlp.py::TestIntentClassificationEdgeCases::test_gibberish_returns_unclear PASSED [ 84%]
+backend/tests/test_nlp.py::TestSentimentScoring::test_positive_sentiment PASSED [ 86%]
+backend/tests/test_nlp.py::TestSentimentScoring::test_negative_sentiment PASSED [ 88%]
+backend/tests/test_nlp.py::TestSentimentScoring::test_neutral_sentiment PASSED [ 91%]
+backend/tests/test_nlp.py::TestSentimentEdgeCases::test_empty_input_is_neutral PASSED [ 93%]
+backend/tests/test_nlp.py::TestSentimentEdgeCases::test_mixed_signals_balanced PASSED [ 95%]
+backend/tests/test_nlp.py::TestSentimentEdgeCases::test_confirm_message_is_positive PASSED [ 97%]
+backend/tests/test_nlp.py::TestSentimentEdgeCases::test_cancel_message_is_negative PASSED [100%]
+
+================================== FAILURES ===================================
+______ TestStudentVerificationSecurity.test_case_insensitive_student_id _______
+backend\tests\test_auth.py:111: in test_case_insensitive_student_id
+    assert response.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+_____________ TestFullWithdrawalFlow.test_step1_ask_reason_state ______________
+backend\tests\test_chat.py:26: in test_step1_ask_reason_state
+    session_id = _verify_student(client, "STU004")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+___ TestFullWithdrawalFlow.test_step2_decline_alternatives_moves_to_confirm ___
+backend\tests\test_chat.py:41: in test_step2_decline_alternatives_moves_to_confirm
+    session_id = _verify_student(client, "STU005")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+________ TestFullWithdrawalFlow.test_step3_confirm_submits_withdrawal _________
+backend\tests\test_chat.py:57: in test_step3_confirm_submits_withdrawal
+    session_id = _verify_student(client, "STU006")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+_________ TestFullWithdrawalFlow.test_withdrawal_record_stored_in_db __________
+backend\tests\test_chat.py:80: in test_withdrawal_record_stored_in_db
+    session_id = _verify_student(client, "STU007")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+__ TestCancelAndGuardFlows.test_cancel_at_confirm_stage_resets_to_ask_reason __
+backend\tests\test_chat.py:100: in test_cancel_at_confirm_stage_resets_to_ask_reason
+    session_id = _verify_student(client, "STU008")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+____ TestCancelAndGuardFlows.test_invalid_confirm_keyword_stays_at_confirm ____
+backend\tests\test_chat.py:122: in test_invalid_confirm_keyword_stays_at_confirm
+    session_id = _verify_student(client, "STU009")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+______ TestCancelAndGuardFlows.test_accept_alternatives_resolves_session ______
+backend\tests\test_chat.py:134: in test_accept_alternatives_resolves_session
+    session_id = _verify_student(client, "STU010")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+________ TestCancelAndGuardFlows.test_empty_message_rejected_by_schema ________
+backend\tests\test_chat.py:145: in test_empty_message_rejected_by_schema
+    session_id = _verify_student(client, "STU001")
+backend\tests\test_chat.py:15: in _verify_student
+    assert resp.status_code == 200
+E   assert 429 == 200
+E    +  where 429 = <Response [429 Too Many Requests]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  slowapi:extension.py:510 ratelimit 5 per 1 minute (testclient) exceeded at endpoint: /api/auth/verify
+============================== warnings summary ===============================
+backend/tests/test_auth.py::TestStudentVerification::test_valid_student_id_returns_session
+backend/tests/test_auth.py::TestStudentVerification::test_valid_email_returns_session
+  C:\Users\HP\ANtiAgentBuilding\backend\services\chat_service.py:42: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    "created_at": datetime.utcnow(),
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED backend/tests/test_auth.py::TestStudentVerificationSecurity::test_case_insensitive_student_id
+FAILED backend/tests/test_chat.py::TestFullWithdrawalFlow::test_step1_ask_reason_state
+FAILED backend/tests/test_chat.py::TestFullWithdrawalFlow::test_step2_decline_alternatives_moves_to_confirm
+FAILED backend/tests/test_chat.py::TestFullWithdrawalFlow::test_step3_confirm_submits_withdrawal
+FAILED backend/tests/test_chat.py::TestFullWithdrawalFlow::test_withdrawal_record_stored_in_db
+FAILED backend/tests/test_chat.py::TestCancelAndGuardFlows::test_cancel_at_confirm_stage_resets_to_ask_reason
+FAILED backend/tests/test_chat.py::TestCancelAndGuardFlows::test_invalid_confirm_keyword_stays_at_confirm
+FAILED backend/tests/test_chat.py::TestCancelAndGuardFlows::test_accept_alternatives_resolves_session
+FAILED backend/tests/test_chat.py::TestCancelAndGuardFlows::test_empty_message_rejected_by_schema
+================== 9 failed, 36 passed, 2 warnings in 0.69s ===================
