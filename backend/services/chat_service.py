@@ -22,7 +22,7 @@ from typing import Optional
 
 from ..database.connection import get_connection
 from ..models.schemas import ChatResponse
-from .nlp_service import classify_intent, score_sentiment
+from .nlp_service import classify_intent, detect_language, is_voice_command, route_intent, score_sentiment
 
 # ---------------------------------------------------------------------------
 # In-memory session registry  {session_id: SessionData}
@@ -39,6 +39,8 @@ def create_session(student_id: str) -> str:
         "state": "ASK_REASON",
         "intent": None,
         "reason": None,
+        "grievance_category": None,
+        "grievance_description": None,
         "created_at": datetime.utcnow(),
     }
     return session_id
@@ -114,6 +116,7 @@ _SUGGESTIONS: dict[str, str] = {
 
 _POSITIVE_SIGNALS = {"yes", "yeah", "yep", "sure", "ok", "okay", "agree", "please", "try", "interested", "help"}
 _NEGATIVE_SIGNALS = {"no", "nope", "nah", "none", "still", "withdraw", "proceed", "want to leave", "decided"}
+_GRIEVANCE_CATEGORIES = {"academic", "fee", "hostel", "exam", "scholarship"}
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +151,229 @@ def _submit_withdrawal(student_id: str, reason: str, intent: str) -> None:
     conn.commit()
 
 
+def _fetch_student(student_id: str) -> Optional[dict]:
+    conn = get_connection()
+    row = conn.execute("SELECT * FROM students WHERE id = ?", (student_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def _fetch_exam_summary(student_id: str) -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM examinations WHERE student_id = ? ORDER BY exam_date ASC",
+        (student_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _fetch_scholarship_summary(student_id: str, cgpa: float) -> list[dict]:
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM scholarships ORDER BY eligibility_cgpa DESC").fetchall()
+    applied = conn.execute(
+        "SELECT scholarship_id, status FROM scholarship_applications WHERE student_id = ?",
+        (student_id,),
+    ).fetchall()
+    statuses = {row["scholarship_id"]: row["status"] for row in applied}
+
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["eligible"] = cgpa >= row["eligibility_cgpa"]
+        item["application_status"] = statuses.get(row["id"])
+        result.append(item)
+    return result
+
+
+def _calculate_refund(student: dict) -> dict:
+    enrolled = datetime.fromisoformat(student["enrolled_date"])
+    days_enrolled = max((datetime.utcnow() - enrolled).days, 0)
+    annual_tuition = 240000.0
+
+    if days_enrolled <= 15:
+        percent = 1.0
+    elif days_enrolled <= 30:
+        percent = 0.8
+    elif days_enrolled <= 60:
+        percent = 0.5
+    elif days_enrolled <= 90:
+        percent = 0.25
+    else:
+        percent = 0.0
+
+    gross_refund = annual_tuition * percent
+    fee_due = float(student.get("fee_due") or 0)
+    return {
+        "days_enrolled": days_enrolled,
+        "percent": percent,
+        "gross_refund": gross_refund,
+        "fee_due": fee_due,
+        "net_refund": max(gross_refund - fee_due, 0.0),
+    }
+
+
+def _language_prefix(language: str, voice: bool) -> str:
+    if voice and language == "hindi":
+        return "Voice command received. Hindi mode active.\n\n"
+    if voice and language == "hinglish":
+        return "Voice command received. Hinglish mode active.\n\n"
+    if language == "hindi":
+        return "Hindi mode: "
+    if language == "hinglish":
+        return "Hinglish mode: "
+    if voice:
+        return "Voice command received.\n\n"
+    return ""
+
+
+def _is_lifecycle_query(raw_message: str, voice: bool) -> bool:
+    lower = raw_message.lower()
+    command_markers = (
+        "show", "which", "eligible", "status", "file", "register", "apply",
+        "admit card", "datesheet", "backpaper", "back paper", "cgpa",
+        "attendance", "bata", "batao", "help", "complaint", "grievance",
+        "result",
+    )
+    return voice or any(marker in lower for marker in command_markers)
+
+
+def _route_lifecycle_message(session: dict, raw_message: str, language: str, voice: bool) -> Optional[ChatResponse]:
+    student_id = session["student_id"]
+    routed_intent = route_intent(raw_message)
+    sentiment = score_sentiment(raw_message)
+    student = _fetch_student(student_id)
+    prefix = _language_prefix(language, voice)
+
+    if routed_intent in {"unknown", "withdrawals"}:
+        return None
+    if not _is_lifecycle_query(raw_message, voice):
+        return None
+
+    if routed_intent == "help":
+        reply = (
+            f"{prefix}I can help with academics, exams, scholarships, grievances, "
+            "withdrawals, refund estimates, notices, and document support. "
+            "Tell me what you need in English, Hindi, Hinglish, or by voice."
+        )
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "academics" and student:
+        reply = (
+            f"{prefix}{student['name']}, your academic snapshot is: CGPA {student['cgpa']}, "
+            f"attendance {student['attendance']}%, semester {student['semester']}, "
+            f"performance: {student['academic_performance']}. "
+            "For back papers or admit cards, ask about exams."
+        )
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "exams":
+        exams = _fetch_exam_summary(student_id)
+        if not exams:
+            reply = f"{prefix}I could not find exam records for your profile yet."
+        else:
+            upcoming = [exam for exam in exams if exam["grade"] is None]
+            backpapers = [exam for exam in exams if exam["grade"] in ("F", "D")]
+            lines = []
+            if upcoming:
+                next_exam = upcoming[0]
+                lines.append(f"Next exam: {next_exam['subject_name']} on {next_exam['exam_date']}.")
+            if backpapers:
+                names = ", ".join(exam["subject_name"] for exam in backpapers[:3])
+                lines.append(f"Back-paper eligible subjects: {names}.")
+            if not lines:
+                lines.append("All listed exam records are completed with no pending back-paper action.")
+            reply = prefix + " ".join(lines)
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "scholarships" and student:
+        schemes = _fetch_scholarship_summary(student_id, float(student["cgpa"]))
+        eligible = [scheme for scheme in schemes if scheme["eligible"]]
+        if eligible:
+            names = ", ".join(scheme["name"] for scheme in eligible)
+            reply = (
+                f"{prefix}Based on CGPA {student['cgpa']}, you are eligible for: {names}. "
+                "Use the Scholarship Hub to apply or say the scheme name."
+            )
+        else:
+            minimum = min(scheme["eligibility_cgpa"] for scheme in schemes) if schemes else 0
+            reply = (
+                f"{prefix}Your current CGPA is {student['cgpa']}. "
+                f"The lowest listed scholarship threshold is {minimum}."
+            )
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="ROUTED", intent=routed_intent, sentiment=sentiment)
+
+    if routed_intent == "grievances":
+        session["state"] = "GRIEVANCE_CATEGORY"
+        reply = (
+            f"{prefix}I can file a grievance for you. "
+            "Choose one category: academic, fee, hostel, exam, or scholarship."
+        )
+        _log_message(student_id, reply, "bot", routed_intent, sentiment)
+        return ChatResponse(reply=reply, state="GRIEVANCE_CATEGORY", intent=routed_intent, sentiment=sentiment)
+
+    return None
+
+
+def _handle_grievance_state(session: dict, raw_message: str) -> ChatResponse:
+    student_id = session["student_id"]
+    state = session["state"]
+    sentiment = score_sentiment(raw_message)
+    normalised = raw_message.lower().strip()
+
+    if state == "GRIEVANCE_CATEGORY":
+        category = next((item for item in _GRIEVANCE_CATEGORIES if item in normalised), None)
+        if category is None:
+            reply = "Please choose one category: academic, fee, hostel, exam, or scholarship."
+            _log_message(student_id, reply, "bot", "grievances", sentiment)
+            return ChatResponse(reply=reply, state="GRIEVANCE_CATEGORY", intent="grievances", sentiment=sentiment)
+        session["grievance_category"] = category
+        session["state"] = "GRIEVANCE_DESCRIPTION"
+        reply = f"Got it: {category}. Please describe the issue in one or two sentences."
+        _log_message(student_id, reply, "bot", "grievances", sentiment)
+        return ChatResponse(reply=reply, state="GRIEVANCE_DESCRIPTION", intent="grievances", sentiment=sentiment)
+
+    if state == "GRIEVANCE_DESCRIPTION":
+        if len(raw_message.strip()) < 5:
+            reply = "Please add a little more detail so the right office can act on it."
+            _log_message(student_id, reply, "bot", "grievances", sentiment)
+            return ChatResponse(reply=reply, state="GRIEVANCE_DESCRIPTION", intent="grievances", sentiment=sentiment)
+        session["grievance_description"] = raw_message.strip()
+        session["state"] = "GRIEVANCE_CONFIRM"
+        reply = "I have the grievance details. Type CONFIRM to file it, or CANCEL to discard it."
+        _log_message(student_id, reply, "bot", "grievances", sentiment)
+        return ChatResponse(reply=reply, state="GRIEVANCE_CONFIRM", intent="grievances", sentiment=sentiment)
+
+    if state == "GRIEVANCE_CONFIRM":
+        if raw_message.strip().upper() == "CONFIRM":
+            conn = get_connection()
+            conn.execute(
+                "INSERT INTO grievances (student_id, category, description) VALUES (?, ?, ?)",
+                (student_id, session["grievance_category"], session["grievance_description"]),
+            )
+            conn.commit()
+            session["state"] = "ASK_REASON"
+            session["grievance_category"] = None
+            session["grievance_description"] = None
+            reply = "Your grievance has been filed successfully. You will receive a response within 3 working days."
+            _log_message(student_id, reply, "bot", "grievances", sentiment)
+            return ChatResponse(reply=reply, state="RESOLVED", intent="grievances", sentiment=sentiment)
+        if raw_message.strip().upper() == "CANCEL":
+            session["state"] = "ASK_REASON"
+            session["grievance_category"] = None
+            session["grievance_description"] = None
+            reply = "Grievance filing cancelled. No record was created."
+            _log_message(student_id, reply, "bot", "grievances", sentiment)
+            return ChatResponse(reply=reply, state="ASK_REASON", intent="grievances", sentiment=sentiment)
+        reply = "Please type CONFIRM to file the grievance, or CANCEL to discard it."
+        _log_message(student_id, reply, "bot", "grievances", sentiment)
+        return ChatResponse(reply=reply, state="GRIEVANCE_CONFIRM", intent="grievances", sentiment=sentiment)
+
+    return ChatResponse(reply="Invalid grievance state.", state="INVALID", intent="grievances", sentiment=sentiment)
+
+
 # ---------------------------------------------------------------------------
 # Core FSM
 # ---------------------------------------------------------------------------
@@ -171,12 +397,21 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
 
     student_id: str = session["student_id"]
     state: str = session["state"]
+    language = detect_language(raw_message)
+    voice = is_voice_command(raw_message)
 
     # Persist student's raw message
     _log_message(student_id, raw_message, "student")
 
+    if state in {"GRIEVANCE_CATEGORY", "GRIEVANCE_DESCRIPTION", "GRIEVANCE_CONFIRM"}:
+        return _handle_grievance_state(session, raw_message)
+
     # ── State: ASK_REASON ────────────────────────────────────────────────────
     if state == "ASK_REASON":
+        routed_response = _route_lifecycle_message(session, raw_message, language, voice)
+        if routed_response is not None:
+            return routed_response
+
         intent = classify_intent(raw_message)
         sentiment = score_sentiment(raw_message)
 
@@ -185,6 +420,16 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
         session["state"] = "SUGGEST"
 
         bot_reply = _SUGGESTIONS[intent]
+        if route_intent(raw_message) == "withdrawals":
+            student = _fetch_student(student_id)
+            if student:
+                refund = _calculate_refund(student)
+                bot_reply += (
+                    "\n\n"
+                    f"Estimated refund check: enrolled for {refund['days_enrolled']} days, "
+                    f"policy refund {int(refund['percent'] * 100)}%, "
+                    f"net estimate INR {refund['net_refund']:,.0f} after outstanding dues."
+                )
         _log_message(student_id, bot_reply, "bot", intent, sentiment)
 
         return ChatResponse(
@@ -226,6 +471,15 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
                 "To proceed, type **CONFIRM**.\n"
                 "To cancel and go back, type **CANCEL**."
             )
+            student = _fetch_student(student_id)
+            if student:
+                refund = _calculate_refund(student)
+                bot_reply += (
+                    "\n\n"
+                    f"Current refund estimate: INR {refund['net_refund']:,.0f} "
+                    f"({int(refund['percent'] * 100)}% policy band, "
+                    f"INR {refund['fee_due']:,.0f} dues adjusted)."
+                )
             _log_message(student_id, bot_reply, "bot", intent, sentiment)
             return ChatResponse(reply=bot_reply, state="CONFIRM", intent=intent, sentiment=sentiment)
 

@@ -77,7 +77,18 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    state: Literal["ASK_REASON", "SUGGEST", "CONFIRM", "DONE", "RESOLVED", "INVALID"]
+    state: Literal[
+        "ASK_REASON",
+        "SUGGEST",
+        "CONFIRM",
+        "DONE",
+        "RESOLVED",
+        "INVALID",
+        "ROUTED",
+        "GRIEVANCE_CATEGORY",
+        "GRIEVANCE_DESCRIPTION",
+        "GRIEVANCE_CONFIRM",
+    ]
     intent: Optional[str] = None
     sentiment: Optional[str] = None
     withdrawal_submitted: bool = False
