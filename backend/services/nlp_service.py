@@ -18,6 +18,16 @@ from typing import Literal
 
 Intent = Literal["financial", "academic", "personal", "health", "career", "unclear"]
 Sentiment = Literal["positive", "neutral", "negative"]
+RouterIntent = Literal[
+    "academics",
+    "scholarships",
+    "exams",
+    "grievances",
+    "withdrawals",
+    "help",
+    "unknown",
+]
+Language = Literal["english", "hinglish", "hindi"]
 
 # ---------------------------------------------------------------------------
 # Keyword tables (all lower-case; substring matching used for partial words)
@@ -68,6 +78,34 @@ _NEGATIVE_WORDS = frozenset({
     "frustrated", "desperate", "overwhelmed",
 })
 
+_ROUTER_KEYWORDS: dict[str, list[str]] = {
+    "academics": [
+        "academic", "academics", "cgpa", "gpa", "attendance", "performance",
+        "semester", "course", "subject", "marks", "kitna cgpa", "attendance bata",
+        "padhai", "class",
+    ],
+    "scholarships": [
+        "scholarship", "fellowship", "merit", "fee waiver", "eligible",
+        "apply scholarship", "scholarship ke liye", "chatravriti",
+    ],
+    "exams": [
+        "exam", "exams", "admit card", "backpaper", "back paper", "result",
+        "grade", "datesheet", "paper", "arrear", "reappear",
+    ],
+    "grievances": [
+        "grievance", "complaint", "complain", "issue", "problem", "hostel issue",
+        "file complaint", "shikayat", "samasya", "pareshani",
+    ],
+    "withdrawals": [
+        "withdraw", "withdrawal", "leave university", "drop out", "dropout",
+        "refund", "cancel admission", "quit", "programme chhod", "college chhod",
+    ],
+    "help": [
+        "help", "support", "menu", "options", "what can you do", "assist",
+        "madad", "sahayata",
+    ],
+}
+
 
 def _tokenize(text: str) -> list[str]:
     """Lower-case, strip punctuation, split into tokens."""
@@ -97,6 +135,47 @@ def classify_intent(text: str) -> Intent:
 
     best = max(scores, key=lambda k: scores[k])
     return best if scores[best] > 0 else "unclear"  # type: ignore[return-value]
+
+
+def route_intent(text: str) -> RouterIntent:
+    """Route a general assistant message to a student-lifecycle capability."""
+    lower_text = text.lower()
+    tokens = set(_tokenize(text))
+
+    scores: dict[str, int] = {}
+    for intent, keywords in _ROUTER_KEYWORDS.items():
+        score = 0
+        for kw in keywords:
+            if kw in tokens or kw in lower_text:
+                score += 1
+        scores[intent] = score
+
+    best = max(scores, key=lambda k: scores[k])
+    return best if scores[best] > 0 else "unknown"  # type: ignore[return-value]
+
+
+def detect_language(text: str) -> Language:
+    """Detect English, Hinglish, or Hindi using deterministic text signals."""
+    if re.search(r"[\u0900-\u097F]", text):
+        return "hindi"
+
+    hinglish_markers = {
+        "bata", "batao", "kya", "kaise", "kitna", "kitni", "mera", "meri",
+        "mujhe", "chahiye", "karna", "karo", "hai", "fees", "madad",
+        "shikayat", "pareshani", "college", "padhai",
+    }
+    if set(_tokenize(text)) & hinglish_markers:
+        return "hinglish"
+    return "english"
+
+
+def is_voice_command(text: str) -> bool:
+    """Return True when the message looks like speech-transcription input."""
+    lower_text = text.lower().strip()
+    return lower_text.startswith(("voice:", "spoken:", "mic:")) or any(
+        phrase in lower_text
+        for phrase in ("hey amity", "ok amity", "voice command", "bol kar")
+    )
 
 
 def score_sentiment(text: str) -> Sentiment:

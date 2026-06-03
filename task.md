@@ -12,11 +12,11 @@ We will execute the development of AmityAssist in 6 structured phases. We will v
     - `[x]` Update `backend/routes/documents.py` with mock Document AI OCR & Fraud detection analysis.
     - `[x]` Mount student router in `backend/main.py`.
     - `[x]` Verify endpoints using python testing or pytest.
-- `[ ]` Phase 3: Conversational AI Router & FSM Enhancements
-    - `[ ]` Update `backend/services/chat_service.py` to route user intents (academics, scholarships, exams, grievances, withdrawals, help).
-    - `[ ]` Implement multilingual (Hinglish/Hindi/English) and voice-command routing in the chat logic.
-    - `[ ]` Add conversational refund calculations for withdrawals.
-    - `[ ]` Verify chatbot FSM state transitions and test suite.
+- `[x]` Phase 3: Conversational AI Router & FSM Enhancements
+    - `[x]` Update `backend/services/chat_service.py` to route user intents (academics, scholarships, exams, grievances, withdrawals, help).
+    - `[x]` Implement multilingual (Hinglish/Hindi/English) and voice-command routing in the chat logic.
+    - `[x]` Add conversational refund calculations for withdrawals.
+    - `[x]` Verify chatbot FSM state transitions and test suite.
 - `[ ]` Phase 4: Modern CSS (Glassmorphism) & Core Dashboard Widgets
     - `[ ]` Redesign `frontend/css/styles.css` with a premium glassmorphic system, circular progress rings, animations, and dark mode toggling.
     - `[ ]` Update `frontend/index.html` structure with the new widgets: personalized welcome, circular academic progress, fee outstanding, hostel allocation status, and targeted notices.
