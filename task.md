@@ -17,11 +17,11 @@ We will execute the development of AmityAssist in 6 structured phases. We will v
     - `[x]` Implement multilingual (Hinglish/Hindi/English) and voice-command routing in the chat logic.
     - `[x]` Add conversational refund calculations for withdrawals.
     - `[x]` Verify chatbot FSM state transitions and test suite.
-- `[ ]` Phase 4: Modern CSS (Glassmorphism) & Core Dashboard Widgets
-    - `[ ]` Redesign `frontend/css/styles.css` with a premium glassmorphic system, circular progress rings, animations, and dark mode toggling.
-    - `[ ]` Update `frontend/index.html` structure with the new widgets: personalized welcome, circular academic progress, fee outstanding, hostel allocation status, and targeted notices.
-    - `[ ]` Implement client-side theme toggling and tab navigation.
-    - `[ ]` Verify UI rendering and basic styling.
+- `[x]` Phase 4: Modern CSS (Glassmorphism) & Core Dashboard Widgets
+    - `[x]` Redesign `frontend/css/styles.css` with a premium glassmorphic system, circular progress rings, animations, and dark mode toggling.
+    - `[x]` Update `frontend/index.html` structure with the new widgets: personalized welcome, circular academic progress, fee outstanding, hostel allocation status, and targeted notices.
+    - `[x]` Implement client-side theme toggling and tab navigation.
+    - `[x]` Verify UI rendering and basic styling.
 - `[ ]` Phase 5: Student Lifecycle View Modules & Voice AI
     - `[ ]` Implement Academics tab (exam results and backpaper registration form).
     - `[ ]` Implement Scholarship Hub tab (scheme discovery and one-click application).

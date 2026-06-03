@@ -24,6 +24,11 @@ RouterIntent = Literal[
     "exams",
     "grievances",
     "withdrawals",
+    "notices",
+    "fees",
+    "hostel",
+    "documents",
+    "internships",
     "help",
     "unknown",
 ]
@@ -95,6 +100,26 @@ _ROUTER_KEYWORDS: dict[str, list[str]] = {
     "grievances": [
         "grievance", "complaint", "complain", "issue", "problem", "hostel issue",
         "file complaint", "shikayat", "samasya", "pareshani",
+    ],
+    "notices": [
+        "notice", "notices", "announcement", "announcements", "circular",
+        "updates", "news", "deadline", "deadlines", "portal update",
+    ],
+    "fees": [
+        "fee", "fees", "dues", "due", "payment", "outstanding", "paid",
+        "pending fee", "fee status", "kitni fees", "fees kitni",
+    ],
+    "hostel": [
+        "hostel", "room", "allocation", "allocated", "day scholar",
+        "hostel status", "hostel allotment", "accommodation",
+    ],
+    "documents": [
+        "document", "documents", "upload", "ocr", "verification", "verify document",
+        "certificate", "id proof", "medical certificate", "fraud",
+    ],
+    "internships": [
+        "internship", "internships", "placement", "placements", "campus drive",
+        "job drive", "company", "stipend", "eligible internship",
     ],
     "withdrawals": [
         "withdraw", "withdrawal", "leave university", "drop out", "dropout",
