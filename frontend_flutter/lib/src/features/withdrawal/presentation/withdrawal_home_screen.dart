@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'withdrawal_providers.dart';
 
@@ -108,6 +109,11 @@ class WithdrawalHomeScreen extends ConsumerWidget {
             ],
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.go('/withdrawal/flow'),
+        icon: const Icon(Icons.add),
+        label: const Text('Initiate Withdrawal'),
       ),
     );
   }

@@ -1,13 +1,13 @@
-import '../../../core/network/api_client.dart';
+import 'package:dio/dio.dart';
 import '../domain/withdrawal_models.dart';
 
 class WithdrawalRepository {
-  WithdrawalRepository(this._apiClient);
+  WithdrawalRepository(this._dio);
 
-  final ApiClient _apiClient;
+  final Dio _dio;
 
   Future<WithdrawalGuide> fetchGuide() async {
-    final response = await _apiClient.dio.get<Map<String, dynamic>>('/api/withdrawal/guide');
+    final response = await _dio.get<Map<String, dynamic>>('/withdrawal/guide');
     return WithdrawalGuide.fromJson(response.data ?? {});
   }
 }
