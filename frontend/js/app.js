@@ -365,20 +365,46 @@ async function sendChatMessage(message) {
 verifyForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    const role = document.querySelector('input[name="role"]:checked')?.value || "student";
     const rawId = studentIdInput.value.trim();
     const rawEmail = emailInput.value.trim();
 
-    if (!rawId && !rawEmail) {
+    if (!rawId && !rawEmail && role === "student") {
         showVerifyError("Please enter your Student ID or institutional email.");
         return;
     }
 
+    setVerifyLoading(true);
+    clearVerifyError();
+
+    if (role === "staff") {
+        // Mock Staff Login
+        setTimeout(() => {
+            state.isVerified = true;
+            document.body.classList.remove("auth-view");
+            
+            // Hide all standard student nav items except Dashboard maybe? Or hide them all.
+            document.querySelectorAll('.sidebar__nav-item:not(.staff-nav)').forEach(n => n.hidden = true);
+            document.querySelectorAll('.staff-nav').forEach(n => n.hidden = false);
+            
+            studentBadge.textContent = "Staff Member";
+            switchTab("staff-dashboard-screen", $("nav-staff-dashboard"));
+            
+            // Load Admin Data
+            fetchAdminStats();
+            fetchAdminWithdrawals();
+            fetchAdminGrievances();
+            fetchAdminDocuments();
+            
+            setVerifyLoading(false);
+        }, 500);
+        return;
+    }
+
+    // Student Logic
     const payload = {};
     if (rawId) payload.student_id = rawId;
     if (rawEmail) payload.email = rawEmail;
-
-    setVerifyLoading(true);
-    clearVerifyError();
 
     try {
         const data = await verifyStudent(payload);
@@ -410,6 +436,11 @@ verifyForm.addEventListener("submit", async (e) => {
 
         renderStudentBadge(data.student_name, data.course);
         renderDashboard(state.profile);
+        
+        // Hide staff nav, show student nav
+        document.querySelectorAll('.sidebar__nav-item:not(.staff-nav)').forEach(n => n.hidden = false);
+        document.querySelectorAll('.staff-nav').forEach(n => n.hidden = true);
+        
         fetchStudentNotices(state.studentId).then(renderNotices).catch(() => renderNotices([]));
         loadLifecycleModules().catch((err) => console.error("[Lifecycle Load Error]", err));
         document.body.classList.remove("auth-view");
@@ -485,6 +516,7 @@ function logoutSession() {
     fileUpload.value = "";
 
     document.body.classList.add("auth-view");
+    document.querySelectorAll('.sidebar__nav-item').forEach(n => n.hidden = true);
     switchTab("verify-screen", null);
     studentIdInput.focus();
 }
@@ -887,5 +919,162 @@ voiceSpeakBtn.addEventListener("click", () => {
     setTheme("light");
     updateCharCount();
     setupVoiceControls();
+    document.querySelectorAll('.sidebar__nav-item').forEach(n => n.hidden = true);
     studentIdInput.focus();
+    
+    // Toggle Student ID hint based on role selection
+    document.querySelectorAll('input[name="role"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'staff') {
+                $("student-id-hint").textContent = "Just click Verify for Staff demo access.";
+            } else {
+                $("student-id-hint").textContent = "Try STU001 from the seeded demo database.";
+            }
+        });
+    });
 })();
+
+// ── Admin Functions ──────────────────────────────────────────────────────────
+
+async function fetchAdminStats() {
+    try {
+        const stats = await apiJson('/api/admin/stats');
+        $("staff-requests-count").textContent = stats.pending_requests || "0";
+        $("staff-grievances-count").textContent = stats.pending_grievances || "0";
+    } catch (err) {
+        console.error("Admin stats error:", err);
+    }
+}
+
+async function fetchAdminWithdrawals() {
+    try {
+        const requests = await apiJson('/api/admin/requests');
+        const tbody = $("staff-withdrawal-tbody");
+        if (!requests.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="muted" style="padding:1rem;">No withdrawal requests found.</td></tr>`;
+            return;
+        }
+        
+        tbody.innerHTML = requests.map(req => `
+            <tr>
+              <td style="padding:1rem;">${escapeHtml(req.name)} <br><small class="muted">${escapeHtml(req.student_id)}</small></td>
+              <td style="padding:1rem;">${escapeHtml(req.reason || 'N/A')}</td>
+              <td style="padding:1rem;">${new Date(req.timestamp).toLocaleDateString()}</td>
+              <td style="padding:1rem;"><span class="status-badge status-badge--${escapeHtml(req.status)}">${escapeHtml(req.status)}</span></td>
+              <td style="padding:1rem;">
+                ${req.status === 'pending' ? `
+                  <button class="btn btn--compact btn--primary" onclick="updateWithdrawalStatus(${req.id}, 'approved')">Approve</button>
+                  <button class="btn btn--compact" onclick="updateWithdrawalStatus(${req.id}, 'rejected')">Reject</button>
+                ` : 'Processed'}
+              </td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        console.error("Admin withdrawals error:", err);
+    }
+}
+
+async function updateWithdrawalStatus(reqId, status) {
+    if (!confirm(`Mark request #${reqId} as ${status}?`)) return;
+    try {
+        await apiJson(`/api/admin/requests/${reqId}/status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status })
+        });
+        alert(`Request marked as ${status}`);
+        fetchAdminWithdrawals();
+        fetchAdminStats();
+    } catch (err) {
+        alert("Failed to update request.");
+    }
+}
+
+async function fetchAdminGrievances() {
+    try {
+        const grievances = await apiJson('/api/admin/grievances');
+        const tbody = $("staff-grievance-tbody");
+        if (!grievances.length) {
+            tbody.innerHTML = `<tr><td colspan="4" class="muted" style="padding:1rem;">No grievances found.</td></tr>`;
+            return;
+        }
+        
+        tbody.innerHTML = grievances.map(g => `
+            <tr>
+              <td style="padding:1rem;">${escapeHtml(g.student_name)} <br><small class="muted">${escapeHtml(g.student_id)}</small></td>
+              <td style="padding:1rem;">${escapeHtml(g.category)}</td>
+              <td style="padding:1rem;"><span class="status-badge status-badge--${escapeHtml(g.status)}">${escapeHtml(g.status)}</span></td>
+              <td style="padding:1rem;">
+                ${g.status !== 'resolved' ? `
+                  <button class="btn btn--compact btn--primary" onclick="resolveGrievance(${g.id})">Resolve</button>
+                ` : escapeHtml(g.resolution || 'Resolved')}
+              </td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        console.error("Admin grievances error:", err);
+    }
+}
+
+async function resolveGrievance(grievanceId) {
+    const resolution = prompt('Enter resolution notes:');
+    if (!resolution) return;
+    try {
+        await apiJson(`/api/admin/grievances/${grievanceId}/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ resolution })
+        });
+        fetchAdminGrievances();
+        fetchAdminStats();
+    } catch (err) {
+        alert("Failed to resolve grievance.");
+    }
+}
+
+async function fetchAdminDocuments() {
+    try {
+        const docs = await apiJson('/api/admin/documents');
+        const tbody = $("staff-document-tbody");
+        if (!docs.length) {
+            tbody.innerHTML = `<tr><td colspan="5" class="muted" style="padding:1rem;">No documents uploaded.</td></tr>`;
+            return;
+        }
+        
+        tbody.innerHTML = docs.map(d => {
+            const riskHtml = d.ocr_data ? 
+                `<strong>Risk:</strong> ${d.ocr_data.fraud_indicators?.risk_level || 'Low'}` : 
+                `<span class="muted">No OCR data</span>`;
+                
+            return `
+            <tr>
+              <td style="padding:1rem;">${escapeHtml(d.student_name)} <br><small class="muted">${escapeHtml(d.student_id)}</small></td>
+              <td style="padding:1rem;">${escapeHtml(d.document_type)} <br><small class="muted"><a href="${API_BASE}/api${escapeHtml(d.file_path)}" target="_blank">View File</a></small></td>
+              <td style="padding:1rem;">${riskHtml}</td>
+              <td style="padding:1rem;"><span class="status-badge status-badge--${escapeHtml(d.status)}">${escapeHtml(d.status)}</span></td>
+              <td style="padding:1rem;">
+                ${d.status === 'pending' ? `
+                  <button class="btn btn--compact btn--primary" onclick="verifyDocument(${d.id}, 'verified', '')">Verify</button>
+                  <button class="btn btn--compact" onclick="verifyDocument(${d.id}, 'rejected', 'Failed visual check')">Reject</button>
+                ` : 'Processed'}
+              </td>
+            </tr>
+        `}).join('');
+    } catch (err) {
+        console.error("Admin docs error:", err);
+    }
+}
+
+async function verifyDocument(docId, status, notes) {
+    if (!confirm(`Mark document #${docId} as ${status}?`)) return;
+    try {
+        await apiJson(`/api/admin/documents/${docId}/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status, admin_notes: notes })
+        });
+        fetchAdminDocuments();
+    } catch (err) {
+        alert("Failed to update document status.");
+    }
+}

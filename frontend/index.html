@@ -55,6 +55,24 @@
           <span class="nav-icon" aria-hidden="true">07</span>
           Document Center
         </a>
+        
+        <!-- Staff Navigation (Hidden for students) -->
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-dashboard-screen', this)" id="nav-staff-dashboard" hidden>
+          <span class="nav-icon" aria-hidden="true">S1</span>
+          Staff Dashboard
+        </a>
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-withdrawal-screen', this)" id="nav-staff-withdrawal" hidden>
+          <span class="nav-icon" aria-hidden="true">S2</span>
+          Withdrawal Queue
+        </a>
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-grievance-screen', this)" id="nav-staff-grievance" hidden>
+          <span class="nav-icon" aria-hidden="true">S3</span>
+          Grievance Desk
+        </a>
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-document-screen', this)" id="nav-staff-document" hidden>
+          <span class="nav-icon" aria-hidden="true">S4</span>
+          Document Audit
+        </a>
       </nav>
 
       <div class="sidebar__footer">
@@ -93,10 +111,18 @@
           </div>
 
           <form id="verify-form" class="verify-form" novalidate aria-label="Student identity verification form">
-            <div class="form-group">
-              <label class="form-label" for="student-id-input">Student ID</label>
-              <input id="student-id-input" type="text" class="form-input" placeholder="e.g. STU001" maxlength="20" autocomplete="off" aria-describedby="student-id-hint" />
-              <span id="student-id-hint" class="form-hint">Try STU001 from the seeded demo database.</span>
+            <div class="form-group role-selector">
+              <label class="form-label">Access Mode</label>
+              <div class="radio-group" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <label><input type="radio" name="role" value="student" checked> Student</label>
+                <label><input type="radio" name="role" value="staff"> Staff Member</label>
+              </div>
+            </div>
+
+            <div class="form-group" id="student-id-group">
+              <label class="form-label" for="student-id-input">Student ID / Staff ID</label>
+              <input id="student-id-input" type="text" class="form-input" placeholder="e.g. STU001 or STAFF1" maxlength="20" autocomplete="off" aria-describedby="student-id-hint" />
+              <span id="student-id-hint" class="form-hint">Try STU001 for Student, or just click Verify for Staff.</span>
             </div>
 
             <div class="form-divider"><span class="form-divider__text">or</span></div>
@@ -378,6 +404,115 @@
             </div>
           </article>
         </div>
+      </section>
+
+      <!-- Staff Dashboard Screen -->
+      <section id="staff-dashboard-screen" class="screen dashboard-screen" aria-label="Staff dashboard" hidden>
+        <div class="dashboard-grid">
+          <article class="welcome-panel glass-card">
+            <div>
+              <p class="eyebrow">Welcome Back</p>
+              <h2>Staff Dashboard</h2>
+              <p>Manage student lifecycle procedures and audits.</p>
+            </div>
+          </article>
+
+          <article class="metric-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">Requests</p>
+              <h3 id="staff-requests-count">--</h3>
+            </div>
+            <p class="muted">Total pending withdrawal requests</p>
+          </article>
+
+          <article class="metric-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">Grievances</p>
+              <h3 id="staff-grievances-count">--</h3>
+            </div>
+            <p class="muted">Total unresolved grievances</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Staff Withdrawal Requests Screen -->
+      <section id="staff-withdrawal-screen" class="screen utility-screen" aria-label="Staff Withdrawal Requests" hidden>
+        <article class="glass-card module-card module-card--wide" style="width: 100%;">
+          <div class="card-heading card-heading--row">
+            <div>
+              <h2>Withdrawal Requests Queue</h2>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto; margin-top: 1rem;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Student</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Reason</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Date</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Status</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Action</th>
+                </tr>
+              </thead>
+              <tbody id="staff-withdrawal-tbody">
+                <tr><td colspan="5" class="muted" style="padding: 1rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- Staff Grievance Desk Screen -->
+      <section id="staff-grievance-screen" class="screen utility-screen" aria-label="Staff Grievance Desk" hidden>
+        <article class="glass-card module-card module-card--wide" style="width: 100%;">
+          <div class="card-heading card-heading--row">
+            <div>
+              <h2>Grievance Queue</h2>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto; margin-top: 1rem;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Student</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Category</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Status</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Action</th>
+                </tr>
+              </thead>
+              <tbody id="staff-grievance-tbody">
+                <tr><td colspan="4" class="muted" style="padding: 1rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- Staff Document Audit Screen -->
+      <section id="staff-document-screen" class="screen utility-screen" aria-label="Staff Document Audit" hidden>
+        <article class="glass-card module-card module-card--wide" style="width: 100%;">
+          <div class="card-heading card-heading--row">
+            <div>
+              <h2>Document Audit Log</h2>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto; margin-top: 1rem;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Student</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">File Info</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">OCR / Fraud Risk</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Status</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Action</th>
+                </tr>
+              </thead>
+              <tbody id="staff-document-tbody">
+                <tr><td colspan="5" class="muted" style="padding: 1rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
       </section>
     </main>
   </div>
