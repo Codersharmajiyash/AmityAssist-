@@ -1,10 +1,106 @@
-# AmityAssist
+# UNIASSIST
 
-AmityAssist is a student lifecycle management portal for Amity-style university workflows. It combines a FastAPI backend, SQLite seed data, a vanilla HTML/CSS/JS dashboard, student lifecycle modules, document OCR simulation, and a voice-enabled AI advisor.
+UNIASSIST is a workflow-centric Student Service and Procedure Guidance Platform for universities.
+
+It acts as a digital front desk that guides students through official procedures from intent to completion:
+
+```text
+Intent -> Information -> Documents -> Submission -> Processing -> Completion
+```
+
+UNIASSIST is not a chatbot-only project, not an LLM project, and not a prediction system. Assistant-style interaction is only one interface over the structured workflow engine.
 
 ## Current Status
 
-Completed through Phase 5:
+This repository currently contains an older prototype folder named `AmityAssist-`. Phase 1 work has started converting it toward the target UNIASSIST stack and withdrawal workflow MVP.
+
+### Target Stack
+
+- Frontend: Flutter
+- State management: Riverpod
+- Backend: FastAPI
+- Database: PostgreSQL
+- Authentication: JWT
+- Caching: Redis
+- Storage: MinIO or AWS S3
+- Containerization: Docker
+- Architecture: Clean Architecture, Repository Pattern, RBAC
+
+### Phase 1 Status
+
+Implemented in this phase:
+
+- Structured Withdrawal Intelligence workflow API.
+- Official withdrawal guide endpoint with steps, departments, required documents, forms, timelines, and statuses.
+- Generated withdrawal checklist items when a student confirms a withdrawal request.
+- Workflow event tracking for submitted withdrawal requests.
+- PostgreSQL schema draft for the target platform.
+- Docker Compose foundation for FastAPI, PostgreSQL, Redis, and MinIO.
+- Environment-based backend configuration for database, Redis, JWT, S3/MinIO, and CORS.
+
+Still local/prototype-based:
+
+- Runtime database remains SQLite until PostgreSQL/Docker are available locally or deployed.
+- Existing frontend remains static HTML/CSS/JS until Phase 3 Flutter implementation.
+- Existing session verification remains prototype-based until JWT authentication is implemented.
+
+## Development Phases
+
+### Phase 1: Withdrawal Intelligence MVP
+
+Goal: Build the first workflow-centric procedure module.
+
+Status: In progress.
+
+Includes:
+
+- Withdrawal guidance
+- Withdrawal knowledge base
+- Required document generation
+- Form repository
+- Checklist engine
+- Workflow guidance
+- Status tracking
+- Official timeline guidance
+- Refund process guidance without outcome prediction
+
+### Phase 2: Core Platform Foundation
+
+Goal: Move the backend fully onto the production platform foundation.
+
+Planned:
+
+- PostgreSQL runtime integration
+- JWT authentication
+- RBAC authorization
+- Redis caching
+- MinIO/S3 document storage
+- Audit logging
+- Repository pattern
+- Clean Architecture layering
+
+Status: Not started.
+
+### Phase 3: Flutter Frontend
+
+Goal: Build the student-facing UNIASSIST frontend using Flutter and Riverpod.
+
+Planned:
+
+- Student login
+- Procedure dashboard
+- Withdrawal workflow screens
+- Checklist screen
+- Form repository
+- Document upload screen
+- Status tracker
+- Responsive mobile/web layouts
+
+Status: Not started.
+
+## Existing Prototype Features
+
+The older prototype currently includes:
 
 - Expanded student lifecycle database and seed data.
 - Student and staff backend routes for profiles, notices, exams, scholarships, grievances, documents, and chat.
@@ -17,7 +113,7 @@ Completed through Phase 5:
   - Document AI panel with scan animation, OCR fields, and fraud warnings.
   - Floating voice widget using the browser Web Speech API.
 
-## Quick Start
+## Quick Start: Current Local Prototype
 
 Run these commands from:
 
@@ -154,3 +250,21 @@ Phase 6 is the staff portal and end-to-end verification phase:
 - Document audit records.
 - Staff portal API actions.
 - Full client-server walkthrough.
+
+## Target Stack Startup
+
+Docker and Flutter are not currently available in this local environment. Once Docker is installed, the target-stack services can be started with:
+
+```powershell
+docker compose up --build
+```
+
+Services:
+
+```text
+FastAPI:     http://127.0.0.1:8000
+API docs:    http://127.0.0.1:8000/api/docs
+PostgreSQL:  localhost:5432
+Redis:       localhost:6379
+MinIO:       http://127.0.0.1:9001
+```

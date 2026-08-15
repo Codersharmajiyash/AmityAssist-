@@ -54,10 +54,80 @@ CREATE TABLE IF NOT EXISTS withdrawal_requests (
     reason          TEXT    NOT NULL,
     detected_intent TEXT,
     refund_amount   REAL    DEFAULT 0.0,
-    status          TEXT    NOT NULL DEFAULT 'pending'
-                    CHECK(status IN ('pending', 'approved', 'rejected')),
+    status          TEXT    NOT NULL DEFAULT 'pending',
+    reference_no    TEXT,
+    current_step    INTEGER NOT NULL DEFAULT 1,
     timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(student_id) REFERENCES students(id)
+);
+
+CREATE TABLE IF NOT EXISTS procedure_steps (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    procedure_code  TEXT NOT NULL,
+    step_number     INTEGER NOT NULL,
+    title           TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    department      TEXT NOT NULL,
+    timeline_text   TEXT NOT NULL,
+    status_after    TEXT NOT NULL,
+    UNIQUE(procedure_code, step_number)
+);
+
+CREATE TABLE IF NOT EXISTS procedure_documents (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    procedure_code    TEXT NOT NULL,
+    document_key      TEXT NOT NULL,
+    name              TEXT NOT NULL,
+    description       TEXT NOT NULL,
+    mandatory         INTEGER NOT NULL DEFAULT 1,
+    applicable_reason TEXT NOT NULL DEFAULT 'all',
+    form_url          TEXT,
+    UNIQUE(procedure_code, document_key)
+);
+
+CREATE TABLE IF NOT EXISTS procedure_forms (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    procedure_code     TEXT NOT NULL,
+    form_key           TEXT NOT NULL,
+    name               TEXT NOT NULL,
+    description        TEXT NOT NULL,
+    download_url       TEXT NOT NULL,
+    issuing_department TEXT NOT NULL,
+    UNIQUE(procedure_code, form_key)
+);
+
+CREATE TABLE IF NOT EXISTS withdrawal_checklist_items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id      INTEGER NOT NULL,
+    document_key    TEXT NOT NULL,
+    label           TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending', 'uploaded', 'verified', 'rejected', 'not_required')),
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(request_id) REFERENCES withdrawal_requests(id)
+);
+
+CREATE TABLE IF NOT EXISTS workflow_events (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id      INTEGER NOT NULL,
+    status          TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    actor           TEXT NOT NULL DEFAULT 'system',
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(request_id) REFERENCES withdrawal_requests(id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id        TEXT,
+    actor_role      TEXT,
+    action          TEXT NOT NULL,
+    entity_type     TEXT NOT NULL,
+    entity_id       TEXT,
+    metadata        TEXT,
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS documents (
@@ -203,6 +273,37 @@ _SAMPLE_INTERNSHIPS = [
     ("Research Associate (Biotech)", "Biocon", "Work in the gene-editing labs assisting senior molecular biologists. Requires biology background.", 7.5, "35,000 INR/month", "2026-06-30")
 ]
 
+_WITHDRAWAL_STEPS = [
+    ("withdrawal", 1, "Collect withdrawal reason", "Record the student's reason and determine whether any special documents are required.", "Student Services Desk", "Immediate during request initiation.", "submitted"),
+    ("withdrawal", 2, "Generate required document list", "Create a personalized checklist using mandatory documents and reason-specific supporting documents.", "Registrar Office", "Generated immediately after intent confirmation.", "documents_pending"),
+    ("withdrawal", 3, "Explain every required document", "Show why each document is needed, who issues it, and what quality checks apply.", "Student Services Desk", "Available immediately in UNIASSIST.", "documents_pending"),
+    ("withdrawal", 4, "Provide downloadable forms", "Make official withdrawal forms and clearance formats available for download or kiosk printing.", "Registrar Office", "Available immediately in the form repository.", "documents_pending"),
+    ("withdrawal", 5, "Guide document preparation", "Guide the student to upload clear, valid files before submission review.", "Student", "Student-dependent.", "documents_pending"),
+    ("withdrawal", 6, "Guide submission process", "Submit the request to the Registrar Office with generated checklist and attachments.", "Registrar Office", "Generally same working day after all required files are ready.", "under_review"),
+    ("withdrawal", 7, "Show departments involved", "Display Academic Department, Library, Hostel, Finance, and Accounts clearances where applicable.", "Registrar Office", "Generally 3-5 working days for clearances.", "department_clearance"),
+    ("withdrawal", 8, "Show official timelines", "Display official timeline bands without predicting individual outcomes.", "Student Services Desk", "Visible throughout the request lifecycle.", "under_review"),
+    ("withdrawal", 9, "Track process status", "Show status events from submission through department and finance processing.", "Registrar Office", "Updated whenever staff records an action.", "under_review"),
+    ("withdrawal", 10, "Guide refund process", "Explain that finance processing begins after required approvals and clearances.", "Finance Office", "Generally 7-10 working days after complete clearance.", "finance_processing"),
+    ("withdrawal", 11, "Mark workflow complete", "Close the request after university processing is completed or rejected with reason.", "Registrar Office", "After final staff action.", "completed"),
+]
+
+_WITHDRAWAL_DOCUMENTS = [
+    ("withdrawal", "withdrawal_application", "Withdrawal Application Form", "Official request form signed by the student. Required for every withdrawal request.", 1, "all", "/forms/withdrawal-application.pdf"),
+    ("withdrawal", "student_id_proof", "Student ID Proof", "University ID card or valid institutional identity proof used to match the student record.", 1, "all", None),
+    ("withdrawal", "fee_clearance", "Fee Clearance Statement", "Finance record showing paid, pending, or adjustable dues before refund processing.", 1, "all", "/forms/fee-clearance.pdf"),
+    ("withdrawal", "library_clearance", "Library Clearance", "Confirmation that books, equipment, or library penalties are settled.", 1, "all", "/forms/library-clearance.pdf"),
+    ("withdrawal", "hostel_clearance", "Hostel Clearance", "Required if the student has a hostel allocation or hostel dues.", 0, "hostel", "/forms/hostel-clearance.pdf"),
+    ("withdrawal", "medical_certificate", "Medical Certificate", "Required when withdrawal reason is medical or health-related.", 0, "health", None),
+    ("withdrawal", "guardian_consent", "Guardian Consent Letter", "Consent or acknowledgement letter when required by university policy.", 0, "personal", "/forms/guardian-consent.pdf"),
+]
+
+_WITHDRAWAL_FORMS = [
+    ("withdrawal", "withdrawal_application", "Withdrawal Application Form", "Primary form for initiating an official withdrawal request.", "/forms/withdrawal-application.pdf", "Registrar Office"),
+    ("withdrawal", "fee_clearance", "Fee Clearance Form", "Finance clearance format used before refund processing.", "/forms/fee-clearance.pdf", "Finance Office"),
+    ("withdrawal", "library_clearance", "Library Clearance Form", "Library no-dues confirmation format.", "/forms/library-clearance.pdf", "Library"),
+    ("withdrawal", "hostel_clearance", "Hostel Clearance Form", "Hostel no-dues and handover format.", "/forms/hostel-clearance.pdf", "Hostel Office"),
+]
+
 
 def init_db() -> None:
     """Create tables and insert rich sample lifecycle data — safe to call multiple times."""
@@ -229,11 +330,24 @@ def init_db() -> None:
         cursor.execute("DROP TABLE IF EXISTS examinations")
         cursor.execute("DROP TABLE IF EXISTS grievances")
         cursor.execute("DROP TABLE IF EXISTS internships")
+        cursor.execute("DROP TABLE IF EXISTS procedure_steps")
+        cursor.execute("DROP TABLE IF EXISTS procedure_documents")
+        cursor.execute("DROP TABLE IF EXISTS procedure_forms")
+        cursor.execute("DROP TABLE IF EXISTS withdrawal_checklist_items")
+        cursor.execute("DROP TABLE IF EXISTS workflow_events")
+        cursor.execute("DROP TABLE IF EXISTS audit_logs")
         conn.commit()
 
     # Create all tables
     cursor.executescript(_SCHEMA)
     conn.commit()
+
+    # Lightweight migrations for existing local SQLite files.
+    existing_columns = [row["name"] for row in cursor.execute("PRAGMA table_info(withdrawal_requests)").fetchall()]
+    if "reference_no" not in existing_columns:
+        cursor.execute("ALTER TABLE withdrawal_requests ADD COLUMN reference_no TEXT")
+    if "current_step" not in existing_columns:
+        cursor.execute("ALTER TABLE withdrawal_requests ADD COLUMN current_step INTEGER NOT NULL DEFAULT 1")
 
     # Seed students
     cursor.executemany(
@@ -270,6 +384,21 @@ def init_db() -> None:
     cursor.executemany(
         "INSERT OR IGNORE INTO internships (title, company, description, required_cgpa, stipend, deadline) VALUES (?, ?, ?, ?, ?, ?)",
         _SAMPLE_INTERNSHIPS
+    )
+
+    cursor.executemany(
+        "INSERT OR IGNORE INTO procedure_steps (procedure_code, step_number, title, description, department, timeline_text, status_after) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        _WITHDRAWAL_STEPS
+    )
+
+    cursor.executemany(
+        "INSERT OR IGNORE INTO procedure_documents (procedure_code, document_key, name, description, mandatory, applicable_reason, form_url) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        _WITHDRAWAL_DOCUMENTS
+    )
+
+    cursor.executemany(
+        "INSERT OR IGNORE INTO procedure_forms (procedure_code, form_key, name, description, download_url, issuing_department) VALUES (?, ?, ?, ?, ?, ?)",
+        _WITHDRAWAL_FORMS
     )
 
     conn.commit()

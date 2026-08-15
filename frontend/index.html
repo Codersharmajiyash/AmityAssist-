@@ -311,10 +311,43 @@
       </section>
 
       <section id="status-screen" class="screen utility-screen" aria-label="Request Status" hidden>
-        <div class="glass-card utility-card">
-          <p class="eyebrow">Withdrawal</p>
-          <h2>Request Status</h2>
-          <div id="status-content" class="utility-copy">You currently do not have any active withdrawal requests.</div>
+        <div class="workflow-layout">
+          <article class="glass-card utility-card workflow-card">
+            <p class="eyebrow">Withdrawal</p>
+            <h2>Procedure GPS</h2>
+            <div id="status-content" class="utility-copy">You currently do not have any active withdrawal requests.</div>
+          </article>
+          <article class="glass-card workflow-card">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Checklist</p>
+                <h2>Required Documents</h2>
+              </div>
+              <span id="withdrawal-checklist-count" class="count-pill">0</span>
+            </div>
+            <div id="withdrawal-checklist" class="records-list">
+              <p class="muted">Verify to load withdrawal document requirements.</p>
+            </div>
+          </article>
+          <article class="glass-card workflow-card workflow-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Official Procedure</p>
+                <h2>Steps, Departments, Timelines</h2>
+              </div>
+              <span id="withdrawal-step-count" class="count-pill">0</span>
+            </div>
+            <div id="withdrawal-steps" class="workflow-steps">
+              <p class="muted">Official withdrawal steps will appear here.</p>
+            </div>
+          </article>
+          <article class="glass-card workflow-card">
+            <p class="eyebrow">Forms</p>
+            <h2>Repository</h2>
+            <div id="withdrawal-forms" class="records-list">
+              <p class="muted">Official form links will appear here.</p>
+            </div>
+          </article>
         </div>
       </section>
 

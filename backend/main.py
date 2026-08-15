@@ -17,9 +17,10 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+from backend.config import settings
 from backend.database.seed import init_db
 from backend.middleware.security import SecurityHeadersMiddleware
-from backend.routes import auth, chat, documents, status, admin, student
+from backend.routes import auth, chat, documents, status, admin, student, withdrawal
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -31,10 +32,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Student Withdrawal Chatbot API",
+    title=f"{settings.app_name} API",
     description=(
-        "Secure, AI-powered chatbot backend for managing student withdrawal requests "
-        "at an educational institution."
+        "Workflow-centric student service and procedure guidance backend for "
+        "university digital front desk operations."
     ),
     version="1.0.0",
     docs_url="/api/docs",
@@ -53,7 +54,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # In production: replace "*" with your actual front-end domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(settings.cors_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
@@ -65,10 +66,16 @@ app.include_router(chat.router)
 app.include_router(student.router)
 app.include_router(documents.router)
 app.include_router(status.router)
+app.include_router(withdrawal.router)
 app.include_router(admin.router)
 
 
 @app.get("/api/health", tags=["System"])
 async def health_check():
     """Liveness probe endpoint."""
-    return {"status": "ok", "service": "withdrawal-chatbot", "version": "1.0.0"}
+    return {
+        "status": "ok",
+        "service": settings.app_name.lower(),
+        "environment": settings.environment,
+        "version": "1.0.0",
+    }
