@@ -167,6 +167,10 @@ async function fetchGrievances(studentId) {
     return apiJson(`/api/student/grievances?student_id=${encodeURIComponent(studentId)}`);
 }
 
+async function fetchWithdrawalStatus(studentId) {
+    return apiJson(`/api/withdrawal/status/${encodeURIComponent(studentId)}`);
+}
+
 function statusClass(status) {
     const normalized = String(status || "pending").toLowerCase();
     if (["pass", "approved", "verified", "clean", "paid", "resolved"].includes(normalized)) return "record-pill--good";
@@ -260,16 +264,76 @@ function renderGrievances(items) {
     `).join("");
 }
 
+function renderWithdrawalWorkflow(data) {
+    const guide = data.guide || {};
+    const request = data.request || {};
+    const steps = guide.steps || [];
+    const forms = guide.forms || [];
+    const checklist = data.has_request ? (data.checklist || []) : (guide.documents || []);
+
+    $("withdrawal-step-count").textContent = steps.length;
+    $("withdrawal-checklist-count").textContent = checklist.length;
+
+    if (data.has_request) {
+        $("status-content").innerHTML = `
+          <strong>Reference:</strong> ${escapeHtml(request.reference_no || "Pending")}<br>
+          <strong>Status:</strong> <span class="status-label">${escapeHtml(request.status || "pending")}</span><br>
+          <strong>Reason:</strong> ${escapeHtml(request.reason || "Not recorded")}<br><br>
+          According to the official procedure, initial verification generally takes 1-2 working days after submission.`;
+    } else {
+        $("status-content").innerHTML = `
+          <strong>No active withdrawal request.</strong><br><br>
+          Review the official steps, required documents, and forms before starting the workflow.`;
+    }
+
+    $("withdrawal-checklist").innerHTML = checklist.length ? checklist.map((item) => `
+      <article class="record-item">
+        <div>
+          <span class="record-item__meta">${escapeHtml(item.mandatory ? "Required" : (item.status || "Pending"))}</span>
+          <h3>${escapeHtml(item.label || item.name)}</h3>
+          <p>${escapeHtml(item.description)}</p>
+        </div>
+      </article>
+    `).join("") : `<p class="muted">No document requirements are configured.</p>`;
+
+    $("withdrawal-steps").innerHTML = steps.length ? steps.map((step) => `
+      <article class="timeline-item">
+        <div class="timeline-item__dot"></div>
+        <div>
+          <span class="record-item__meta">Step ${escapeHtml(step.step_number)} - ${escapeHtml(step.department)}</span>
+          <h3>${escapeHtml(step.title)}</h3>
+          <p>${escapeHtml(step.description)}</p>
+          <p class="timeline-item__resolution">${escapeHtml(step.timeline_text)}</p>
+        </div>
+      </article>
+    `).join("") : `<p class="muted">No official steps are configured.</p>`;
+
+    $("withdrawal-forms").innerHTML = forms.length ? forms.map((form) => `
+      <article class="record-item">
+        <div>
+          <span class="record-item__meta">${escapeHtml(form.issuing_department)}</span>
+          <h3>${escapeHtml(form.name)}</h3>
+          <p>${escapeHtml(form.description)}</p>
+        </div>
+        <div class="record-item__side">
+          <span class="record-pill record-pill--pending">Form</span>
+        </div>
+      </article>
+    `).join("") : `<p class="muted">No forms are configured.</p>`;
+}
+
 async function loadLifecycleModules() {
     if (!state.studentId) return;
-    const [exams, scholarships, grievances] = await Promise.all([
+    const [exams, scholarships, grievances, withdrawal] = await Promise.all([
         fetchExams(state.studentId),
         fetchScholarships(state.studentId),
         fetchGrievances(state.studentId),
+        fetchWithdrawalStatus(state.studentId),
     ]);
     renderExams(exams);
     renderScholarships(scholarships);
     renderGrievances(grievances);
+    renderWithdrawalWorkflow(withdrawal);
 }
 
 async function verifyStudent(payload) {
@@ -708,9 +772,11 @@ async function sendMessage(text) {
             quickReplies.hidden = true;
 
             if (data.withdrawal_submitted) {
-                $("status-content").innerHTML = `
-                  <strong>Status:</strong> <span class="status-label">pending</span><br><br>
-                  Your withdrawal request has been submitted and is currently being processed by the Registrar's Office.`;
+                fetchWithdrawalStatus(state.studentId).then(renderWithdrawalWorkflow).catch(() => {
+                    $("status-content").innerHTML = `
+                      <strong>Status:</strong> <span class="status-label">pending</span><br><br>
+                      Your withdrawal request has been submitted and is currently being processed by the Registrar's Office.`;
+                });
             }
         } else {
             renderQuickReplies(data.state);

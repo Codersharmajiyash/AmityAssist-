@@ -1,0 +1,15 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/network/api_client.dart';
+import '../data/withdrawal_repository.dart';
+import '../domain/withdrawal_models.dart';
+
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+
+final withdrawalRepositoryProvider = Provider<WithdrawalRepository>(
+  (ref) => WithdrawalRepository(ref.watch(apiClientProvider)),
+);
+
+final withdrawalGuideProvider = FutureProvider<WithdrawalGuide>((ref) {
+  return ref.watch(withdrawalRepositoryProvider).fetchGuide();
+});

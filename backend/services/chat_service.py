@@ -29,6 +29,7 @@ from .nlp_service import (
     route_intent,
     score_sentiment,
 )
+from .withdrawal_workflow import create_withdrawal_request
 
 # ---------------------------------------------------------------------------
 # In-memory session registry  {session_id: SessionData}
@@ -192,15 +193,9 @@ def _log_message(
     conn.commit()
 
 
-def _submit_withdrawal(student_id: str, reason: str, intent: str) -> None:
-    """Create a withdrawal_request record with 'pending' status."""
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO withdrawal_requests (student_id, reason, detected_intent, status) "
-        "VALUES (?, ?, ?, 'pending')",
-        (student_id, reason, intent),
-    )
-    conn.commit()
+def _submit_withdrawal(student_id: str, reason: str, intent: str) -> str:
+    """Create a structured withdrawal request and generated checklist."""
+    return create_withdrawal_request(student_id, reason, intent)
 
 
 def _fetch_student(student_id: str) -> Optional[dict]:
@@ -887,9 +882,10 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
                 refund = _calculate_refund(student)
                 bot_reply += (
                     "\n\n"
-                    f"Estimated refund check: enrolled for {refund['days_enrolled']} days, "
-                    f"policy refund {int(refund['percent'] * 100)}%, "
-                    f"net estimate INR {refund['net_refund']:,.0f} after outstanding dues."
+                    f"Official refund guidance: your current enrollment age is {refund['days_enrolled']} days, "
+                    f"which maps to the {int(refund['percent'] * 100)}% policy band before finance verification. "
+                    f"Recorded outstanding dues are INR {refund['fee_due']:,.0f}. "
+                    "The Finance Office confirms final eligibility and amount after clearances; UNIASSIST does not predict outcomes."
                 )
         _log_message(student_id, bot_reply, "bot", intent, sentiment)
 
@@ -947,9 +943,10 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
             session["state"] = "CONFIRM"
             bot_reply = (
                 "I understand, and I respect your decision.\n\n"
-                "⚠️ **Please note:** Submitting this request will initiate a formal withdrawal "
-                "from your programme. Depending on the withdrawal date, you may be eligible for "
-                "a partial tuition refund — our Registrar's office will advise you on this.\n\n"
+                "Please note: submitting this request will initiate the official withdrawal workflow "
+                "for your programme. UNIASSIST will generate your document checklist, form links, "
+                "departments involved, and official timeline bands. The Registrar and Finance offices "
+                "make final decisions according to university policy.\n\n"
                 "To proceed, type **CONFIRM**.\n"
                 "To cancel and go back, type **CANCEL**."
             )
@@ -958,9 +955,9 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
                 refund = _calculate_refund(student)
                 bot_reply += (
                     "\n\n"
-                    f"Current refund estimate: INR {refund['net_refund']:,.0f} "
-                    f"({int(refund['percent'] * 100)}% policy band, "
-                    f"INR {refund['fee_due']:,.0f} dues adjusted)."
+                    f"Refund policy band: {int(refund['percent'] * 100)}% before final finance verification. "
+                    f"Recorded outstanding dues: INR {refund['fee_due']:,.0f}. "
+                    "Finance processing generally takes 7-10 working days after all required clearances."
                 )
             _log_message(student_id, bot_reply, "bot", intent, sentiment)
             return ChatResponse(
@@ -974,16 +971,14 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
         normalised = raw_message.strip().upper()
 
         if normalised == "CONFIRM":
-            _submit_withdrawal(student_id, session.get("reason", ""), intent)
+            ref = _submit_withdrawal(student_id, session.get("reason", ""), intent)
             invalidate_session(session_id)
-            ref = "WD-" + str(uuid.uuid4())[:8].upper()
             bot_reply = (
-                f"✅ **Your withdrawal request has been submitted successfully.**\n\n"
-                f"📋 **Reference:** `{ref}`\n\n"
-                "You will receive a confirmation email within **2 business days** with full details. "
-                "If you reconsider, please contact the Registrar's office within **48 hours** — "
-                "requests can be withdrawn within that window.\n\n"
-                "We wish you every success in your future endeavours. 🎓"
+                f"**Your withdrawal workflow has been submitted.**\n\n"
+                f"**Reference:** `{ref}`\n\n"
+                "Next, open Request Status to review the generated checklist, official forms, "
+                "departments involved, and timeline guidance. According to the official procedure, "
+                "initial verification generally takes 1-2 working days after submission."
             )
             _log_message(student_id, bot_reply, "bot", intent, sentiment)
             return ChatResponse(

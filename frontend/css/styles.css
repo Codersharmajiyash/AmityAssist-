@@ -947,6 +947,33 @@ body.auth-view #verify-screen {
   gap: 14px;
 }
 
+.workflow-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(320px, 1fr);
+  align-content: start;
+  gap: 16px;
+  width: 100%;
+  max-width: 1180px;
+  margin: auto;
+}
+
+.workflow-card {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.workflow-card--wide {
+  grid-column: 1 / -1;
+}
+
+.workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .module-grid,
 .document-grid {
   display: grid;
@@ -1299,6 +1326,11 @@ body.auth-view #verify-screen {
   .chat-screen { min-height: 70vh; }
   .module-grid,
   .document-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-layout,
+  .workflow-steps {
     grid-template-columns: 1fr;
   }
 }
