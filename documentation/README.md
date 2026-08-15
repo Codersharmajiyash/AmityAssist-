@@ -12,11 +12,11 @@ UNIASSIST is not a chatbot-only project, not an LLM project, and not a predictio
 
 ## Current Status
 
-This repository currently contains an older prototype folder named `AmityAssist-`. Phase 1 work has started converting it toward the target UNIASSIST stack and withdrawal workflow MVP.
+This repository currently contains the UNIASSIST prototype and target-stack scaffolding. The older static frontend remains useful for validating backend flows locally, but the intended kiosk/tablet frontend should continue in `frontend_flutter/`.
 
 ### Target Stack
 
-- Frontend: Flutter
+- Frontend: Flutter for kiosk/tablet/web target
 - State management: Riverpod
 - Backend: FastAPI
 - Database: PostgreSQL
@@ -41,7 +41,8 @@ Implemented in this phase:
 Still local/prototype-based:
 
 - Runtime database remains SQLite until PostgreSQL/Docker are available locally or deployed.
-- Existing frontend remains static HTML/CSS/JS until Phase 3 Flutter implementation.
+- Existing static HTML/CSS/JS remains a prototype validation surface only.
+- `frontend_flutter/` contains the Flutter/Riverpod scaffold for the kiosk-grade interface.
 - Existing session verification remains prototype-based until JWT authentication is implemented.
 
 ## Development Phases
@@ -81,9 +82,9 @@ Planned:
 
 Status: Not started.
 
-### Phase 3: Flutter Frontend
+### Phase 3: Flutter / Kiosk Frontend
 
-Goal: Build the student-facing UNIASSIST frontend using Flutter and Riverpod.
+Goal: Build the student-facing UNIASSIST kiosk/tablet frontend using Flutter and Riverpod.
 
 Planned:
 
@@ -96,7 +97,16 @@ Planned:
 - Status tracker
 - Responsive mobile/web layouts
 
-Status: Not started.
+Status: Scaffold started. Login and withdrawal guidance screens exist; complete kiosk journey still remains.
+
+Kiosk expectations:
+
+- Touch-first flows with large tap targets.
+- Minimal free typing.
+- Clear session reset after completion or inactivity.
+- Privacy-aware display of student data.
+- Print/download/handoff support for official forms.
+- Voice support only where the device/browser supports it.
 
 ## Existing Prototype Features
 
@@ -115,10 +125,10 @@ The older prototype currently includes:
 
 ## Quick Start: Current Local Prototype
 
-Run these commands from:
+Run these commands from the repository root:
 
 ```powershell
-c:\Users\WINDOWS 11\OneDrive\Desktop\AMITYASSIST\AmityAssist-
+cd C:\Users\HP\ANtiAgentBuilding
 ```
 
 ### 1. Install Dependencies
@@ -130,7 +140,7 @@ pip install -r backend\requirements.txt
 ### 2. Start Backend
 
 ```powershell
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Backend URL:
@@ -196,7 +206,7 @@ python -m pytest
 Expected current result:
 
 ```text
-59 passed
+61 passed
 ```
 
 ## Main Endpoints
@@ -244,6 +254,7 @@ AmityAssist-/
 
 Phase 6 is the staff portal and end-to-end verification phase:
 
+- Continue kiosk frontend work in `frontend_flutter/`.
 - Staff Portal tab.
 - Approval center.
 - Grievance responses.
