@@ -4,9 +4,10 @@ Student lifecycle API endpoints.
 Provides personalized data for dashboard, academics, scholarships,
 notices, grievances, internships, and back-paper registration.
 """
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from ..database.connection import get_connection
 from ..models.schemas import BackpaperRequest, GrievanceCreate, ScholarshipApply
+from ..security.rbac import require_student_access
 
 router = APIRouter(prefix="/api/student", tags=["Student"])
 
@@ -28,14 +29,16 @@ def _fetch_profile(student_id: str):
 
 
 @router.get("/profile")
-async def get_profile(student_id: str = Query(..., min_length=3, max_length=20)):
+async def get_profile(student_id: str = Query(..., min_length=3, max_length=20), request: Request = None):
     """Return full student profile for dashboard personalization."""
+    require_student_access(request, student_id)
     return _fetch_profile(student_id)
 
 
 @router.get("/profile/{student_id}")
-async def get_profile_by_path(student_id: str):
+async def get_profile_by_path(student_id: str, request: Request = None):
     """Compatibility route for existing callers that use path parameters."""
+    require_student_access(request, student_id)
     return _fetch_profile(student_id)
 
 
@@ -64,14 +67,16 @@ def _fetch_notices(student_id: str):
 
 
 @router.get("/notices")
-async def get_notices(student_id: str = Query(..., min_length=3, max_length=20)):
+async def get_notices(student_id: str = Query(..., min_length=3, max_length=20), request: Request = None):
     """Return notices personalized to student's branch and semester."""
+    require_student_access(request, student_id)
     return _fetch_notices(student_id)
 
 
 @router.get("/notices/{student_id}")
-async def get_notices_by_path(student_id: str):
+async def get_notices_by_path(student_id: str, request: Request = None):
     """Compatibility route for existing callers that use path parameters."""
+    require_student_access(request, student_id)
     return _fetch_notices(student_id)
 
 
@@ -93,14 +98,16 @@ def _fetch_exams(student_id: str):
 
 
 @router.get("/exams")
-async def get_exams(student_id: str = Query(..., min_length=3, max_length=20)):
+async def get_exams(student_id: str = Query(..., min_length=3, max_length=20), request: Request = None):
     """Return exam schedule, grades, and back-paper status for a student."""
+    require_student_access(request, student_id)
     return _fetch_exams(student_id)
 
 
 @router.get("/exams/{student_id}")
-async def get_exams_by_path(student_id: str):
+async def get_exams_by_path(student_id: str, request: Request = None):
     """Compatibility route for existing callers that use path parameters."""
+    require_student_access(request, student_id)
     return _fetch_exams(student_id)
 
 
@@ -166,14 +173,16 @@ def _fetch_scholarships(student_id: str):
 
 
 @router.get("/scholarships")
-async def get_scholarships(student_id: str = Query(..., min_length=3, max_length=20)):
+async def get_scholarships(student_id: str = Query(..., min_length=3, max_length=20), request: Request = None):
     """Return all scholarships and eligibility status for the student."""
+    require_student_access(request, student_id)
     return _fetch_scholarships(student_id)
 
 
 @router.get("/scholarships/{student_id}")
-async def get_scholarships_by_path(student_id: str):
+async def get_scholarships_by_path(student_id: str, request: Request = None):
     """Compatibility route for existing callers that use path parameters."""
+    require_student_access(request, student_id)
     return _fetch_scholarships(student_id)
 
 
@@ -248,14 +257,16 @@ def _fetch_grievances(student_id: str):
 
 
 @router.get("/grievances")
-async def get_grievances(student_id: str = Query(..., min_length=3, max_length=20)):
+async def get_grievances(student_id: str = Query(..., min_length=3, max_length=20), request: Request = None):
     """Return all grievances for a student."""
+    require_student_access(request, student_id)
     return _fetch_grievances(student_id)
 
 
 @router.get("/grievances/{student_id}")
-async def get_grievances_by_path(student_id: str):
+async def get_grievances_by_path(student_id: str, request: Request = None):
     """Compatibility route for existing callers that use path parameters."""
+    require_student_access(request, student_id)
     return _fetch_grievances(student_id)
 
 

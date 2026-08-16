@@ -20,7 +20,8 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import settings
 from backend.database.seed import init_db
 from backend.middleware.security import SecurityHeadersMiddleware
-from backend.routes import auth, chat, documents, status, admin, student, withdrawal
+from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications
+
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -67,6 +68,8 @@ app.include_router(student.router)
 app.include_router(documents.router)
 app.include_router(status.router)
 app.include_router(withdrawal.router)
+app.include_router(workflows.router)
+app.include_router(notifications.router)
 app.include_router(admin.router)
 
 

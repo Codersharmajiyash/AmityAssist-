@@ -119,3 +119,44 @@ class TestStudentVerificationSecurity:
         )
         body = response.text
         assert "aisha.malik@uni.edu" not in body
+
+
+class TestJWTAndRBAC:
+    """Phase 6: JWT-based auth and role-protected access."""
+
+    def test_student_login_returns_jwt(self, client):
+        response = client.post("/api/auth/login", json={"student_id": "STU001"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["role"] == "Student"
+        assert data["token"]
+        assert data["student_id"] == "STU001"
+
+    def test_student_profile_rejects_mismatched_student_id(self, client):
+        response = client.post("/api/auth/login", json={"student_id": "STU001"})
+        token = response.json()["token"]
+
+        protected = client.get(
+            "/api/student/profile",
+            params={"student_id": "STU002"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert protected.status_code == 403
+
+    def test_staff_login_and_admin_access(self, client):
+        response = client.post("/api/auth/staff/login", json={"username": "registrar_staff"})
+        assert response.status_code == 200
+        token = response.json()["token"]
+
+        admin = client.get(
+            "/api/admin/grievances",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert admin.status_code == 200
+
+        denied = client.get(
+            "/api/student/profile",
+            params={"student_id": "STU001"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert denied.status_code == 403

@@ -14,10 +14,10 @@ class TestSeedData:
     """Round 1 — Seed correctness."""
 
     def test_ten_students_seeded(self):
-        """Exactly 10 sample students must exist after init_db()."""
+        """Exactly 12 sample students must exist after init_db()."""
         conn = get_connection()
         count = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
-        assert count == 10
+        assert count == 12
 
     def test_student_stu001_exists(self):
         conn = get_connection()
@@ -41,7 +41,7 @@ class TestSeedData:
         init_db()
         conn = get_connection()
         count = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
-        assert count == 10  # still exactly 10
+        assert count == 12  # still exactly 12
 
 
 class TestDirectDbOperations:

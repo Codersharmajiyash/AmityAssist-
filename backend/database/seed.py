@@ -5,6 +5,7 @@ Security note: All INSERT statements use parameterised queries.
 INSERT OR IGNORE makes repeated startups idempotent without duplicating data.
 """
 
+import uuid
 from .connection import get_connection
 
 # ---------------------------------------------------------------------------
@@ -203,6 +204,75 @@ CREATE TABLE IF NOT EXISTS internships (
     stipend       TEXT NOT NULL,
     deadline      TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS departments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL UNIQUE,
+    display_name    TEXT NOT NULL,
+    description     TEXT,
+    contact_email   TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS workflows (
+    id              TEXT PRIMARY KEY,
+    student_id      TEXT NOT NULL,
+    procedure_type  TEXT NOT NULL CHECK(procedure_type IN ('withdrawal', 'grievance', 'scholarship')),
+    status          TEXT NOT NULL DEFAULT 'initiated' CHECK(status IN ('initiated', 'submitted', 'under_review', 'pending_approval', 'department_clearance', 'finance_processing', 'approved', 'rejected', 'completed')),
+    assigned_department TEXT,
+    metadata        TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(student_id) REFERENCES students(id),
+    FOREIGN KEY(assigned_department) REFERENCES departments(name)
+);
+
+CREATE TABLE IF NOT EXISTS workflow_checklist_items (
+    id              TEXT PRIMARY KEY,
+    workflow_id     TEXT NOT NULL,
+    item_number     INTEGER NOT NULL,
+    description     TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'completed', 'pending_review', 'approved')),
+    notes           TEXT,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(workflow_id) REFERENCES workflows(id)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id              TEXT PRIMARY KEY,
+    student_id      TEXT NOT NULL,
+    notification_type TEXT NOT NULL CHECK(notification_type IN ('workflow_status', 'alert', 'deadline', 'reminder', 'approval')),
+    title           TEXT NOT NULL,
+    message         TEXT NOT NULL,
+    priority        TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('low', 'normal', 'high', 'urgent')),
+    template_key    TEXT,
+    template_data   TEXT,
+    read_status     TEXT NOT NULL DEFAULT 'unread' CHECK(read_status IN ('unread', 'read')),
+    sent_by         TEXT DEFAULT 'system',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    read_at         DATETIME,
+    FOREIGN KEY(student_id) REFERENCES students(id)
+);
+
+CREATE TABLE IF NOT EXISTS notification_logs (
+    id              TEXT PRIMARY KEY,
+    notification_id TEXT NOT NULL,
+    action          TEXT NOT NULL,
+    details         TEXT,
+    timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(notification_id) REFERENCES notifications(id)
+);
+
+CREATE TABLE IF NOT EXISTS notification_templates (
+    id              TEXT PRIMARY KEY,
+    template_key    TEXT NOT NULL UNIQUE,
+    title_template  TEXT NOT NULL,
+    message_template TEXT NOT NULL,
+    notification_type TEXT NOT NULL,
+    default_priority TEXT NOT NULL DEFAULT 'normal',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -219,7 +289,9 @@ _SAMPLE_STUDENTS = [
     ("STU007", "Sofia Gonzalez", "sofia.gonzalez@uni.edu", "Psychology", "Psychology", 8, "2022-07-15", 89.0, 8.40, "Paid", 0.0, "Day Scholar", "25% Merit Scholarship", "Good", "Cognitive Studies, Therapy", 9),
     ("STU008", "Amara Diallo", "amara.diallo@uni.edu", "Architecture", "Architecture", 4, "2024-07-15", 81.2, 7.50, "Paid", 0.0, "Allocated (Hostel-4)", "None", "Good", "Urban Planning, Sustainable Design", 7),
     ("STU009", "Lucas Ferreira", "lucas.ferreira@uni.edu", "Civil Engineering", "Civil Engineering", 6, "2023-07-15", 64.5, 6.10, "Pending", 1200.0, "Day Scholar", "None", "Average", "Structural Analysis, Surveying", 11),
-    ("STU010", "Mei Lin", "mei.lin@uni.edu", "Pharmacy", "Pharmacy", 2, "2025-07-15", 94.0, 9.30, "Paid", 0.0, "Allocated (Hostel-3)", "100% VC Fellowship", "Outstanding", "Pharmacology, Drug Chemistry", 3)
+    ("STU010", "Mei Lin", "mei.lin@uni.edu", "Pharmacy", "Pharmacy", 2, "2025-07-15", 94.0, 9.30, "Paid", 0.0, "Allocated (Hostel-3)", "100% VC Fellowship", "Outstanding", "Pharmacology, Drug Chemistry", 3),
+    ("STU011", "Vikram Patel", "vikram.patel@uni.edu", "Chemical Engineering", "Chemical", 4, "2024-07-15", 75.5, 7.40, "Paid", 0.0, "Day Scholar", "None", "Good", "Process Control, Thermodynamics", 5),
+    ("STU012", "Zara Khan", "zara.khan@uni.edu", "Electronics & Communications", "ECE", 6, "2023-07-15", 80.3, 8.10, "Paid", 0.0, "Allocated (Hostel-2)", "50% Merit Scholarship", "Good", "VLSI, Signal Processing", 10)
 ]
 
 _SAMPLE_USERS = [
@@ -304,6 +376,23 @@ _WITHDRAWAL_FORMS = [
     ("withdrawal", "hostel_clearance", "Hostel Clearance Form", "Hostel no-dues and handover format.", "/forms/hostel-clearance.pdf", "Hostel Office"),
 ]
 
+_DEPARTMENTS = [
+    ("Academic Affairs", "Academic Affairs Department", "Handles academic procedures, withdrawals, and registrations", "academic@uni.edu"),
+    ("Student Services", "Student Services Department", "Student support and lifecycle management", "support@uni.edu"),
+    ("Finance", "Finance Department", "Financial clearances and fee processing", "finance@uni.edu"),
+    ("Registry", "Registry & Registrar Office", "Official records and documentation", "registry@uni.edu"),
+]
+
+_NOTIFICATION_TEMPLATES = [
+    ("withdrawal_submitted", "Withdrawal Request Submitted", "Your withdrawal request has been submitted with reference number {reference_no}. You can track the status in your dashboard.", "workflow_status", "normal"),
+    ("withdrawal_approved", "Withdrawal Request Approved", "Your withdrawal request (Ref: {reference_no}) has been approved. Refund processing will begin shortly.", "workflow_status", "high"),
+    ("document_uploaded", "Document Uploaded Successfully", "Your document '{document_name}' has been uploaded and is being verified.", "alert", "normal"),
+    ("document_verified", "Document Verified", "Your document '{document_name}' has been verified successfully.", "alert", "normal"),
+    ("fee_deadline", "Fee Payment Deadline", "Your fee payment is due on {due_date}. Please complete payment to avoid late fees.", "deadline", "high"),
+    ("exam_reminder", "Exam Reminder", "Your exam for {subject_name} is on {exam_date}. Please prepare and arrive 15 minutes early.", "reminder", "normal"),
+    ("scholarship_approved", "Scholarship Approved", "Congratulations! Your application for {scheme_name} scholarship has been approved for {amount}.", "approval", "high"),
+]
+
 
 def init_db() -> None:
     """Create tables and insert rich sample lifecycle data — safe to call multiple times."""
@@ -336,6 +425,12 @@ def init_db() -> None:
         cursor.execute("DROP TABLE IF EXISTS withdrawal_checklist_items")
         cursor.execute("DROP TABLE IF EXISTS workflow_events")
         cursor.execute("DROP TABLE IF EXISTS audit_logs")
+        cursor.execute("DROP TABLE IF EXISTS workflow_checklist_items")
+        cursor.execute("DROP TABLE IF EXISTS workflows")
+        cursor.execute("DROP TABLE IF EXISTS departments")
+        cursor.execute("DROP TABLE IF EXISTS notification_logs")
+        cursor.execute("DROP TABLE IF EXISTS notifications")
+        cursor.execute("DROP TABLE IF EXISTS notification_templates")
         conn.commit()
 
     # Create all tables
@@ -400,6 +495,20 @@ def init_db() -> None:
         "INSERT OR IGNORE INTO procedure_forms (procedure_code, form_key, name, description, download_url, issuing_department) VALUES (?, ?, ?, ?, ?, ?)",
         _WITHDRAWAL_FORMS
     )
+
+    # Seed departments
+    cursor.executemany(
+        "INSERT OR IGNORE INTO departments (name, display_name, description, contact_email) VALUES (?, ?, ?, ?)",
+        _DEPARTMENTS
+    )
+
+    # Seed notification templates
+    for template_key, title_template, message_template, notif_type, priority in _NOTIFICATION_TEMPLATES:
+        template_id = str(uuid.uuid4())
+        cursor.execute(
+            "INSERT OR IGNORE INTO notification_templates (id, template_key, title_template, message_template, notification_type, default_priority) VALUES (?, ?, ?, ?, ?, ?)",
+            (template_id, template_key, title_template, message_template, notif_type, priority)
+        )
 
     conn.commit()
     print("[DB] Expanded Student Lifecycle Database seeded successfully.")

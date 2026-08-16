@@ -6,10 +6,11 @@ Supports multi-role staff: Registrar, Department Coordinator, Finance, Scholarsh
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from ..database.connection import get_connection
 from ..models.schemas import DocumentVerification
+from ..security.rbac import require_any_role
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
@@ -19,8 +20,9 @@ class StatusUpdate(BaseModel):
 
 # ── Withdrawal Requests Management ──────────────────────────────────────────────
 @router.get("/requests")
-async def get_all_requests():
+async def get_all_requests(request: Request = None):
     """Get all withdrawal requests for admin review."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -35,8 +37,9 @@ async def get_all_requests():
         raise HTTPException(status_code=500, detail="Failed to fetch requests.")
 
 @router.get("/conversation/{student_id}")
-async def get_conversation(student_id: str):
+async def get_conversation(student_id: str, request: Request = None):
     """Get conversation history for a student's withdrawal session."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -48,8 +51,9 @@ async def get_conversation(student_id: str):
         raise HTTPException(status_code=500, detail="Failed to fetch conversation log.")
 
 @router.post("/requests/{req_id}/status")
-async def update_request_status(req_id: int, body: StatusUpdate):
+async def update_request_status(req_id: int, body: StatusUpdate, request: Request = None):
     """Update withdrawal request status (approved/rejected)."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     if body.status not in ("approved", "rejected"):
         raise HTTPException(status_code=400, detail="Invalid status. Use 'approved' or 'rejected'.")
         
@@ -80,8 +84,9 @@ class GrievanceResolve(BaseModel):
     resolution: str
 
 @router.get("/grievances")
-async def get_all_grievances():
+async def get_all_grievances(request: Request = None):
     """Get all grievances for admin/coordinator review."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     conn = get_connection()
     try:
         rows = conn.execute(
@@ -110,8 +115,9 @@ async def get_grievance(grievance_id: int):
     return dict(row)
 
 @router.post("/grievances/{grievance_id}/resolve")
-async def resolve_grievance(grievance_id: int, body: GrievanceResolve):
+async def resolve_grievance(grievance_id: int, body: GrievanceResolve, request: Request = None):
     """Mark grievance as resolved with resolution notes."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     conn = get_connection()
     row = conn.execute("SELECT id FROM grievances WHERE id = ?", (grievance_id,)).fetchone()
     if not row:

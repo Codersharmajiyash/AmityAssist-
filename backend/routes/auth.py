@@ -14,7 +14,8 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from ..database.connection import get_connection
-from ..models.schemas import VerifyRequest, VerifyResponse
+from ..models.schemas import StaffLoginRequest, StudentLoginRequest, TokenResponse, VerifyRequest, VerifyResponse
+from ..security.jwt import create_access_token
 from ..services.chat_service import create_session
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -92,4 +93,54 @@ async def verify_student(request: Request, body: VerifyRequest) -> VerifyRespons
         message=f"Welcome back, {first_name}! How can I assist you today?",
         has_existing_request=has_req,
         request_status=req_status,
+    )
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login_student(body: StudentLoginRequest) -> TokenResponse:
+    """Issue a JWT to an authenticated student."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM students WHERE id = ?",
+        (body.student_id,),
+    ).fetchone()
+
+    if row is None:
+        raise HTTPException(
+            status_code=401,
+            detail="We could not verify your identity. Please check your Student ID and try again.",
+        )
+
+    token = create_access_token(row["id"], "Student", {"student_name": row["name"]})
+    return TokenResponse(
+        token=token,
+        role="Student",
+        student_id=row["id"],
+        student_name=row["name"],
+        message="Student login successful.",
+    )
+
+
+@router.post("/staff/login", response_model=TokenResponse)
+async def login_staff(body: StaffLoginRequest) -> TokenResponse:
+    """Issue a JWT to an authenticated staff member."""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM users WHERE username = ?",
+        (body.username,),
+    ).fetchone()
+
+    if row is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid staff username.",
+        )
+
+    token = create_access_token(row["username"], row["role"], {"name": row["name"]})
+    return TokenResponse(
+        token=token,
+        role=row["role"],
+        username=row["username"],
+        student_name=row["name"],
+        message="Staff login successful.",
     )

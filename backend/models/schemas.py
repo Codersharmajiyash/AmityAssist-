@@ -57,6 +57,38 @@ class VerifyResponse(BaseModel):
     request_status: Optional[str] = None
 
 
+class StudentLoginRequest(BaseModel):
+    student_id: str = Field(..., min_length=3, max_length=20)
+
+    @field_validator("student_id", mode="before")
+    @classmethod
+    def sanitize_student_id(cls, v: str) -> str:
+        if not re.match(r"^[A-Za-z0-9_\-]+$", v):
+            raise ValueError("student_id contains invalid characters")
+        return v.upper().strip()
+
+
+class StaffLoginRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+
+    @field_validator("username", mode="before")
+    @classmethod
+    def sanitize_username(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("username cannot be empty")
+        return stripped
+
+
+class TokenResponse(BaseModel):
+    token: str
+    role: str
+    student_id: Optional[str] = None
+    username: Optional[str] = None
+    student_name: Optional[str] = None
+    message: str
+
+
 # ---------------------------------------------------------------------------
 # Chat
 # ---------------------------------------------------------------------------
