@@ -27,24 +27,25 @@ class StorageService:
         return self._client
 
     def upload_document(self, key: str, body: BinaryIO, content_type: str | None = None) -> str:
+        data = body.read() if hasattr(body, "read") else b""
+        from io import BytesIO
         try:
             extra_args = {"ContentType": content_type} if content_type else None
             kwargs = {
                 "Bucket": settings.s3_bucket_documents,
                 "Key": key,
-                "Fileobj": body,
+                "Fileobj": BytesIO(data),
             }
             if extra_args:
                 kwargs["ExtraArgs"] = extra_args
             self.client.upload_fileobj(**kwargs)
             return key
-        except (BotoCoreError, ClientError, OSError, ValueError):
+        except Exception:
             local_root = Path(__file__).resolve().parents[2] / "uploads"
             local_root.mkdir(parents=True, exist_ok=True)
-            body.seek(0)
             target = local_root / key
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(body.read())
+            target.write_bytes(data)
             return key
 
     def read_document(self, key: str) -> bytes:

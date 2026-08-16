@@ -97,6 +97,18 @@ CREATE TABLE IF NOT EXISTS procedure_forms (
     UNIQUE(procedure_code, form_key)
 );
 
+CREATE TABLE IF NOT EXISTS forms_catalog (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    form_key           TEXT NOT NULL UNIQUE,
+    name               TEXT NOT NULL,
+    category           TEXT NOT NULL,
+    department         TEXT NOT NULL,
+    description        TEXT NOT NULL,
+    file_name          TEXT NOT NULL,
+    download_url       TEXT NOT NULL,
+    file_type          TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS withdrawal_checklist_items (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     request_id      INTEGER NOT NULL,
@@ -376,6 +388,40 @@ _WITHDRAWAL_FORMS = [
     ("withdrawal", "hostel_clearance", "Hostel Clearance Form", "Hostel no-dues and handover format.", "/forms/hostel-clearance.pdf", "Hostel Office"),
 ]
 
+_FORMS_CATALOG = [
+    ("dl_form", "DL Form", "Logistics & Fleet", "Administration", "Driving License / Duty Driving Permission Format.", "1. DL FORM.docx", "/forms/1. DL FORM.docx", "docx"),
+    ("transport_requisition", "Requisition for Transport", "Logistics & Fleet", "Transport Department", "Official transport booking requisition for university duty, guest pick-ups, and field visits.", "10. Requisition for Tranport.docx", "/forms/10. Requisition for Tranport.docx", "docx"),
+    ("local_conveyance", "Local Conveyance Form", "Finance", "Finance & Accounts", "Reimbursement claim form for local travel expenses incurred on official work.", "11. Local Conveynce form.docx", "/forms/11. Local Conveynce form.docx", "docx"),
+    ("advance_imprest_requisition", "Advance Imprest Requisition", "Finance", "Finance & Accounts", "Format for requesting official advance imprest funds.", "12.Advance  Imprest_Requisition-Hon pro Chancellor 16.11.2023.pdf", "/forms/12.Advance  Imprest_Requisition-Hon pro Chancellor 16.11.2023.pdf", "pdf"),
+    ("mentoring_record_card", "Mentoring Record Card", "Student Welfare", "Student Mentorship Desk", "Individual student mentoring tracking card used by faculty mentors.", "13.Mentoring Record Card.doc", "/forms/13.Mentoring Record Card.doc", "doc"),
+    ("revised_purchase_proposal", "Revised Purchase Proposal (2019)", "Procurement", "Purchase & Stores", "Formal purchase proposal format for equipment, consumables, and software licenses.", "14. Revised PURCHASE PROPOSAL 28.09.2019.docx", "/forms/14. Revised PURCHASE PROPOSAL 28.09.2019.docx", "docx"),
+    ("migration_certificate_doc", "Migration Certificate Application (.doc)", "Academics", "Registrar Office", "Official application form for issuing migration certificates to outgoing students.", "15.Application Forms for issue of Migration Certificates to the Students.doc", "/forms/15.Application Forms for issue of Migration Certificates to the Students.doc", "doc"),
+    ("migration_certificate_pdf", "Migration Certificate Application (.pdf)", "Academics", "Registrar Office", "Official PDF printable format for migration certificate application.", "15.Application for Migration Certificates.pdf", "/forms/15.Application for Migration Certificates.pdf", "pdf"),
+    ("placement_opted_out", "Placement Opted Out Declaration", "Career & Placement", "Corporate Resource Centre (CRC)", "Formal declaration form for students opting out of campus placement drives.", "16.Declaration placement opted out form.docx", "/forms/16.Declaration placement opted out form.docx", "docx"),
+    ("exit_interview_withdrawal", "Exit Interview Form for Withdrawal", "Student Welfare", "Registrar & Student Welfare Desk", "Exit interview and feedback questionnaire required during program withdrawal.", "17.Exit Interview form for Withdrawl.pdf", "/forms/17.Exit Interview form for Withdrawl.pdf", "pdf"),
+    ("stationery_indent", "Stationery Indent Requisition", "Logistics & Stores", "Central Store", "Departmental stationery items indent requisition format.", "18.Stationery indent.docx", "/forms/18.Stationery indent.docx", "docx"),
+    ("stationery_indent_form", "Stationery Indent Form (Alt)", "Logistics & Stores", "Central Store", "Alternative format for departmental stationery requisition.", "18.Stationery indent_form.docx", "/forms/18.Stationery indent_form.docx", "docx"),
+    ("biometric_id_forget", "Biometric / ID Card Issue Application", "HR & IT", "IT Support & HR Desk", "Re-issue application for forgotten or missing biometric ID card (Teaching & Non-Teaching).", "19. Appl forget biometric id card_Teaching & Nonteaching.pdf", "/forms/19. Appl forget biometric id card_Teaching & Nonteaching.pdf", "pdf"),
+    ("emergency_leave", "Emergency Leave Proforma", "HR & Staff", "HR Administration", "Emergency leave application proforma for faculty and staff.", "2.Performa for Emg Leave.docx", "/forms/2.Performa for Emg Leave.docx", "docx"),
+    ("blank_exam_form", "Blank Examination Form", "Examinations", "Controller of Examinations", "Official blank examination application format for semester end exams.", "20. Blank exam form _20 .09. 2024.xlsx", "/forms/20. Blank exam form _20 .09. 2024.xlsx", "xlsx"),
+    ("cartridge_refill_form", "Cartridge Refill Form", "IT & Logistics", "IT Support Desk", "Printer cartridge refill and replacement requisition form.", "21. Cartridge refill form.docx", "/forms/21. Cartridge refill form.docx", "docx"),
+    ("degree_application_format", "Degree Application Format", "Examinations", "Controller of Examinations", "Official application format for obtaining degree certificate / convocation degree.", "22. Degree Application Format.pdf", "/forms/22. Degree Application Format.pdf", "pdf"),
+    ("faculty_leave_application", "Faculty Leave Application", "HR & Staff", "HR Administration", "Formal leave application form for faculty members.", "23. Faculty Leave Application (1).pdf", "/forms/23. Faculty Leave Application (1).pdf", "pdf"),
+    ("employee_id_card_form", "Employee ID Card Form", "HR & Staff", "HR Administration", "Application format for issuing official Employee ID card.", "24. ID Card form Employee.pdf", "/forms/24. ID Card form Employee.pdf", "pdf"),
+    ("mentor_mentee_record_form", "Mentor-Mentee Record Form (2024)", "Student Welfare", "Academic Mentorship Cell", "Updated mentor-mentee interaction log and progress record format.", "25. Mentor Menttee Record Form_29.11.2024.docx", "/forms/25. Mentor Menttee Record Form_29.11.2024.docx", "docx"),
+    ("blank_purchase_proposal", "Purchase Proposal Blank Format", "Procurement", "Purchase & Stores", "Standard blank proposal format for departmental procurement.", "26. PURCHASE PROPOSAL_Blank.docx", "/forms/26. PURCHASE PROPOSAL_Blank.docx", "docx"),
+    ("rechecking_result_application", "Application for Rechecking of Result", "Examinations", "Controller of Examinations", "Official application for rechecking / re-evaluation of semester examination marks.", "27. APPLICATION FOR RECHECKING  OF RESULT.pdf", "/forms/27. APPLICATION FOR RECHECKING  OF RESULT.pdf", "pdf"),
+    ("student_id_card_form", "Student ID Card Form", "Admissions & Registrar", "Registrar Office", "Application form for new or replacement Student Identity Card.", "28. student Id Card Form.docx", "/forms/28. student Id Card Form.docx", "docx"),
+    ("stationery_indent_alt", "Stationery Indent Requisition (v2)", "Logistics & Stores", "Central Store", "Stationery requisition form version 2.", "29. stationary indent.docx", "/forms/29. stationary indent.docx", "docx"),
+    ("class_arrangement", "Class Arrangement Format (2019)", "Academics", "Academic Affairs", "Format for adjusting and arranging classes during faculty absence.", "3.Class Arrangement(2019).docx", "/forms/3.Class Arrangement(2019).docx", "docx"),
+    ("aset_faculty_contact_list", "List of ASET Faculty & Staff with Contact Details", "Directory", "ASET Dean Office", "Complete contact directory of ASET faculty and technical staff.", "5.List of ASET FACULTY & STAFF with Contact details 107.08.20.xlsx", "/forms/5.List of ASET FACULTY & STAFF with Contact details 107.08.20.xlsx", "xlsx"),
+    ("financial_assistance_events", "Format for Financial Assistance for Events", "Finance", "Finance & Dean Student Welfare", "Requisition format for seeking university financial assistance for technical/cultural events.", "6 Format for Financial Asst. for Events.doc", "/forms/6 Format for Financial Asst. for Events.doc", "doc"),
+    ("letter_parents_debarred", "Format Letter to Parents of Debarred Students", "Academics", "Examination & Academic Office", "Official template letter sent to parents regarding attendance shortage and debarment.", "7. Format Letter to Parents of Debarred Students.docx", "/forms/7. Format Letter to Parents of Debarred Students.docx", "docx"),
+    ("tada_claim", "TA / DA Claim Format", "Finance", "Finance & Accounts", "Travelling Allowance and Daily Allowance claim form for official university travel.", "8. TA DA claim format.xls", "/forms/8. TA DA claim format.xls", "xls"),
+    ("refreshment_cafeteria_req", "Requisition for Refreshment (Cafeteria)", "Logistics & Catering", "Hospitality & Logistics", "Requisition form for cafeteria refreshments for official meetings and seminars.", "9. Requisition for Refreshment Cafeteria-1.docx", "/forms/9. Requisition for Refreshment Cafeteria-1.docx", "docx"),
+    ("aset_patents_list", "List of Patents Filed by ASET", "Research & Patents", "Dean Research & Development", "Comprehensive record of patents filed by ASET faculty and research scholars.", "List of Patents filed ASET 13_01_2021_vsk final.docx", "/forms/List of Patents filed ASET 13_01_2021_vsk final.docx", "docx")
+]
+
 _DEPARTMENTS = [
     ("Academic Affairs", "Academic Affairs Department", "Handles academic procedures, withdrawals, and registrations", "academic@uni.edu"),
     ("Student Services", "Student Services Department", "Student support and lifecycle management", "support@uni.edu"),
@@ -422,6 +468,7 @@ def init_db() -> None:
         cursor.execute("DROP TABLE IF EXISTS procedure_steps")
         cursor.execute("DROP TABLE IF EXISTS procedure_documents")
         cursor.execute("DROP TABLE IF EXISTS procedure_forms")
+        cursor.execute("DROP TABLE IF EXISTS forms_catalog")
         cursor.execute("DROP TABLE IF EXISTS withdrawal_checklist_items")
         cursor.execute("DROP TABLE IF EXISTS workflow_events")
         cursor.execute("DROP TABLE IF EXISTS audit_logs")
@@ -496,6 +543,11 @@ def init_db() -> None:
         _WITHDRAWAL_FORMS
     )
 
+    cursor.executemany(
+        "INSERT OR IGNORE INTO forms_catalog (form_key, name, category, department, description, file_name, download_url, file_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        _FORMS_CATALOG
+    )
+
     # Seed departments
     cursor.executemany(
         "INSERT OR IGNORE INTO departments (name, display_name, description, contact_email) VALUES (?, ?, ?, ?)",
@@ -511,4 +563,5 @@ def init_db() -> None:
         )
 
     conn.commit()
+    print("[DB] Expanded Student Lifecycle Database seeded successfully.")
     print("[DB] Expanded Student Lifecycle Database seeded successfully.")

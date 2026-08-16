@@ -87,6 +87,11 @@ function switchTab(screenId, navElement) {
     if (navElement?.classList) {
         navElement.classList.add("sidebar__nav-item--active");
     }
+
+    if (screenId === "forms-screen") {
+        loadFormCategories();
+        loadFormsCatalog();
+    }
 }
 
 function renderStudentBadge(name, course) {
@@ -1078,3 +1083,98 @@ async function verifyDocument(docId, status, notes) {
         alert("Failed to update document status.");
     }
 }
+
+// ── Official Forms Hub ───────────────────────────────────────────────────────
+async function loadFormCategories() {
+    try {
+        const res = await fetch(`${API_BASE}/api/forms/categories`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const select = $("forms-category-select");
+        if (select) {
+            const currentVal = select.value;
+            select.innerHTML = '<option value="">All Categories</option>' +
+                data.categories.map(c => `<option value="${escapeHtml(c.category)}">${escapeHtml(c.category)} (${c.count})</option>`).join('');
+            select.value = currentVal;
+        }
+    } catch (e) {
+        console.error("Failed to load form categories:", e);
+    }
+}
+
+async function loadFormsCatalog() {
+    const grid = $("forms-grid");
+    if (!grid) return;
+
+    grid.innerHTML = `<p class="muted">Loading official university forms catalog...</p>`;
+
+    const search = $("forms-search-input")?.value || "";
+    const category = $("forms-category-select")?.value || "";
+
+    const params = new URLSearchParams();
+    if (search) params.append("q", search);
+    if (category) params.append("category", category);
+
+    try {
+        const res = await fetch(`${API_BASE}/api/forms/catalog?${params.toString()}`);
+        if (!res.ok) throw new Error("Failed to fetch forms");
+        const data = await res.json();
+
+        if (!data.forms || data.forms.length === 0) {
+            grid.innerHTML = `<p class="muted">No matching forms found.</p>`;
+            return;
+        }
+
+        grid.innerHTML = data.forms.map(form => {
+            const ext = (form.file_type || "file").toUpperCase();
+            const badgeClass = ext === "PDF" ? "status-badge--error" : (ext === "DOCX" || ext === "DOC" ? "status-badge--pending" : "status-badge--verified");
+            const fileUrl = `${API_BASE}${form.download_url}`;
+            const cleanName = (form.name || "").replace(/^\d+[\.\s\-]+/, "");
+
+            return `
+            <article class="glass-card form-card" style="padding: 1.25rem; display: flex; flex-direction: column; justify-content: space-between; gap: 0.75rem; border: 1px solid var(--glass-border); border-radius: 12px; background: var(--card-bg, rgba(255,255,255,0.05));">
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="status-badge ${badgeClass}" style="font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem;">${escapeHtml(ext)}</span>
+                        <span class="muted" style="font-size: 0.8rem; font-weight: 500;">${escapeHtml(form.department)}</span>
+                    </div>
+                    <h3 style="font-size: 1.05rem; margin: 0.3rem 0 0.1rem 0; font-weight: 600;">${escapeHtml(cleanName)}</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; margin: 0;">${escapeHtml(form.description)}</p>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.08);">
+                    <span style="font-size: 0.75rem; color: var(--accent, #6366f1); background: rgba(99, 102, 241, 0.12); padding: 0.25rem 0.6rem; border-radius: 20px; font-weight: 500;">${escapeHtml(form.category)}</span>
+                    <a href="${fileUrl}" target="_blank" download class="btn btn--compact btn--primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download
+                    </a>
+                </div>
+            </article>`;
+        }).join('');
+    } catch (e) {
+        console.error("Error loading forms catalog:", e);
+        grid.innerHTML = `<p class="muted" style="color: red;">Error loading forms catalog. Please check backend.</p>`;
+    }
+}
+
+// Bind live search and category filter events
+document.addEventListener("DOMContentLoaded", () => {
+    const searchInput = $("forms-search-input");
+    const categorySelect = $("forms-category-select");
+
+    if (searchInput) {
+        let debounceTimer;
+        searchInput.addEventListener("input", () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                loadFormsCatalog();
+            }, 250);
+        });
+    }
+
+    if (categorySelect) {
+        categorySelect.addEventListener("change", () => {
+            loadFormsCatalog();
+        });
+    }
+});
+
