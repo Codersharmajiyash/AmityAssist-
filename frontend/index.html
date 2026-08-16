@@ -55,6 +55,10 @@
           <span class="nav-icon" aria-hidden="true">07</span>
           Document Center
         </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('forms-screen', this)" id="nav-forms">
+          <span class="nav-icon" aria-hidden="true">08</span>
+          Official Forms Hub
+        </a>
         
         <!-- Staff Navigation (Hidden for students) -->
         <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-dashboard-screen', this)" id="nav-staff-dashboard" hidden>
@@ -403,6 +407,29 @@
               <p class="muted">OCR fields and warnings will appear after upload.</p>
             </div>
           </article>
+        </div>
+      </section>
+
+      <!-- Official Forms Hub Screen -->
+      <section id="forms-screen" class="screen utility-screen" aria-label="Official Forms Hub" hidden>
+        <div class="forms-hub-container" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%;">
+          <article class="glass-card forms-header-card" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div>
+              <p class="eyebrow">Digital Repository</p>
+              <h2>Official University Forms & Documents Hub</h2>
+              <p class="utility-copy">Browse, search, and download official university forms, applications, requisitions, and guidelines (31 official documents available).</p>
+            </div>
+            <div class="forms-search-bar" style="display: flex; gap: 1rem; flex-wrap: wrap;">
+              <input type="text" id="forms-search-input" class="form-input" placeholder="Search by document title, department, or keyword..." style="flex: 2; min-width: 250px;" />
+              <select id="forms-category-select" class="form-input" style="flex: 1; min-width: 180px;">
+                <option value="">All Categories</option>
+              </select>
+            </div>
+          </article>
+
+          <div id="forms-grid" class="forms-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;">
+            <p class="muted">Loading official university forms catalog...</p>
+          </div>
         </div>
       </section>
 

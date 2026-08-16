@@ -9,6 +9,7 @@ Mock services:
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel
+import hashlib
 import shutil
 import uuid
 import json
@@ -24,46 +25,71 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 
 # ── Mock Document AI Service ──────────────────────────────────────────────────
-def simulate_ocr_analysis(filename: str, student_id: str) -> dict:
+def _detect_document_type(filename: str) -> str:
+    lower_name = filename.lower()
+    if "id" in lower_name or "card" in lower_name:
+        return "ID Card"
+    if "marksheet" in lower_name or "marks" in lower_name or "grade" in lower_name:
+        return "Marksheet"
+    if "medical" in lower_name or "certificate" in lower_name:
+        return "Medical Certificate"
+    return "Other Document"
+
+
+def simulate_ocr_analysis(filename: str, student_id: str, file_bytes: bytes = b"", duplicate_hash: str | None = None) -> dict:
     """
     Simulate Document AI OCR extraction.
     Returns mock OCR data and fraud detection flags.
     """
-    # Mock OCR extraction
+    document_type = _detect_document_type(filename)
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    file_size = len(file_bytes)
+    suffix = Path(filename).suffix.lower()
+
     ocr_data = {
         "extracted_name": "Aisha Malik",
         "extracted_student_id": student_id,
         "extracted_date": "2024-05-15",
         "confidence_score": round(random.uniform(0.85, 0.99), 2),
-        "document_type": "ID Card" if "id" in filename.lower() else "Medical Certificate",
+        "document_type": document_type,
         "image_quality_score": round(random.uniform(0.75, 0.98), 2),
         "signature_detected": True,
         "stamp_detected": True,
+        "metadata": {
+            "file_name": filename,
+            "file_size_bytes": file_size,
+            "extension": suffix,
+            "sha256": file_hash,
+            "mime_type": {
+                ".pdf": "application/pdf",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+            }.get(suffix, "application/octet-stream"),
+        },
     }
-    
-    # Mock fraud detection
+
     fraud_flags = []
-    
-    # Check for signature tampering (simulated)
-    if random.random() < 0.05:  # 5% chance
+
+    if duplicate_hash and file_hash == duplicate_hash:
+        fraud_flags.append("Duplicate document detected")
+
+    if random.random() < 0.05:
         fraud_flags.append("Signature mismatch detected")
-    
-    # Check for text alteration (simulated)
-    if random.random() < 0.03:  # 3% chance
+
+    if random.random() < 0.03:
         fraud_flags.append("Text alteration suspected")
-    
-    # Check for duplicate (simulated)
-    if random.random() < 0.02:  # 2% chance
+
+    if random.random() < 0.02:
         fraud_flags.append("Potential duplicate submission")
-    
-    # Image quality check
+
     if ocr_data["image_quality_score"] < 0.60:
         fraud_flags.append("Image quality too low for verification")
-    
+
     return {
         "ocr_data": ocr_data,
         "fraud_flags": fraud_flags,
-        "overall_status": "FRAUD_DETECTED" if fraud_flags else "CLEAN"
+        "overall_status": "FRAUD_DETECTED" if fraud_flags else "CLEAN",
     }
 
 
@@ -76,43 +102,62 @@ async def upload_document(
     """
     Upload document and run mock Document AI OCR + fraud detection.
     """
-    # Validate extension
     ext = Path(file.filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Invalid file type. Only PDF, JPG, and PNG are allowed.")
-    
-    # Secure filename
+
+    if file.filename is None:
+        raise HTTPException(status_code=400, detail="A file name is required.")
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
     secure_name = f"{student_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = UPLOAD_DIR / secure_name
 
-    # Save to disk
     with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(contents)
 
-    # Run mock Document AI analysis
-    analysis_result = simulate_ocr_analysis(file.filename, student_id)
-    
-    # Save to DB with OCR results
     conn = get_connection()
+    rows = conn.execute(
+        "SELECT ocr_data FROM documents WHERE student_id = ? ORDER BY timestamp DESC",
+        (student_id.upper().strip(),),
+    ).fetchall()
+
+    duplicate_hash = None
+    for row in rows:
+        if row["ocr_data"]:
+            try:
+                data = json.loads(row["ocr_data"])
+                metadata = data.get("metadata", {})
+                duplicate_hash = metadata.get("sha256")
+                if duplicate_hash and duplicate_hash == hashlib.sha256(contents).hexdigest():
+                    break
+            except json.JSONDecodeError:
+                continue
+
+    analysis_result = simulate_ocr_analysis(file.filename, student_id, contents, duplicate_hash)
+
     try:
         verification_status = "fraud_detected" if analysis_result["fraud_flags"] else "pending"
         ocr_json = json.dumps(analysis_result["ocr_data"])
         fraud_notes = "; ".join(analysis_result["fraud_flags"]) if analysis_result["fraud_flags"] else None
-        
+
         conn.execute(
             """INSERT INTO documents 
                (student_id, file_name, file_path, classification, ocr_data, verification_status, verification_notes) 
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (student_id, file.filename, str(file_path), 
-             analysis_result["ocr_data"]["document_type"], 
-             ocr_json, 
+            (student_id, file.filename, str(file_path),
+             analysis_result["ocr_data"]["document_type"],
+             ocr_json,
              verification_status,
              fraud_notes)
         )
         conn.commit()
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=500, detail="Database error while saving document record.")
-    
+
     return {
         "message": "Document uploaded successfully",
         "file_name": file.filename,

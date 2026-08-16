@@ -14,7 +14,7 @@ class Settings:
 
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql+asyncpg://uniassist:uniassist@localhost:5432/uniassist",
+        "sqlite:///database/chatbot.db",
     )
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 

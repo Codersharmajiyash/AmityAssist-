@@ -11,8 +11,10 @@ Startup sequence:
 
 from contextlib import asynccontextmanager
 
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -20,7 +22,8 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import settings
 from backend.database.seed import init_db
 from backend.middleware.security import SecurityHeadersMiddleware
-from backend.routes import auth, chat, documents, status, admin, student, withdrawal
+from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications, forms
+
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -42,6 +45,11 @@ app = FastAPI(
     redoc_url=None,
     lifespan=lifespan,
 )
+
+# ── Static Files ──────────────────────────────────────────────────────────────
+forms_dir = Path("backend/static/forms")
+forms_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/forms", StaticFiles(directory=str(forms_dir)), name="forms")
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
 app.state.limiter = limiter
@@ -67,7 +75,10 @@ app.include_router(student.router)
 app.include_router(documents.router)
 app.include_router(status.router)
 app.include_router(withdrawal.router)
+app.include_router(workflows.router)
+app.include_router(notifications.router)
 app.include_router(admin.router)
+app.include_router(forms.router)
 
 
 @app.get("/api/health", tags=["System"])
