@@ -310,28 +310,13 @@ CREATE TABLE IF NOT EXISTS notification_templates (
 # Sample Records
 # ---------------------------------------------------------------------------
 
-_SAMPLE_STUDENTS = [
-    ("STU001", "Aisha Malik", "aisha.malik@uni.edu", "Computer Science", "CSE", 6, "2023-07-15", 82.5, 8.75, "Paid", 0.0, "Allocated (Hostel-3)", "50% Merit Scholarship", "Outstanding", "Artificial Intelligence, Web Development", 12),
-    ("STU002", "Rahul Sharma", "rahul.sharma@uni.edu", "Electrical Engineering", "ECE", 4, "2024-07-15", 68.0, 5.8, "Pending", 1850.0, "Day Scholar", "None", "Needs Improvement", "Embedded Systems, Robotics", 8),
-    ("STU003", "Priya Nair", "priya.nair@uni.edu", "Business Administration", "MBA", 2, "2025-01-10", 91.2, 9.1, "Paid", 0.0, "Day Scholar", "100% VC Fellowship", "Outstanding", "Finance, Public Speaking", 4),
-    ("STU004", "James Osei", "james.osei@uni.edu", "Data Science", "CSE", 8, "2022-07-15", 74.5, 7.20, "Paid", 0.0, "Allocated (Hostel-1)", "None", "Good", "Machine Learning, R Programming", 15),
-    ("STU005", "Fatima Al-Hassan", "fatima.alhassan@uni.edu", "Biotechnology", "Biotech", 2, "2025-07-15", 85.0, 7.90, "Paid", 0.0, "Allocated (Hostel-2)", "None", "Good", "Genetics, Cell Biology", 2),
-    ("STU006", "Chen Wei", "chen.wei@uni.edu", "Mechanical Engineering", "Mechanical Engineering", 6, "2023-07-15", 77.8, 6.90, "Paid", 0.0, "Day Scholar", "None", "Good", "Automotive Design, CAD", 6),
-    ("STU007", "Sofia Gonzalez", "sofia.gonzalez@uni.edu", "Psychology", "Psychology", 8, "2022-07-15", 89.0, 8.40, "Paid", 0.0, "Day Scholar", "25% Merit Scholarship", "Good", "Cognitive Studies, Therapy", 9),
-    ("STU008", "Amara Diallo", "amara.diallo@uni.edu", "Architecture", "Architecture", 4, "2024-07-15", 81.2, 7.50, "Paid", 0.0, "Allocated (Hostel-4)", "None", "Good", "Urban Planning, Sustainable Design", 7),
-    ("STU009", "Lucas Ferreira", "lucas.ferreira@uni.edu", "Civil Engineering", "Civil Engineering", 6, "2023-07-15", 64.5, 6.10, "Pending", 1200.0, "Day Scholar", "None", "Average", "Structural Analysis, Surveying", 11),
-    ("STU010", "Mei Lin", "mei.lin@uni.edu", "Pharmacy", "Pharmacy", 2, "2025-07-15", 94.0, 9.30, "Paid", 0.0, "Allocated (Hostel-3)", "100% VC Fellowship", "Outstanding", "Pharmacology, Drug Chemistry", 3),
-    ("STU011", "Vikram Patel", "vikram.patel@uni.edu", "Chemical Engineering", "Chemical", 4, "2024-07-15", 75.5, 7.40, "Paid", 0.0, "Day Scholar", "None", "Good", "Process Control, Thermodynamics", 5),
-    ("STU012", "Zara Khan", "zara.khan@uni.edu", "Electronics & Communications", "ECE", 6, "2023-07-15", 80.3, 8.10, "Paid", 0.0, "Allocated (Hostel-2)", "50% Merit Scholarship", "Good", "VLSI, Signal Processing", 10)
-]
-
 _SAMPLE_USERS = [
     ("registrar_staff", "Registrar Office Support", "Registrar"),
     ("admission_staff", "Admissions Helpdesk", "Admission Team"),
     ("finance_staff", "Finance Advisor Office", "Finance Department"),
     ("scholarship_staff", "Scholarship Desk Coordinator", "Scholarship Department"),
     ("exam_staff", "Examination Cell Controller", "Examination Cell"),
-    ("coordinator_staff", "Academic Department Coordinator", "Department Coordinator")
+    ("coordinator_staff", "Academic Department Coordinator", "Department Coordinator"),
 ]
 
 _SAMPLE_CAMPUSES = [
@@ -351,7 +336,6 @@ _CAMPUS_PROCEDURE_RULES = [
     ("MUMBAI", "scholarship", "Finance", 14, "Finance verifies scholarship eligibility."),
     ("LUCKNOW", "scholarship", "Finance", 14, "Finance verifies scholarship eligibility."),
 ]
-
 _SAMPLE_NOTICES = [
     ("Mid-Semester Examinations Datesheet", "Mid-Semester Examinations for all undergraduate programs will commence on Oct 12, 2026. The detailed subject datesheet is available on the portal. Please ensure you clear any outstanding fees to receive your admit card.", "ALL", 0, "exam"),
     ("Wipro Campus Placement Internship Drive 2026", "Wipro is conducting an internship selection drive for CSE and ECE students of the 6th semester. Minimum required CGPA is 8.0. Register by June 25, 2026.", "CSE", 6, "internship"),

@@ -16,7 +16,6 @@ from starlette.responses import Response
 
 from ..config import settings
 
-
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         response: Response = await call_next(request)
