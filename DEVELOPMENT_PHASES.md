@@ -144,24 +144,37 @@ Remaining Phase 3 hardening:
 - Add richer multilingual response templates.
 - Add tests for every frontend-visible lifecycle chat path.
 
-## Immediate Next Phase - Staff Portal
+## Phase 15 - Flutter Mobile App / Kiosk UI
 
-The next teammate-friendly chunk is the staff portal.
+Goal: Expand `frontend_flutter/` into a full touch-first kiosk interface with offline caching and session resets.
 
-Build:
+Completed:
+- `KioskDashboard` created with touch-first layout.
+- `SessionManager` widget built to handle idle session timeouts (resets after 2 mins inactivity).
+- `HiveService` configured for local NoSQL data caching of notices and profiles.
+- Integrated Kiosk routing in `uniassist_app.dart` to serve the kiosk dashboard upon login.
 
-- Continue the student-facing kiosk in `frontend_flutter/`, not the HTML prototype.
-- Staff role selector or staff login mode.
-- Staff Portal tab in `frontend/index.html`.
-- Admin dashboard cards using `/api/admin/stats`.
-- Grievance queue using `/api/admin/grievances`.
-- Grievance resolve form using `/api/admin/grievances/{id}/resolve`.
-- Document audit table using `/api/admin/documents`.
-- Document verify/flag actions using `/api/admin/documents/{id}/verify`.
-- Withdrawal request review using existing admin request endpoints.
+## Phase 16 - Staff Portal Frontend Expansion
 
-Verification:
+Goal: Build a dedicated desktop admin client inside the Flutter app for clearance queues, approvals, and grievances.
 
-- Run backend tests.
-- Run `node --check frontend/js/app.js`.
-- Manually verify student login, document upload, grievance creation, and staff resolution.
+Completed:
+- `StaffDesktopLayout` implemented providing a responsive split-view sidebar.
+- `ClearanceQueueScreen` built with a data table for pending student withdrawals.
+- `DocumentApprovalsScreen` built for batch document review alongside Document AI OCR results.
+- `GrievanceResponseScreen` built for staff to read and resolve grievances.
+- `ShellRoute` implemented in `go_router` to securely wrap all `/staff` paths in the desktop layout.
+
+## Phase 17 - Native iOS/Android Features
+
+Goal: Add mobile biometric authentication, hardware push notifications, and local offline store sync.
+
+Completed:
+- Added `local_auth`, `flutter_local_notifications`, `connectivity_plus`, `hive`, and `hive_flutter` dependencies.
+- `BiometricLogin` integrated into `LoginScreen` allowing Face ID / Fingerprint unlocks.
+- `NotificationService` configured for local push notification channels (prototype).
+- `SyncService` created to listen for network state changes and trigger background syncs to resolve offline actions.
+
+## Immediate Next Phase
+
+The next chunk is to finish wiring the backend endpoints to these new frontend UI components (e.g., swapping static data in `ClearanceQueueScreen` with API calls).
