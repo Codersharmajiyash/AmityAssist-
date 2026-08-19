@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AmityAssist student lifecycle dashboard and AI support portal." />
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <title>AmityAssist Student Lifecycle Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="auth-view">
+  <div class="bg-canvas" aria-hidden="true"></div>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Application navigation">
+      <div class="sidebar__logo">
+        <div class="sidebar__logo-mark" aria-hidden="true">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Amity_University_logo.svg/200px-Amity_University_logo.svg.png" alt="" onerror="this.src='https://www.amity.edu/images/logo.png'" />
+        </div>
+        <div>
+          <span class="sidebar__logo-text">AmityAssist</span>
+          <span class="sidebar__logo-caption">Student Lifecycle</span>
+        </div>
+      </div>
+
+      <nav class="sidebar__nav" aria-label="Portal navigation">
+        <a href="#" class="sidebar__nav-item sidebar__nav-item--active" onclick="switchTab('dashboard-screen', this)" id="nav-dashboard">
+          <span class="nav-icon" aria-hidden="true">01</span>
+          Dashboard
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('academics-screen', this)" id="nav-academics">
+          <span class="nav-icon" aria-hidden="true">02</span>
+          Academics
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('scholarship-screen', this)" id="nav-scholarship">
+          <span class="nav-icon" aria-hidden="true">03</span>
+          Scholarships
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('grievance-screen', this)" id="nav-grievance">
+          <span class="nav-icon" aria-hidden="true">04</span>
+          Grievance Desk
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('chat-screen', this)" id="nav-chat">
+          <span class="nav-icon" aria-hidden="true">05</span>
+          AI Advisor
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('status-screen', this)" id="nav-status">
+          <span class="nav-icon" aria-hidden="true">06</span>
+          Request Status
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('document-screen', this)" id="nav-document">
+          <span class="nav-icon" aria-hidden="true">07</span>
+          Document Center
+        </a>
+        <a href="#" class="sidebar__nav-item" onclick="switchTab('forms-screen', this)" id="nav-forms">
+          <span class="nav-icon" aria-hidden="true">08</span>
+          Official Forms Hub
+        </a>
+        
+        <!-- Staff Navigation (Hidden for students) -->
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-dashboard-screen', this)" id="nav-staff-dashboard" hidden>
+          <span class="nav-icon" aria-hidden="true">S1</span>
+          Staff Dashboard
+        </a>
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-withdrawal-screen', this)" id="nav-staff-withdrawal" hidden>
+          <span class="nav-icon" aria-hidden="true">S2</span>
+          Withdrawal Queue
+        </a>
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-grievance-screen', this)" id="nav-staff-grievance" hidden>
+          <span class="nav-icon" aria-hidden="true">S3</span>
+          Grievance Desk
+        </a>
+        <a href="#" class="sidebar__nav-item staff-nav" onclick="switchTab('staff-document-screen', this)" id="nav-staff-document" hidden>
+          <span class="nav-icon" aria-hidden="true">S4</span>
+          Document Audit
+        </a>
+      </nav>
+
+      <div class="sidebar__footer">
+        <div class="sidebar__help-card">
+          <p class="sidebar__help-title">Registrar Window</p>
+          <p class="sidebar__help-text">Mon-Fri, 9am-5pm<br />Block A, Ground Floor</p>
+          <a href="#" class="sidebar__help-link" onclick="alert('Appointment request captured for demo.')">Book appointment</a>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main-panel" role="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Amity University Portal</p>
+          <h1 class="topbar__title">Student Success Console</h1>
+        </div>
+        <div class="topbar__actions">
+          <div class="chat-header__student" id="student-badge" aria-live="polite"></div>
+          <button id="theme-toggle" type="button" class="theme-toggle" aria-label="Toggle dark mode" aria-pressed="false">
+            <span class="theme-toggle__track"><span class="theme-toggle__thumb"></span></span>
+            <span class="theme-toggle__text">Dark</span>
+          </button>
+          <button id="logout-btn" type="button" class="btn btn--compact btn--logout" aria-label="Log out from current session">Logout</button>
+        </div>
+      </header>
+
+      <section id="verify-screen" class="screen screen--active" aria-label="Identity verification">
+        <div class="verify-card">
+          <div class="verify-card__header">
+            <div class="verify-card__icon" aria-hidden="true">
+              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Amity_University_logo.svg/200px-Amity_University_logo.svg.png" alt="" onerror="this.src='https://www.amity.edu/images/logo.png'" />
+            </div>
+            <h2 class="verify-card__title">Secure Verification</h2>
+            <p class="verify-card__subtitle">Verify once to unlock your personalized academics, finance, hostel, notices, and withdrawal support workspace.</p>
+          </div>
+
+          <form id="verify-form" class="verify-form" novalidate aria-label="Student identity verification form">
+            <div class="form-group role-selector">
+              <label class="form-label">Access Mode</label>
+              <div class="radio-group" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+                <label><input type="radio" name="role" value="student" checked> Student</label>
+                <label><input type="radio" name="role" value="staff"> Staff Member</label>
+              </div>
+            </div>
+
+            <div class="form-group" id="student-id-group">
+              <label class="form-label" for="student-id-input">Student ID / staff username</label>
+              <input id="student-id-input" type="text" class="form-input" placeholder="e.g. STU001 or registrar_staff" maxlength="50" autocomplete="username" aria-describedby="student-id-hint" />
+              <span id="student-id-hint" class="form-hint">Try STU001 for Student, or just click Verify for Staff.</span>
+            </div>
+
+            <div class="form-divider"><span class="form-divider__text">or</span></div>
+
+            <div class="form-group">
+              <label class="form-label" for="email-input">Institutional Email</label>
+              <input id="email-input" type="email" class="form-input" placeholder="your.name@amity.edu" maxlength="254" autocomplete="email" aria-describedby="email-hint" />
+              <span id="email-hint" class="form-hint">Use your university-issued email address.</span>
+            </div>
+
+            <div id="verify-error" class="form-error" role="alert" aria-live="polite" hidden></div>
+
+            <button id="verify-btn" type="submit" class="btn btn--primary btn--full">
+              <span class="btn__text">Verify Identity</span>
+              <span class="btn__spinner" aria-hidden="true" hidden></span>
+            </button>
+          </form>
+
+          <p class="verify-card__disclaimer">Secure, rate-limited access. Session tokens stay in memory only.</p>
+        </div>
+      </section>
+
+      <section id="dashboard-screen" class="screen dashboard-screen" aria-label="Student dashboard" hidden>
+        <div class="dashboard-grid">
+          <article class="welcome-panel glass-card">
+            <div>
+              <p class="eyebrow">Welcome Back</p>
+              <h2 id="welcome-name">Student Dashboard</h2>
+              <p id="welcome-summary">Your lifecycle snapshot will appear after verification.</p>
+            </div>
+            <div class="welcome-panel__meta">
+              <span id="profile-branch">Branch -</span>
+              <span id="profile-semester">Semester -</span>
+            </div>
+          </article>
+
+          <article class="progress-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">Academics</p>
+              <h3>Attendance Ring</h3>
+            </div>
+            <div id="attendance-ring" class="progress-ring">
+              <span id="attendance-value">0%</span>
+            </div>
+            <p id="academic-note" class="muted">Academic progress awaiting verification.</p>
+          </article>
+
+          <article class="metric-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">CGPA</p>
+              <h3 id="cgpa-value">--</h3>
+            </div>
+            <p id="performance-value" class="metric-card__copy">Performance status will load here.</p>
+          </article>
+
+          <article class="metric-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">Finance</p>
+              <h3 id="fee-due-value">INR --</h3>
+            </div>
+            <p id="fee-status-value" class="metric-card__copy">Fee status pending.</p>
+          </article>
+
+          <article class="metric-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">Hostel</p>
+              <h3 id="hostel-status-value">--</h3>
+            </div>
+            <p id="scholarship-status-value" class="metric-card__copy">Scholarship status pending.</p>
+          </article>
+
+          <article class="notices-card glass-card">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Targeted Notices</p>
+                <h3>For Your Programme</h3>
+              </div>
+              <span id="notice-count" class="count-pill">0</span>
+            </div>
+            <div id="notices-list" class="notices-list">
+              <p class="muted">Verify to see branch and semester specific notices.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="academics-screen" class="screen module-screen" aria-label="Academics" hidden>
+        <div class="module-grid">
+          <article class="glass-card module-card module-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Academics</p>
+                <h2>Exam Results</h2>
+              </div>
+              <span id="academics-count" class="count-pill">0</span>
+            </div>
+            <div id="exam-results" class="records-list">
+              <p class="muted">Verify to load exam results and backpaper status.</p>
+            </div>
+          </article>
+
+          <article class="glass-card module-card">
+            <p class="eyebrow">Backpaper</p>
+            <h2>Registration Form</h2>
+            <form id="backpaper-form" class="module-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="backpaper-exam">Eligible subject</label>
+                <select id="backpaper-exam" class="form-input" required>
+                  <option value="">Load eligible exams</option>
+                </select>
+              </div>
+              <button class="btn btn--primary btn--full" type="submit">Register Backpaper</button>
+              <p id="backpaper-status" class="form-status" aria-live="polite"></p>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section id="scholarship-screen" class="screen module-screen" aria-label="Scholarship Hub" hidden>
+        <div class="module-grid">
+          <article class="glass-card module-card module-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Scholarship Hub</p>
+                <h2>Scheme Discovery</h2>
+              </div>
+              <span id="scholarship-count" class="count-pill">0</span>
+            </div>
+            <div id="scholarship-list" class="records-list">
+              <p class="muted">Verify to discover eligible scholarship schemes.</p>
+            </div>
+          </article>
+          <article class="glass-card module-card highlight-card">
+            <p class="eyebrow">Readiness</p>
+            <h2 id="scholarship-readiness">Pending</h2>
+            <p id="scholarship-readiness-copy" class="utility-copy">Eligibility and applications will appear after verification.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="grievance-screen" class="screen module-screen" aria-label="Grievance Desk" hidden>
+        <div class="module-grid">
+          <article class="glass-card module-card">
+            <p class="eyebrow">Grievance Desk</p>
+            <h2>Raise a Ticket</h2>
+            <form id="grievance-form" class="module-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="grievance-category">Category</label>
+                <select id="grievance-category" class="form-input" required>
+                  <option value="academic">Academic</option>
+                  <option value="fee">Fee</option>
+                  <option value="hostel">Hostel</option>
+                  <option value="exam">Exam</option>
+                  <option value="scholarship">Scholarship</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="grievance-description">Description</label>
+                <textarea id="grievance-description" class="form-input module-textarea" minlength="5" maxlength="2000" placeholder="Describe the issue for the concerned office." required></textarea>
+              </div>
+              <button class="btn btn--primary btn--full" type="submit">Submit Grievance</button>
+              <p id="grievance-status" class="form-status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="glass-card module-card module-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Timeline</p>
+                <h2>Status Tracker</h2>
+              </div>
+              <span id="grievance-count" class="count-pill">0</span>
+            </div>
+            <div id="grievance-timeline" class="timeline">
+              <p class="muted">Your submitted grievances will appear here.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="chat-screen" class="screen chat-screen" aria-label="AI advisor conversation" hidden>
+        <header class="chat-header">
+          <div class="chat-header__bot">
+            <div class="chat-header__avatar" aria-hidden="true">AI</div>
+            <div class="chat-header__info">
+              <span class="chat-header__name">Amity Advisor</span>
+              <span class="chat-header__status"><span class="status-dot" aria-hidden="true"></span>Online</span>
+            </div>
+          </div>
+        </header>
+
+        <div id="messages-container" class="messages" role="log" aria-label="Conversation messages" aria-live="polite"></div>
+
+        <div id="typing-indicator" class="typing-indicator" hidden aria-label="Advisor is typing" aria-live="polite">
+          <div class="typing-indicator__bubble">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+          <span class="typing-indicator__label">Amity Advisor is typing...</span>
+        </div>
+
+        <div class="chat-input-area">
+          <div id="quick-replies" class="quick-replies" hidden aria-label="Quick reply options"></div>
+          <form id="chat-form" class="chat-form" novalidate aria-label="Send message form">
+            <textarea id="message-input" class="chat-form__textarea" placeholder="Ask about CGPA, attendance, scholarship, hostel, or withdrawal..." rows="1" maxlength="2000" aria-label="Message input" aria-describedby="char-count"></textarea>
+            <div class="chat-form__actions">
+              <span id="char-count" class="chat-form__char-count" aria-live="polite">0 / 2000</span>
+              <button id="send-btn" type="submit" class="btn btn--send" aria-label="Send message" disabled>Send</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="status-screen" class="screen utility-screen" aria-label="Request Status" hidden>
+        <div class="workflow-layout">
+          <article class="glass-card utility-card workflow-card">
+            <p class="eyebrow">Withdrawal</p>
+            <h2>Procedure GPS</h2>
+            <div id="status-content" class="utility-copy">You currently do not have any active withdrawal requests.</div>
+          </article>
+          <article class="glass-card workflow-card">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Checklist</p>
+                <h2>Required Documents</h2>
+              </div>
+              <span id="withdrawal-checklist-count" class="count-pill">0</span>
+            </div>
+            <div id="withdrawal-checklist" class="records-list">
+              <p class="muted">Verify to load withdrawal document requirements.</p>
+            </div>
+          </article>
+          <article class="glass-card workflow-card workflow-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Official Procedure</p>
+                <h2>Steps, Departments, Timelines</h2>
+              </div>
+              <span id="withdrawal-step-count" class="count-pill">0</span>
+            </div>
+            <div id="withdrawal-steps" class="workflow-steps">
+              <p class="muted">Official withdrawal steps will appear here.</p>
+            </div>
+          </article>
+          <article class="glass-card workflow-card">
+            <p class="eyebrow">Forms</p>
+            <h2>Repository</h2>
+            <div id="withdrawal-forms" class="records-list">
+              <p class="muted">Official form links will appear here.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="document-screen" class="screen utility-screen" aria-label="Document Verification" hidden>
+        <div class="document-grid">
+          <article class="glass-card utility-card">
+            <p class="eyebrow">Document AI</p>
+            <h2>Upload & Scan</h2>
+            <p class="utility-copy">Upload medical certificates, ID proof, or supporting files for OCR extraction and mock fraud screening.</p>
+            <form id="document-form" class="module-form" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="file-upload">Document file</label>
+                <input type="file" id="file-upload" class="form-input" accept=".pdf,.jpg,.jpeg,.png" required />
+              </div>
+              <button id="document-submit" class="btn btn--primary btn--full" type="submit">Secure Upload</button>
+              <p id="document-status" class="form-status" aria-live="polite"></p>
+            </form>
+          </article>
+          <article class="glass-card scan-card">
+            <div class="scan-preview" id="scan-preview" aria-label="Document scanning preview">
+              <div class="scan-preview__paper">
+                <span></span><span></span><span></span><span></span>
+              </div>
+              <div id="scan-beam" class="scan-preview__beam"></div>
+            </div>
+            <div id="ocr-results" class="ocr-results">
+              <p class="muted">OCR fields and warnings will appear after upload.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- Official Forms Hub Screen -->
+      <section id="forms-screen" class="screen utility-screen" aria-label="Official Forms Hub" hidden>
+        <div class="forms-hub-container" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%;">
+          <article class="glass-card forms-header-card" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div>
+              <p class="eyebrow">Digital Repository</p>
+              <h2>Official University Forms & Documents Hub</h2>
+              <p class="utility-copy">Browse, search, and download official university forms, applications, requisitions, and guidelines (31 official documents available).</p>
+            </div>
+            <div class="forms-search-bar" style="display: flex; gap: 1rem; flex-wrap: wrap;">
+              <input type="text" id="forms-search-input" class="form-input" placeholder="Search by document title, department, or keyword..." style="flex: 2; min-width: 250px;" />
+              <select id="forms-category-select" class="form-input" style="flex: 1; min-width: 180px;">
+                <option value="">All Categories</option>
+              </select>
+            </div>
+          </article>
+
+          <div id="forms-grid" class="forms-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem;">
+            <p class="muted">Loading official university forms catalog...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Staff Dashboard Screen -->
+      <section id="staff-dashboard-screen" class="screen dashboard-screen" aria-label="Staff dashboard" hidden>
+        <div class="dashboard-grid">
+          <article class="welcome-panel glass-card">
+            <div>
+              <p class="eyebrow">Welcome Back</p>
+              <h2>Staff Dashboard</h2>
+              <p>Manage student lifecycle procedures and audits.</p>
+            </div>
+          </article>
+
+          <article class="metric-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">Requests</p>
+              <h3 id="staff-requests-count">--</h3>
+            </div>
+            <p class="muted">Total pending withdrawal requests</p>
+          </article>
+
+          <article class="metric-card glass-card">
+            <div class="card-heading">
+              <p class="eyebrow">Grievances</p>
+              <h3 id="staff-grievances-count">--</h3>
+            </div>
+            <p class="muted">Total unresolved grievances</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Staff Withdrawal Requests Screen -->
+      <section id="staff-withdrawal-screen" class="screen utility-screen" aria-label="Staff Withdrawal Requests" hidden>
+        <article class="glass-card module-card module-card--wide" style="width: 100%;">
+          <div class="card-heading card-heading--row">
+            <div>
+              <h2>Withdrawal Requests Queue</h2>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto; margin-top: 1rem;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Student</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Reason</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Date</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Status</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Action</th>
+                </tr>
+              </thead>
+              <tbody id="staff-withdrawal-tbody">
+                <tr><td colspan="5" class="muted" style="padding: 1rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- Staff Grievance Desk Screen -->
+      <section id="staff-grievance-screen" class="screen utility-screen" aria-label="Staff Grievance Desk" hidden>
+        <article class="glass-card module-card module-card--wide" style="width: 100%;">
+          <div class="card-heading card-heading--row">
+            <div>
+              <h2>Grievance Queue</h2>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto; margin-top: 1rem;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Student</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Category</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Status</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Action</th>
+                </tr>
+              </thead>
+              <tbody id="staff-grievance-tbody">
+                <tr><td colspan="4" class="muted" style="padding: 1rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- Staff Document Audit Screen -->
+      <section id="staff-document-screen" class="screen utility-screen" aria-label="Staff Document Audit" hidden>
+        <article class="glass-card module-card module-card--wide" style="width: 100%;">
+          <div class="card-heading card-heading--row">
+            <div>
+              <h2>Document Audit Log</h2>
+            </div>
+          </div>
+          <div class="table-container" style="overflow-x: auto; margin-top: 1rem;">
+            <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Student</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">File Info</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">OCR / Fraud Risk</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Status</th>
+                  <th style="padding: 1rem; border-bottom: 1px solid var(--glass-border);">Action</th>
+                </tr>
+              </thead>
+              <tbody id="staff-document-tbody">
+                <tr><td colspan="5" class="muted" style="padding: 1rem;">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <aside class="voice-widget" aria-label="Voice AI controls">
+    <button id="voice-listen-btn" class="voice-widget__button" type="button" aria-label="Start voice transcription" aria-pressed="false">Mic</button>
+    <button id="voice-speak-btn" class="voice-widget__button" type="button" aria-label="Read latest advisor reply">Speak</button>
+    <span id="voice-status" class="voice-widget__status" aria-live="polite">Voice ready</span>
+  </aside>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

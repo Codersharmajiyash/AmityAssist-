@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local env files
+.venv/
+venv/
+env/
+.env
+.env.local
+
+# Local databases and runtime state
+database/*.db
+database/*.db-*
+*.sqlite
+*.sqlite3
+
+# Uploaded/generated files
+uploads/*
+!uploads/.gitkeep
+tmp/
+backups/
+
+# Logs and one-off test captures
+*.log
+pytest_out.txt
+test_out.txt
+test_results.txt
+
+# Node / frontend tooling
+node_modules/
+dist/
+build/
+
+# Flutter / Dart
+frontend_flutter/.dart_tool/
+frontend_flutter/build/
+frontend_flutter/.packages
+frontend_flutter/pubspec.lock
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

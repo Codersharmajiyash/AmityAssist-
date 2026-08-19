@@ -1,0 +1,182 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: uniassist
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: uniassist-config
+  namespace: uniassist
+data:
+  UNIASSIST_ENV: production
+  REDIS_URL: redis://redis:6379/0
+  S3_ENDPOINT_URL: http://minio:9000
+  S3_BUCKET_DOCUMENTS: uniassist-documents
+  CORS_ORIGINS: https://portal.example.edu
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: uniassist-secrets
+  namespace: uniassist
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: replace-before-deploying
+  DATABASE_URL: postgresql://uniassist:replace-before-deploying@postgres:5432/uniassist
+  JWT_SECRET_KEY: replace-before-deploying-with-a-long-random-value
+  S3_ACCESS_KEY: replace-before-deploying
+  S3_SECRET_KEY: replace-before-deploying
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: uniassist
+spec:
+  selector: { app: postgres }
+  ports: [{ port: 5432, targetPort: 5432 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: uniassist
+spec:
+  serviceName: postgres
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports: [{ containerPort: 5432 }]
+          env:
+            - { name: POSTGRES_DB, value: uniassist }
+            - { name: POSTGRES_USER, value: uniassist }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: uniassist-secrets, key: POSTGRES_PASSWORD } }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: schema, mountPath: /docker-entrypoint-initdb.d, readOnly: true }
+      volumes:
+        - name: schema
+          configMap: { name: uniassist-db-schema }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: ["ReadWriteOnce"], resources: { requests: { storage: 10Gi } } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: uniassist
+spec:
+  selector: { app: redis }
+  ports: [{ port: 6379, targetPort: 6379 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: uniassist
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "--appendonly", "yes"]
+          ports: [{ containerPort: 6379 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: uniassist
+spec:
+  selector: { app: minio }
+  ports: [{ name: api, port: 9000, targetPort: 9000 }, { name: console, port: 9001, targetPort: 9001 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: uniassist
+spec:
+  serviceName: minio
+  selector: { matchLabels: { app: minio } }
+  template:
+    metadata: { labels: { app: minio } }
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+          args: ["server", "/data", "--console-address", ":9001"]
+          ports: [{ containerPort: 9000 }, { containerPort: 9001 }]
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom: { secretKeyRef: { name: uniassist-secrets, key: S3_ACCESS_KEY } }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: uniassist-secrets, key: S3_SECRET_KEY } }
+          volumeMounts: [{ name: data, mountPath: /data }]
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec: { accessModes: ["ReadWriteOnce"], resources: { requests: { storage: 20Gi } } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: uniassist-api
+  namespace: uniassist
+spec:
+  selector: { app: uniassist-api }
+  ports: [{ port: 8000, targetPort: 8000 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uniassist-api
+  namespace: uniassist
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: uniassist-api } }
+  template:
+    metadata: { labels: { app: uniassist-api } }
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/your-org/uniassist:latest
+          ports: [{ containerPort: 8000 }]
+          envFrom: [{ configMapRef: { name: uniassist-config } }, { secretRef: { name: uniassist-secrets } }]
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: 8000
+              httpHeaders: [{ name: Host, value: api.example.edu }]
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+              httpHeaders: [{ name: Host, value: api.example.edu }]
+            initialDelaySeconds: 15
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 500m, memory: 512Mi } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: uniassist-api
+  namespace: uniassist
+spec:
+  rules:
+    - host: api.example.edu
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: uniassist-api, port: { number: 8000 } } }
