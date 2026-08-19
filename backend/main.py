@@ -12,8 +12,9 @@ Startup sequence:
 from contextlib import asynccontextmanager
 
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -22,14 +23,20 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import settings
 from backend.database.seed import init_db
 from backend.middleware.security import SecurityHeadersMiddleware
-from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications, forms
+from backend.middleware.observability import ObservabilityMiddleware, telemetry
+from backend.database.connection import get_connection
+from backend.services.cache_service import cache_service
+from backend.security.rbac import require_any_role
+from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications, forms, reports, campuses
 
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit_default])
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialise DB before accepting requests; cleanup on shutdown."""
+    if settings.is_production and settings.jwt_secret_key == "change-me-in-production":
+        raise RuntimeError("JWT_SECRET_KEY must be configured in production.")
     init_db()
     yield
 
@@ -57,15 +64,16 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # ty
 
 # ── Security headers ──────────────────────────────────────────────────────────
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ObservabilityMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# In production: replace "*" with your actual front-end domain
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(settings.cors_origins),
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -78,6 +86,8 @@ app.include_router(withdrawal.router)
 app.include_router(workflows.router)
 app.include_router(notifications.router)
 app.include_router(admin.router)
+app.include_router(reports.router)
+app.include_router(campuses.router)
 app.include_router(forms.router)
 
 
@@ -90,3 +100,22 @@ async def health_check():
         "environment": settings.environment,
         "version": "1.0.0",
     }
+
+
+@app.get("/api/health/ready", tags=["System"])
+async def readiness_check():
+    """Readiness probe that confirms the local database and cache path respond."""
+    try:
+        get_connection().execute("SELECT 1").fetchone()
+        cache_service.set_json("health:ready", {"ok": True}, ttl_seconds=10)
+        cache_service.get_json("health:ready")
+    except Exception:
+        return {"status": "degraded"}
+    return {"status": "ready"}
+
+
+@app.get("/api/health/telemetry", tags=["System"])
+async def telemetry_snapshot(request: Request):
+    """Operational telemetry, restricted to staff administrators."""
+    require_any_role(request, {"Registrar", "Administrator"})
+    return telemetry.snapshot()

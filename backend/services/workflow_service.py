@@ -57,21 +57,34 @@ class WorkflowService:
         procedure_type: str,
         student_id: str,
         metadata: Optional[Dict[str, Any]] = None,
+        campus_code: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a new workflow instance."""
         if procedure_type not in WorkflowService.PROCEDURE_CONFIG:
             raise ValueError(f"Unknown procedure type: {procedure_type}")
 
+        conn = get_connection()
+        student = conn.execute("SELECT campus_code FROM students WHERE id = ?", (student_id.upper().strip(),)).fetchone()
+        if not student:
+            raise ValueError("Student not found")
+        student_campus = student["campus_code"]
+        if campus_code and campus_code.upper().strip() != student_campus:
+            raise ValueError("Workflow campus must match the student's home campus")
+        campus_code = student_campus
+
         workflow_id = str(uuid.uuid4())
         config = WorkflowService.PROCEDURE_CONFIG[procedure_type]
-        assigned_dept = config["default_department"]
+        campus_rule = conn.execute(
+            "SELECT default_department FROM campus_procedure_rules WHERE campus_code = ? AND procedure_type = ?",
+            (campus_code, procedure_type),
+        ).fetchone()
+        assigned_dept = campus_rule["default_department"] if campus_rule else config["default_department"]
 
         # Create workflow record
-        conn = get_connection()
         conn.execute(
             """INSERT INTO workflows 
-               (id, student_id, procedure_type, status, assigned_department, metadata, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (id, student_id, procedure_type, status, assigned_department, metadata, created_at, updated_at, campus_code)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 workflow_id,
                 student_id,
@@ -81,6 +94,7 @@ class WorkflowService:
                 json.dumps(metadata or {}),
                 datetime.now().isoformat(),
                 datetime.now().isoformat(),
+                campus_code,
             ),
         )
         conn.commit()
@@ -96,6 +110,7 @@ class WorkflowService:
             "student_id": student_id,
             "status": "initiated",
             "assigned_department": assigned_dept,
+            "campus_code": campus_code,
             "checklist": checklist,
             "created_at": datetime.now().isoformat(),
         }
@@ -171,6 +186,7 @@ class WorkflowService:
             "student_id": row["student_id"],
             "status": row["status"],
             "assigned_department": row["assigned_department"],
+            "campus_code": row["campus_code"],
             "checklist": checklist,
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -210,6 +226,7 @@ class WorkflowService:
                     "student_id": row["student_id"],
                     "status": row["status"],
                     "assigned_department": row["assigned_department"],
+                    "campus_code": row["campus_code"],
                     "checklist": checklist,
                     "created_at": row["created_at"],
                 }

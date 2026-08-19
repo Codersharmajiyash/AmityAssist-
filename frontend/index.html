@@ -124,8 +124,8 @@
             </div>
 
             <div class="form-group" id="student-id-group">
-              <label class="form-label" for="student-id-input">Student ID / Staff ID</label>
-              <input id="student-id-input" type="text" class="form-input" placeholder="e.g. STU001 or STAFF1" maxlength="20" autocomplete="off" aria-describedby="student-id-hint" />
+              <label class="form-label" for="student-id-input">Student ID / staff username</label>
+              <input id="student-id-input" type="text" class="form-input" placeholder="e.g. STU001 or registrar_staff" maxlength="50" autocomplete="username" aria-describedby="student-id-hint" />
               <span id="student-id-hint" class="form-hint">Try STU001 for Student, or just click Verify for Staff.</span>
             </div>
 
@@ -405,6 +405,18 @@
             </div>
             <div id="ocr-results" class="ocr-results">
               <p class="muted">OCR fields and warnings will appear after upload.</p>
+            </div>
+          </article>
+          <article class="glass-card module-card module-card--wide">
+            <div class="card-heading card-heading--row">
+              <div>
+                <p class="eyebrow">Document Center</p>
+                <h2>Recent Uploads</h2>
+              </div>
+              <span id="document-history-count" class="count-pill">0</span>
+            </div>
+            <div id="document-history" class="records-list">
+              <p class="muted">Verify your identity to view document history.</p>
             </div>
           </article>
         </div>

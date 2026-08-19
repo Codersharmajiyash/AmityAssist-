@@ -7,7 +7,9 @@ Mock services:
   - Verification: Staff can manually verify or flag documents
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from pydantic import BaseModel
 import hashlib
 import shutil
@@ -16,8 +18,10 @@ import json
 import random
 from pathlib import Path
 from ..database.connection import get_connection
+from ..config import settings
 
 router = APIRouter(prefix="/api/documents", tags=["Documents"])
+limiter = Limiter(key_func=get_remote_address)
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -95,7 +99,9 @@ def simulate_ocr_analysis(filename: str, student_id: str, file_bytes: bytes = b"
 
 # ── Upload Document with OCR Analysis ──────────────────────────────────────────
 @router.post("/upload")
+@limiter.limit(settings.rate_limit_upload)
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     student_id: str = Form(...)
 ):
@@ -112,6 +118,8 @@ async def upload_document(
     contents = await file.read()
     if not contents:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    if len(contents) > settings.max_upload_bytes:
+        raise HTTPException(status_code=413, detail="Uploaded file exceeds the permitted size.")
 
     secure_name = f"{student_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = UPLOAD_DIR / secure_name

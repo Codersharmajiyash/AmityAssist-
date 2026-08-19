@@ -7,6 +7,8 @@ const state = {
     studentName: null,
     course: null,
     profile: null,
+    accessToken: null,
+    role: null,
     conversationState: null,
     latestBotReply: "",
     recognition: null,
@@ -92,6 +94,9 @@ function switchTab(screenId, navElement) {
         loadFormCategories();
         loadFormsCatalog();
     }
+    if (screenId === "document-screen" && state.studentId) {
+        fetchDocumentHistory(state.studentId).then(renderDocumentHistory).catch(() => renderDocumentHistory([]));
+    }
 }
 
 function renderStudentBadge(name, course) {
@@ -152,7 +157,11 @@ async function fetchStudentNotices(studentId) {
 }
 
 async function apiJson(path, options = {}) {
-    const res = await fetch(`${API_BASE}${path}`, options);
+    const headers = new Headers(options.headers || {});
+    if (state.accessToken) {
+        headers.set("Authorization", `Bearer ${state.accessToken}`);
+    }
+    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
     if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || `Server error (${res.status})`);
@@ -174,6 +183,10 @@ async function fetchGrievances(studentId) {
 
 async function fetchWithdrawalStatus(studentId) {
     return apiJson(`/api/withdrawal/status/${encodeURIComponent(studentId)}`);
+}
+
+async function fetchDocumentHistory(studentId) {
+    return apiJson(`/api/documents/list/${encodeURIComponent(studentId)}`);
 }
 
 function statusClass(status) {
@@ -354,6 +367,14 @@ async function verifyStudent(payload) {
     return res.json();
 }
 
+async function loginStaff(username) {
+    return apiJson("/api/auth/staff/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+    });
+}
+
 async function sendChatMessage(message) {
     const res = await fetch(`${API_BASE}/api/chat/message`, {
         method: "POST",
@@ -383,16 +404,23 @@ verifyForm.addEventListener("submit", async (e) => {
     clearVerifyError();
 
     if (role === "staff") {
-        // Mock Staff Login
-        setTimeout(() => {
+        if (!rawId) {
+            showVerifyError("Enter your staff username to continue.");
+            setVerifyLoading(false);
+            return;
+        }
+        try {
+            const data = await loginStaff(rawId);
             state.isVerified = true;
+            state.accessToken = data.token;
+            state.role = data.role;
             document.body.classList.remove("auth-view");
             
             // Hide all standard student nav items except Dashboard maybe? Or hide them all.
             document.querySelectorAll('.sidebar__nav-item:not(.staff-nav)').forEach(n => n.hidden = true);
             document.querySelectorAll('.staff-nav').forEach(n => n.hidden = false);
             
-            studentBadge.textContent = "Staff Member";
+            renderStudentBadge(data.username || "Staff Member", data.role || "Staff");
             switchTab("staff-dashboard-screen", $("nav-staff-dashboard"));
             
             // Load Admin Data
@@ -401,8 +429,11 @@ verifyForm.addEventListener("submit", async (e) => {
             fetchAdminGrievances();
             fetchAdminDocuments();
             
+        } catch (err) {
+            showVerifyError(err.message || "Staff login failed.");
+        } finally {
             setVerifyLoading(false);
-        }, 500);
+        }
         return;
     }
 
@@ -447,6 +478,7 @@ verifyForm.addEventListener("submit", async (e) => {
         document.querySelectorAll('.staff-nav').forEach(n => n.hidden = true);
         
         fetchStudentNotices(state.studentId).then(renderNotices).catch(() => renderNotices([]));
+        fetchDocumentHistory(state.studentId).then(renderDocumentHistory).catch(() => renderDocumentHistory([]));
         loadLifecycleModules().catch((err) => console.error("[Lifecycle Load Error]", err));
         document.body.classList.remove("auth-view");
 
@@ -492,6 +524,8 @@ function logoutSession() {
     }
 
     state.isVerified = false;
+    state.accessToken = null;
+    state.role = null;
     state.sessionId = null;
     state.studentId = null;
     state.studentName = null;
@@ -673,6 +707,27 @@ function renderOcrResults(data) {
     `;
 }
 
+function renderDocumentHistory(documents) {
+    const history = $("document-history");
+    $("document-history-count").textContent = documents.length;
+    if (!documents.length) {
+        history.innerHTML = `<p class="muted">No documents uploaded yet.</p>`;
+        return;
+    }
+    history.innerHTML = documents.slice(0, 6).map((document) => `
+      <article class="record-item">
+        <div>
+          <span class="record-item__meta">${escapeHtml(document.timestamp || "Recently uploaded")}</span>
+          <h3>${escapeHtml(document.file_name || "Document")}</h3>
+          <p>${escapeHtml(document.classification || "Document")} ${document.verification_notes ? `- ${escapeHtml(document.verification_notes)}` : ""}</p>
+        </div>
+        <div class="record-item__side">
+          <span class="record-pill ${statusClass(document.verification_status)}">${escapeHtml(document.verification_status || "pending")}</span>
+        </div>
+      </article>
+    `).join("");
+}
+
 documentForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!state.studentId) return;
@@ -697,6 +752,7 @@ documentForm.addEventListener("submit", async (e) => {
         });
         documentStatus.textContent = data.message;
         renderOcrResults(data);
+        renderDocumentHistory(await fetchDocumentHistory(state.studentId));
         fileUpload.value = "";
     } catch (err) {
         documentStatus.textContent = err.message;
@@ -931,7 +987,7 @@ voiceSpeakBtn.addEventListener("click", () => {
     document.querySelectorAll('input[name="role"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
             if (e.target.value === 'staff') {
-                $("student-id-hint").textContent = "Just click Verify for Staff demo access.";
+                $("student-id-hint").textContent = "Use the seeded demo username: registrar_staff.";
             } else {
                 $("student-id-hint").textContent = "Try STU001 from the seeded demo database.";
             }
@@ -944,8 +1000,8 @@ voiceSpeakBtn.addEventListener("click", () => {
 async function fetchAdminStats() {
     try {
         const stats = await apiJson('/api/admin/stats');
-        $("staff-requests-count").textContent = stats.pending_requests || "0";
-        $("staff-grievances-count").textContent = stats.pending_grievances || "0";
+        $("staff-requests-count").textContent = stats.pending_withdrawals ?? "0";
+        $("staff-grievances-count").textContent = stats.open_grievances ?? "0";
     } catch (err) {
         console.error("Admin stats error:", err);
     }
@@ -1056,11 +1112,11 @@ async function fetchAdminDocuments() {
               <td style="padding:1rem;">${escapeHtml(d.student_name)} <br><small class="muted">${escapeHtml(d.student_id)}</small></td>
               <td style="padding:1rem;">${escapeHtml(d.document_type)} <br><small class="muted"><a href="${API_BASE}/api${escapeHtml(d.file_path)}" target="_blank">View File</a></small></td>
               <td style="padding:1rem;">${riskHtml}</td>
-              <td style="padding:1rem;"><span class="status-badge status-badge--${escapeHtml(d.status)}">${escapeHtml(d.status)}</span></td>
+              <td style="padding:1rem;"><span class="status-badge status-badge--${escapeHtml(d.verification_status)}">${escapeHtml(d.verification_status)}</span></td>
               <td style="padding:1rem;">
-                ${d.status === 'pending' ? `
+                ${d.verification_status === 'pending' ? `
                   <button class="btn btn--compact btn--primary" onclick="verifyDocument(${d.id}, 'verified', '')">Verify</button>
-                  <button class="btn btn--compact" onclick="verifyDocument(${d.id}, 'rejected', 'Failed visual check')">Reject</button>
+                  <button class="btn btn--compact" onclick="verifyDocument(${d.id}, 'fraud_detected', 'Failed visual check')">Flag</button>
                 ` : 'Processed'}
               </td>
             </tr>
@@ -1076,7 +1132,7 @@ async function verifyDocument(docId, status, notes) {
         await apiJson(`/api/admin/documents/${docId}/verify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status, admin_notes: notes })
+            body: JSON.stringify({ status, notes })
         });
         fetchAdminDocuments();
     } catch (err) {
@@ -1177,4 +1233,3 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 });
-

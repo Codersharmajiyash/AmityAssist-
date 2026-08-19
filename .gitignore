@@ -25,6 +25,7 @@ database/*.db-*
 uploads/*
 !uploads/.gitkeep
 tmp/
+backups/
 
 # Logs and one-off test captures
 *.log

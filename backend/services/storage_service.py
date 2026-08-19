@@ -26,10 +26,17 @@ class StorageService:
             )
         return self._client
 
+    def ensure_bucket(self) -> None:
+        try:
+            self.client.head_bucket(Bucket=settings.s3_bucket_documents)
+        except (BotoCoreError, ClientError):
+            self.client.create_bucket(Bucket=settings.s3_bucket_documents)
+
     def upload_document(self, key: str, body: BinaryIO, content_type: str | None = None) -> str:
         data = body.read() if hasattr(body, "read") else b""
         from io import BytesIO
         try:
+            self.ensure_bucket()
             extra_args = {"ContentType": content_type} if content_type else None
             kwargs = {
                 "Bucket": settings.s3_bucket_documents,

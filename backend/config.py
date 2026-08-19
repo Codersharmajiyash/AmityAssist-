@@ -21,6 +21,10 @@ class Settings:
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     access_token_minutes: int = int(os.getenv("ACCESS_TOKEN_MINUTES", "30"))
+    rate_limit_default: str = os.getenv("RATE_LIMIT_DEFAULT", "120/minute")
+    rate_limit_auth: str = os.getenv("RATE_LIMIT_AUTH", "10/minute")
+    rate_limit_upload: str = os.getenv("RATE_LIMIT_UPLOAD", "20/hour")
+    max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 
     s3_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "http://localhost:9000")
     s3_access_key: str = os.getenv("S3_ACCESS_KEY", "minioadmin")
@@ -35,6 +39,15 @@ class Settings:
         ).split(",")
         if origin.strip()
     )
+    allowed_hosts: tuple[str, ...] = tuple(
+        host.strip()
+        for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
+        if host.strip()
+    )
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() == "production"
 
 
 settings = Settings()

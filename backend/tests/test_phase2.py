@@ -73,6 +73,11 @@ class TestStudentLifecycleRoutes:
 
 
 class TestStaffLifecycleRoutes:
+    @staticmethod
+    def _staff_headers(client):
+        login = client.post("/api/auth/staff/login", json={"username": "registrar_staff"})
+        return {"Authorization": f"Bearer {login.json()['token']}"}
+
     def test_admin_can_resolve_grievance(self, client):
         client.post(
             "/api/student/grievances",
@@ -91,6 +96,7 @@ class TestStaffLifecycleRoutes:
         response = client.post(
             f"/api/admin/grievances/{grievance['id']}/resolve",
             json={"resolution": "Allocation reviewed and forwarded to hostel office."},
+            headers=self._staff_headers(client),
         )
 
         assert response.status_code == 200
@@ -105,7 +111,8 @@ class TestStaffLifecycleRoutes:
         assert upload.status_code == 200
         assert "ocr_data" in upload.json()
 
-        audit = client.get("/api/admin/documents")
+        headers = self._staff_headers(client)
+        audit = client.get("/api/admin/documents", headers=headers)
         assert audit.status_code == 200
         document = next(item for item in audit.json() if item["file_name"] == "id_card.png")
         assert document["ocr_data"]["extracted_student_id"] == "STU001"
@@ -113,6 +120,7 @@ class TestStaffLifecycleRoutes:
         verification = client.post(
             f"/api/admin/documents/{document['id']}/verify",
             json={"status": "verified", "notes": "OCR fields match student record."},
+            headers=headers,
         )
         assert verification.status_code == 200
         assert "verified" in verification.json()["message"]

@@ -14,6 +14,7 @@ class WorkflowCreateRequest(BaseModel):
     procedure_type: str
     student_id: str
     metadata: Optional[Dict[str, Any]] = None
+    campus_code: Optional[str] = None
 
 
 class WorkflowAdvanceRequest(BaseModel):
@@ -30,7 +31,7 @@ def create_workflow(request: WorkflowCreateRequest):
     """Create a new workflow instance."""
     try:
         result = WorkflowService.create_workflow(
-            request.procedure_type, request.student_id, request.metadata
+            request.procedure_type, request.student_id, request.metadata, request.campus_code
         )
         return result
     except ValueError as e:

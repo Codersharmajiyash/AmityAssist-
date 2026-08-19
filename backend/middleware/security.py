@@ -14,6 +14,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+from ..config import settings
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
@@ -26,14 +27,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = (
             "geolocation=(), microphone=(), camera=(), payment=()"
         )
-        # CSP: allow inline styles/scripts only for the local frontend (dev).
-        # In production, replace 'unsafe-inline' with a nonce-based approach.
+        connect_sources = " ".join(settings.cors_origins)
+        script_policy = "'self' https://fonts.googleapis.com"
+        style_policy = "'self' https://fonts.googleapis.com https://fonts.gstatic.com"
+        if not settings.is_production:
+            script_policy += " 'unsafe-inline'"
+            style_policy += " 'unsafe-inline'"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; "
+            f"script-src {script_policy}; "
+            f"style-src {style_policy}; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data:; "
-            "connect-src 'self' http://localhost:8000;"
+            f"connect-src 'self' {connect_sources}; base-uri 'self'; form-action 'self';"
         )
+        if settings.is_production:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         return response

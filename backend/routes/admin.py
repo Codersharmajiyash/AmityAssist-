@@ -248,8 +248,9 @@ def _document_row_to_dict(row):
 
 
 @router.get("/documents")
-async def get_documents_for_audit():
+async def get_documents_for_audit(request: Request):
     """Fetch uploaded documents with OCR/fraud audit data for staff review."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     conn = get_connection()
     rows = conn.execute(
         """SELECT d.*, s.name as student_name
@@ -261,8 +262,9 @@ async def get_documents_for_audit():
 
 
 @router.post("/documents/{doc_id}/verify")
-async def verify_audited_document(doc_id: int, body: DocumentVerification):
+async def verify_audited_document(doc_id: int, body: DocumentVerification, request: Request):
     """Mark an uploaded document as verified, fraudulent, or errored."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     conn = get_connection()
     row = conn.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if not row:
@@ -277,8 +279,9 @@ async def verify_audited_document(doc_id: int, body: DocumentVerification):
 
 
 @router.get("/stats")
-async def get_admin_stats():
+async def get_admin_stats(request: Request):
     """Get overall admin dashboard statistics."""
+    require_any_role(request, {"Registrar", "Administrator", "Department Coordinator", "Finance Department", "Scholarship Department", "Examination Cell"})
     conn = get_connection()
     
     total_students = conn.execute("SELECT COUNT(*) as count FROM students").fetchone()["count"]

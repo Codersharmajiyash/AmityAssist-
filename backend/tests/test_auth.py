@@ -160,3 +160,18 @@ class TestJWTAndRBAC:
             headers={"Authorization": f"Bearer {token}"},
         )
         assert denied.status_code == 403
+
+    def test_admin_dashboard_routes_require_staff_token(self, client):
+        protected_paths = [
+            "/api/admin/stats",
+            "/api/admin/documents",
+        ]
+        for path in protected_paths:
+            assert client.get(path).status_code == 401
+
+        token = client.post(
+            "/api/auth/staff/login", json={"username": "registrar_staff"}
+        ).json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        for path in protected_paths:
+            assert client.get(path, headers=headers).status_code == 200

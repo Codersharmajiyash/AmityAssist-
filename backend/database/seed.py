@@ -29,13 +29,31 @@ CREATE TABLE IF NOT EXISTS students (
     scholarship_status TEXT NOT NULL DEFAULT 'None',
     academic_performance TEXT NOT NULL DEFAULT 'Good',
     interests     TEXT,
-    previous_interactions INTEGER NOT NULL DEFAULT 0
+    previous_interactions INTEGER NOT NULL DEFAULT 0,
+    campus_code   TEXT NOT NULL DEFAULT 'NOIDA'
 );
 
 CREATE TABLE IF NOT EXISTS users (     
     username      TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
     role          TEXT NOT NULL CHECK(role IN ('Faculty', 'Department Coordinator', 'Finance Department', 'Scholarship Department', 'Examination Cell', 'Registrar', 'Admission Team', 'Administrator'))
+);
+
+CREATE TABLE IF NOT EXISTS campuses (
+    code          TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    city          TEXT NOT NULL,
+    active        INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS campus_procedure_rules (
+    campus_code        TEXT NOT NULL,
+    procedure_type     TEXT NOT NULL,
+    default_department TEXT NOT NULL,
+    target_days        INTEGER NOT NULL,
+    policy_note        TEXT,
+    PRIMARY KEY (campus_code, procedure_type),
+    FOREIGN KEY(campus_code) REFERENCES campuses(code)
 );
 
 CREATE TABLE IF NOT EXISTS conversations (
@@ -235,6 +253,7 @@ CREATE TABLE IF NOT EXISTS workflows (
     metadata        TEXT,
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    campus_code     TEXT NOT NULL DEFAULT 'NOIDA',
     FOREIGN KEY(student_id) REFERENCES students(id),
     FOREIGN KEY(assigned_department) REFERENCES departments(name)
 );
@@ -291,30 +310,32 @@ CREATE TABLE IF NOT EXISTS notification_templates (
 # Sample Records
 # ---------------------------------------------------------------------------
 
-_SAMPLE_STUDENTS = [
-    ("STU001", "Aisha Malik", "aisha.malik@uni.edu", "Computer Science", "CSE", 6, "2023-07-15", 82.5, 8.75, "Paid", 0.0, "Allocated (Hostel-3)", "50% Merit Scholarship", "Outstanding", "Artificial Intelligence, Web Development", 12),
-    ("STU002", "Rahul Sharma", "rahul.sharma@uni.edu", "Electrical Engineering", "ECE", 4, "2024-07-15", 68.0, 5.8, "Pending", 1850.0, "Day Scholar", "None", "Needs Improvement", "Embedded Systems, Robotics", 8),
-    ("STU003", "Priya Nair", "priya.nair@uni.edu", "Business Administration", "MBA", 2, "2025-01-10", 91.2, 9.1, "Paid", 0.0, "Day Scholar", "100% VC Fellowship", "Outstanding", "Finance, Public Speaking", 4),
-    ("STU004", "James Osei", "james.osei@uni.edu", "Data Science", "CSE", 8, "2022-07-15", 74.5, 7.20, "Paid", 0.0, "Allocated (Hostel-1)", "None", "Good", "Machine Learning, R Programming", 15),
-    ("STU005", "Fatima Al-Hassan", "fatima.alhassan@uni.edu", "Biotechnology", "Biotech", 2, "2025-07-15", 85.0, 7.90, "Paid", 0.0, "Allocated (Hostel-2)", "None", "Good", "Genetics, Cell Biology", 2),
-    ("STU006", "Chen Wei", "chen.wei@uni.edu", "Mechanical Engineering", "Mechanical Engineering", 6, "2023-07-15", 77.8, 6.90, "Paid", 0.0, "Day Scholar", "None", "Good", "Automotive Design, CAD", 6),
-    ("STU007", "Sofia Gonzalez", "sofia.gonzalez@uni.edu", "Psychology", "Psychology", 8, "2022-07-15", 89.0, 8.40, "Paid", 0.0, "Day Scholar", "25% Merit Scholarship", "Good", "Cognitive Studies, Therapy", 9),
-    ("STU008", "Amara Diallo", "amara.diallo@uni.edu", "Architecture", "Architecture", 4, "2024-07-15", 81.2, 7.50, "Paid", 0.0, "Allocated (Hostel-4)", "None", "Good", "Urban Planning, Sustainable Design", 7),
-    ("STU009", "Lucas Ferreira", "lucas.ferreira@uni.edu", "Civil Engineering", "Civil Engineering", 6, "2023-07-15", 64.5, 6.10, "Pending", 1200.0, "Day Scholar", "None", "Average", "Structural Analysis, Surveying", 11),
-    ("STU010", "Mei Lin", "mei.lin@uni.edu", "Pharmacy", "Pharmacy", 2, "2025-07-15", 94.0, 9.30, "Paid", 0.0, "Allocated (Hostel-3)", "100% VC Fellowship", "Outstanding", "Pharmacology, Drug Chemistry", 3),
-    ("STU011", "Vikram Patel", "vikram.patel@uni.edu", "Chemical Engineering", "Chemical", 4, "2024-07-15", 75.5, 7.40, "Paid", 0.0, "Day Scholar", "None", "Good", "Process Control, Thermodynamics", 5),
-    ("STU012", "Zara Khan", "zara.khan@uni.edu", "Electronics & Communications", "ECE", 6, "2023-07-15", 80.3, 8.10, "Paid", 0.0, "Allocated (Hostel-2)", "50% Merit Scholarship", "Good", "VLSI, Signal Processing", 10)
-]
-
 _SAMPLE_USERS = [
     ("registrar_staff", "Registrar Office Support", "Registrar"),
     ("admission_staff", "Admissions Helpdesk", "Admission Team"),
     ("finance_staff", "Finance Advisor Office", "Finance Department"),
     ("scholarship_staff", "Scholarship Desk Coordinator", "Scholarship Department"),
     ("exam_staff", "Examination Cell Controller", "Examination Cell"),
-    ("coordinator_staff", "Academic Department Coordinator", "Department Coordinator")
+    ("coordinator_staff", "Academic Department Coordinator", "Department Coordinator"),
 ]
 
+_SAMPLE_CAMPUSES = [
+    ("NOIDA", "Amity University Noida", "Noida", 1),
+    ("MUMBAI", "Amity University Mumbai", "Mumbai", 1),
+    ("LUCKNOW", "Amity University Lucknow", "Lucknow", 1),
+]
+
+_CAMPUS_PROCEDURE_RULES = [
+    ("NOIDA", "withdrawal", "Academic Affairs", 10, "Standard campus withdrawal clearance."),
+    ("MUMBAI", "withdrawal", "Student Services", 12, "Mumbai campus requires student-services triage."),
+    ("LUCKNOW", "withdrawal", "Registry", 9, "Lucknow registrar starts withdrawal review."),
+    ("NOIDA", "grievance", "Student Services", 5, "Standard grievance turnaround."),
+    ("MUMBAI", "grievance", "Student Services", 5, "Standard grievance turnaround."),
+    ("LUCKNOW", "grievance", "Student Services", 5, "Standard grievance turnaround."),
+    ("NOIDA", "scholarship", "Finance", 14, "Finance verifies scholarship eligibility."),
+    ("MUMBAI", "scholarship", "Finance", 14, "Finance verifies scholarship eligibility."),
+    ("LUCKNOW", "scholarship", "Finance", 14, "Finance verifies scholarship eligibility."),
+]
 _SAMPLE_NOTICES = [
     ("Mid-Semester Examinations Datesheet", "Mid-Semester Examinations for all undergraduate programs will commence on Oct 12, 2026. The detailed subject datesheet is available on the portal. Please ensure you clear any outstanding fees to receive your admit card.", "ALL", 0, "exam"),
     ("Wipro Campus Placement Internship Drive 2026", "Wipro is conducting an internship selection drive for CSE and ECE students of the 6th semester. Minimum required CGPA is 8.0. Register by June 25, 2026.", "CSE", 6, "internship"),
@@ -491,6 +512,13 @@ def init_db() -> None:
     if "current_step" not in existing_columns:
         cursor.execute("ALTER TABLE withdrawal_requests ADD COLUMN current_step INTEGER NOT NULL DEFAULT 1")
 
+    student_columns = [row["name"] for row in cursor.execute("PRAGMA table_info(students)").fetchall()]
+    if "campus_code" not in student_columns:
+        cursor.execute("ALTER TABLE students ADD COLUMN campus_code TEXT NOT NULL DEFAULT 'NOIDA'")
+    workflow_columns = [row["name"] for row in cursor.execute("PRAGMA table_info(workflows)").fetchall()]
+    if "campus_code" not in workflow_columns:
+        cursor.execute("ALTER TABLE workflows ADD COLUMN campus_code TEXT NOT NULL DEFAULT 'NOIDA'")
+
     # Seed students
     cursor.executemany(
         "INSERT OR IGNORE INTO students (id, name, email, course, branch, semester, enrolled_date, attendance, cgpa, fee_status, fee_due, hostel_status, scholarship_status, academic_performance, interests, previous_interactions) "
@@ -503,6 +531,17 @@ def init_db() -> None:
         "INSERT OR IGNORE INTO users (username, name, role) VALUES (?, ?, ?)",
         _SAMPLE_USERS
     )
+
+    cursor.executemany(
+        "INSERT OR IGNORE INTO campuses (code, name, city, active) VALUES (?, ?, ?, ?)",
+        _SAMPLE_CAMPUSES,
+    )
+    cursor.executemany(
+        "INSERT OR IGNORE INTO campus_procedure_rules (campus_code, procedure_type, default_department, target_days, policy_note) VALUES (?, ?, ?, ?, ?)",
+        _CAMPUS_PROCEDURE_RULES,
+    )
+    cursor.execute("UPDATE students SET campus_code = 'MUMBAI' WHERE id IN ('STU003', 'STU007', 'STU010')")
+    cursor.execute("UPDATE students SET campus_code = 'LUCKNOW' WHERE id IN ('STU005', 'STU008', 'STU011')")
 
     # Seed notices
     cursor.executemany(

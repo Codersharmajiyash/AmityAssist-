@@ -14,6 +14,11 @@ Completed baseline:
 - Phase 3 conversational assistant routing for academics, exams, scholarships, grievances, notices, hostel/fees/documents/internships, multilingual hints, voice command markers, and withdrawal refund guidance.
 - Prototype frontend alignment for the student dashboard, academics, scholarships, grievances, document upload/OCR result panel, withdrawal status/checklist/steps/forms, dark mode, and Web Speech API controls.
 - Flutter kiosk scaffold for login and withdrawal guidance in `frontend_flutter/`.
+- Phase 11 staff analytics: lifecycle snapshot, workflow funnel, bottleneck detection, and CSV/PDF report exports.
+- Phase 12 multi-campus configuration: campus-scoped procedures, workflow ownership, and cross-campus student lookup.
+- Phase 13 deployment foundation: production Compose, Kubernetes manifests, persistent infrastructure, and PostgreSQL migration extensions.
+- Phase 14 production hardening: configurable limits, security headers, telemetry, readiness probes, and guarded backup tooling.
+- Student Document Center now includes a recent-upload history with verification status and staff notes.
 
 Remaining major work:
 
@@ -94,6 +99,14 @@ GET  /api/admin/grievances
 POST /api/admin/grievances/{id}/resolve
 GET  /api/admin/documents
 POST /api/admin/documents/{id}/verify
+GET  /api/reports/analytics
+GET  /api/reports/funnel
+GET  /api/reports/bottlenecks
+GET  /api/reports/export?report=analytics&format=csv
+GET  /api/campuses
+GET  /api/campuses/students?campus_code=NOIDA
+GET  /api/campuses/{campus_code}/procedure-rules
+PUT  /api/campuses/{campus_code}/procedure-rules/{procedure_type}
 GET  /api/health
 ```
 
@@ -106,3 +119,7 @@ GET  /api/health
 - File storage: local uploads now, MinIO/S3 target.
 - Auth: prototype student verification now, JWT/RBAC target.
 - Deployment: Docker Compose foundation included.
+
+## Production deployment
+
+Use the Phase 13 artifacts in [`deploy/`](deploy/README.md). Copy `.env.production.example` to `.env.production`, replace every placeholder, then start the stack with `docker compose --env-file .env.production -f docker-compose.production.yml up --build`.

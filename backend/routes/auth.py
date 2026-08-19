@@ -17,6 +17,7 @@ from ..database.connection import get_connection
 from ..models.schemas import StaffLoginRequest, StudentLoginRequest, TokenResponse, VerifyRequest, VerifyResponse
 from ..security.jwt import create_access_token
 from ..services.chat_service import create_session
+from ..config import settings
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 limiter = Limiter(key_func=get_remote_address)
@@ -29,7 +30,7 @@ _UNVERIFIED_MSG = (
 
 
 @router.post("/verify", response_model=VerifyResponse)
-@limiter.limit("5/minute")
+@limiter.limit(settings.rate_limit_auth)
 async def verify_student(request: Request, body: VerifyRequest) -> VerifyResponse:
     """Verify a student by ID or email and return a secure session token."""
 

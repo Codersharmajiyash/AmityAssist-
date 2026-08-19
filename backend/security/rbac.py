@@ -112,7 +112,10 @@ def require_student_access(request: Request, student_id: str) -> dict[str, Any] 
 def require_any_role(request: Request, allowed_roles: set[str]) -> dict[str, Any] | None:
     user = get_current_user(request)
     if user is None:
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication is required for this staff/admin route.",
+        )
 
     if user.get("role") not in allowed_roles:
         raise HTTPException(

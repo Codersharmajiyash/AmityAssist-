@@ -444,3 +444,55 @@ pip install -r backend/requirements.txt
 **Remaining:** Phases 11-20 (frontend completion, deployment, advanced features)
 **Current Focus:** Production-ready backend foundation with JWT auth, workflow management, notifications, and document intelligence
 **Next Priority:** Flutter kiosk completion + staff portal frontend + PostgreSQL/Redis/MinIO production migration
+
+---
+
+## Phase 11: Advanced Analytics & Reporting
+
+Implemented:
+
+- Staff-only operational snapshot at `GET /api/reports/analytics`.
+- Student-journey workflow funnel at `GET /api/reports/funnel`.
+- Active workflow bottleneck detection grouped by department and status at `GET /api/reports/bottlenecks`.
+- CSV and lightweight PDF report downloads through `GET /api/reports/export` using `report` (`analytics`, `funnel`, or `bottlenecks`) and `format` (`csv` or `pdf`).
+- Automated route coverage in `backend/tests/test_phase11.py`.
+
+All report endpoints require a valid staff JWT with an authorised operational role. Phase 12 must build its campus configuration on these reports without changing their current response fields.
+
+---
+
+## Phase 12: Multi-Campus Configuration
+
+Implemented:
+
+- Campus catalog for Noida, Mumbai, and Lucknow.
+- Campus-scoped student records and workflow instances, with safe Noida defaults for existing SQLite data.
+- Per-campus rules for withdrawal, grievance, and scholarship procedures, including owning department, target timeline, and policy note.
+- Staff-only cross-campus student lookup and campus rule management at `/api/campuses`.
+- New workflows automatically use the student's home campus and that campus's configured default department; mismatched campus submissions are rejected.
+- Automated coverage in `backend/tests/test_phase12.py`.
+
+---
+
+## Phase 13: Production Deployment & DevOps
+
+Implemented:
+
+- Production-specific Compose stack with health checks and persistent PostgreSQL, Redis, MinIO, and upload volumes.
+- Kubernetes namespace, configuration/secrets, API deployment with health probes, PostgreSQL and MinIO stateful services, Redis deployment, and ingress.
+- PostgreSQL Phase 13 schema extension for campuses, workflow instances, notifications, and production indexes.
+- Production environment template and deployment runbook in `deploy/README.md`.
+- Runtime checks now fail fast when the production JWT secret has not been configured, and CORS is loaded from environment configuration.
+
+---
+
+## Phase 14: Production Hardening
+
+Implemented:
+
+- Environment-configurable global, authentication, and upload rate limits, plus a maximum upload-size bound.
+- Host allowlist, environment-driven CORS, strict production CSP, HSTS, request IDs, and server-timing response headers.
+- Public liveness and readiness endpoints, with staff-restricted in-memory telemetry at `GET /api/health/telemetry`.
+- Kubernetes readiness probe updated to use `/api/health/ready`.
+- Operator-managed PostgreSQL backup and explicitly guarded restore scripts.
+- Automated coverage in `backend/tests/test_phase14.py`.
