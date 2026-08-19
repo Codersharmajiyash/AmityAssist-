@@ -94,6 +94,9 @@ function switchTab(screenId, navElement) {
         loadFormCategories();
         loadFormsCatalog();
     }
+    if (screenId === "document-screen" && state.studentId) {
+        fetchDocumentHistory(state.studentId).then(renderDocumentHistory).catch(() => renderDocumentHistory([]));
+    }
 }
 
 function renderStudentBadge(name, course) {
@@ -180,6 +183,10 @@ async function fetchGrievances(studentId) {
 
 async function fetchWithdrawalStatus(studentId) {
     return apiJson(`/api/withdrawal/status/${encodeURIComponent(studentId)}`);
+}
+
+async function fetchDocumentHistory(studentId) {
+    return apiJson(`/api/documents/list/${encodeURIComponent(studentId)}`);
 }
 
 function statusClass(status) {
@@ -471,6 +478,7 @@ verifyForm.addEventListener("submit", async (e) => {
         document.querySelectorAll('.staff-nav').forEach(n => n.hidden = true);
         
         fetchStudentNotices(state.studentId).then(renderNotices).catch(() => renderNotices([]));
+        fetchDocumentHistory(state.studentId).then(renderDocumentHistory).catch(() => renderDocumentHistory([]));
         loadLifecycleModules().catch((err) => console.error("[Lifecycle Load Error]", err));
         document.body.classList.remove("auth-view");
 
@@ -699,6 +707,27 @@ function renderOcrResults(data) {
     `;
 }
 
+function renderDocumentHistory(documents) {
+    const history = $("document-history");
+    $("document-history-count").textContent = documents.length;
+    if (!documents.length) {
+        history.innerHTML = `<p class="muted">No documents uploaded yet.</p>`;
+        return;
+    }
+    history.innerHTML = documents.slice(0, 6).map((document) => `
+      <article class="record-item">
+        <div>
+          <span class="record-item__meta">${escapeHtml(document.timestamp || "Recently uploaded")}</span>
+          <h3>${escapeHtml(document.file_name || "Document")}</h3>
+          <p>${escapeHtml(document.classification || "Document")} ${document.verification_notes ? `- ${escapeHtml(document.verification_notes)}` : ""}</p>
+        </div>
+        <div class="record-item__side">
+          <span class="record-pill ${statusClass(document.verification_status)}">${escapeHtml(document.verification_status || "pending")}</span>
+        </div>
+      </article>
+    `).join("");
+}
+
 documentForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!state.studentId) return;
@@ -723,6 +752,7 @@ documentForm.addEventListener("submit", async (e) => {
         });
         documentStatus.textContent = data.message;
         renderOcrResults(data);
+        renderDocumentHistory(await fetchDocumentHistory(state.studentId));
         fileUpload.value = "";
     } catch (err) {
         documentStatus.textContent = err.message;

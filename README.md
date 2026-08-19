@@ -18,6 +18,7 @@ Completed baseline:
 - Phase 12 multi-campus configuration: campus-scoped procedures, workflow ownership, and cross-campus student lookup.
 - Phase 13 deployment foundation: production Compose, Kubernetes manifests, persistent infrastructure, and PostgreSQL migration extensions.
 - Phase 14 production hardening: configurable limits, security headers, telemetry, readiness probes, and guarded backup tooling.
+- Student Document Center now includes a recent-upload history with verification status and staff notes.
 
 Remaining major work:
 
