@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../application/auth_provider.dart';
-import 'biometric_login.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -24,7 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _handleLogin() async {
     final success = await ref.read(authProvider.notifier).verify(_studentIdController.text);
     if (success && mounted) {
-      context.go('/kiosk');
+      context.go('/dashboard');
     }
   }
 
@@ -91,14 +90,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Text('Access Kiosk'),
-                      ),
-                      const SizedBox(height: 16),
-                      BiometricLogin(
-                        onAuthenticated: () {
-                          // For mock prototype, assume biometric unlocks STU001
-                          _studentIdController.text = 'STU001';
-                          _handleLogin();
-                        },
                       ),
                       const SizedBox(height: 16),
                       TextButton(

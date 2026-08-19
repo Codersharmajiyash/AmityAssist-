@@ -39,7 +39,7 @@ class StaffDashboardScreen extends ConsumerWidget {
                   children: [
                     _buildStatCard(
                         context, 'Pending Withdrawals', stats['pending_withdrawals'].toString(), Icons.assignment, () {
-                      context.push('/staff/clearance');
+                      context.push('/staff/withdrawals');
                     }),
                     const SizedBox(width: 16),
                     _buildStatCard(
