@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
+import '../../../core/api_client.dart';
+import '../../../core/theme/kiosk_theme.dart';
 import '../../auth/application/auth_provider.dart';
 
 class WithdrawalFlowScreen extends ConsumerStatefulWidget {
@@ -28,18 +31,29 @@ class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
     final studentId = ref.read(authProvider).studentId;
 
     try {
-      if (studentId != null) {
-        // We use the chat endpoint for submission as a fallback if specific endpoint doesn't exist,
-        // but let's assume we have a direct endpoint for Phase 4 or just mock the success.
-        // We will just hit a mocked submission for the kiosk for now.
-        await Future.delayed(const Duration(seconds: 2)); // Mock delay
-      }
+      final dio = ref.read(apiClientProvider);
+
+      // Create a withdrawal workflow via the Workflow API.
+      await dio.post('/workflows', data: {
+        'student_id': studentId,
+        'procedure_type': 'withdrawal',
+        'reason': _reason,
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Withdrawal request submitted successfully!')),
+          const SnackBar(
+            content: Text('Withdrawal request submitted successfully!'),
+            backgroundColor: AppColors.successGreen,
+          ),
         );
-        Navigator.pop(context); // Go back
+        Navigator.pop(context);
+      }
+    } on DioException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.response?.data?['detail'] ?? e.message}')),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -89,9 +103,14 @@ class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
               children: [
                 FilledButton(
                   onPressed: _isSubmitting ? null : details.onStepContinue,
-                  child: _isSubmitting 
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : Text(isLastStep ? 'Submit Request' : 'Continue'),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text(isLastStep ? 'Submit Request' : 'Continue'),
                 ),
                 const SizedBox(width: 12),
                 if (!isLastStep)
@@ -108,19 +127,24 @@ class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
             title: const Text('Select Reason'),
             content: DropdownButtonFormField<String>(
               initialValue: _reason,
-              decoration: const InputDecoration(labelText: 'Reason for Withdrawal'),
-              items: _reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+              decoration:
+                  const InputDecoration(labelText: 'Reason for Withdrawal'),
+              items: _reasons
+                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                  .toList(),
               onChanged: (v) => setState(() => _reason = v),
             ),
             isActive: _currentStep >= 0,
-            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
+            state:
+                _currentStep > 0 ? StepState.complete : StepState.indexed,
           ),
           Step(
             title: const Text('Required Documents'),
             content: const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Based on your reason, the following documents are required:'),
+                Text(
+                    'Based on your reason, the following documents are required:'),
                 SizedBox(height: 12),
                 ListTile(
                   leading: Icon(Icons.description),
@@ -140,14 +164,16 @@ class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
               ],
             ),
             isActive: _currentStep >= 1,
-            state: _currentStep > 1 ? StepState.complete : StepState.indexed,
+            state:
+                _currentStep > 1 ? StepState.complete : StepState.indexed,
           ),
           Step(
             title: const Text('Upload & Submit'),
             content: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400, style: BorderStyle.solid),
+                border: Border.all(
+                    color: Colors.grey.shade400, style: BorderStyle.solid),
                 borderRadius: BorderRadius.circular(12),
                 color: Colors.grey.shade100,
               ),
