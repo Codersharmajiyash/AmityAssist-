@@ -1,8 +1,15 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'services/offline_cache_service.dart';
+
+/// Key used to persist the JWT token in SharedPreferences.
+const kJwtTokenKey = 'jwt_token';
+
 /// Provides a global singleton instance of Dio for API requests.
 final apiClientProvider = Provider<Dio>((ref) {
+  final prefs = ref.watch(sharedPreferencesProvider);
+
   final dio = Dio(BaseOptions(
     // Localhost IP address for Android emulator is 10.0.2.2.
     // For desktop/web, it is 127.0.0.1.
@@ -16,12 +23,23 @@ final apiClientProvider = Provider<Dio>((ref) {
     },
   ));
 
-  // Add a simple interceptor for logging/error handling if needed.
+  // ── JWT auth interceptor ──────────────────────────────────
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) {
-        // Optionally attach token here in Phase 6
+        final token = prefs.getString(kJwtTokenKey);
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
         return handler.next(options);
+      },
+      onError: (error, handler) {
+        // On 401 Unauthorized, clear the stored token so the UI
+        // can redirect to login.
+        if (error.response?.statusCode == 401) {
+          prefs.remove(kJwtTokenKey);
+        }
+        return handler.next(error);
       },
     ),
   );
