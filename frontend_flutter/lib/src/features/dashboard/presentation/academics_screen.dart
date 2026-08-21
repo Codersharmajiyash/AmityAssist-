@@ -114,7 +114,7 @@ class _ExamCardState extends ConsumerState<_ExamCard> {
   IconData _gradeIcon(String? grade) {
     switch (grade) {
       case 'A+' || 'A':
-        return Icons.emoji_events_rounded;
+        return Icons.workspace_premium_rounded;
       case 'B+' || 'B':
         return Icons.thumb_up_rounded;
       case 'C+' || 'C':

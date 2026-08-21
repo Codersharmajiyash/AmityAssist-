@@ -55,7 +55,7 @@ class ScholarshipScreen extends ConsumerWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.emoji_events_outlined, size: 64, color: Colors.grey.shade400),
+                  Icon(Icons.workspace_premium_outlined, size: 64, color: Colors.grey.shade400),
                   const SizedBox(height: 16),
                   Text('No scholarships available', style: Theme.of(context).textTheme.titleMedium),
                 ],
@@ -155,7 +155,7 @@ class _ScholarshipCardState extends ConsumerState<_ScholarshipCard> {
                     color: AppColors.amityYellow.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.emoji_events_rounded, color: Color(0xFFF9A825), size: 28),
+                  child: const Icon(Icons.workspace_premium_rounded, color: Color(0xFFF9A825), size: 28),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

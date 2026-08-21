@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/theme/kiosk_theme.dart';
-import '../../student/application/student_provider.dart';
+import '../../../core/widgets/uniassist_logo.dart';
 import '../../auth/application/auth_provider.dart';
 import '../../notifications/application/notifications_provider.dart';
-
-/// Theme mode provider for runtime dark/light toggle.
-final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
+import '../../student/application/student_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -21,272 +19,251 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('UNIASSIST'),
-        leading: const Padding(
-          padding: EdgeInsets.all(10),
-          child: Icon(Icons.school_rounded, size: 28),
-        ),
+        toolbarHeight: 76,
+        title: const UniAssistLogo(size: 42, showWordmark: true),
         actions: [
-          // Notification bell with badge
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined, size: 28),
-                onPressed: () => context.push('/notifications'),
-              ),
-              if (unreadCount > 0)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: AppColors.urgentRed,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                    child: Text(
-                      unreadCount > 9 ? '9+' : '$unreadCount',
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          // Theme toggle
+          _NotificationButton(count: unreadCount),
+          const SizedBox(width: 8),
           IconButton(
-            icon: Icon(
-              Theme.of(context).brightness == Brightness.dark
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
-              size: 26,
-            ),
-            onPressed: () {
-              final current = ref.read(themeModeProvider);
-              ref.read(themeModeProvider.notifier).state =
-                  current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, size: 26),
+            tooltip: 'End session',
+            icon: const Icon(Icons.logout_rounded),
             onPressed: () {
               ref.read(authProvider.notifier).logout();
               context.go('/');
             },
           ),
+          const SizedBox(width: 20),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // ── Hero banner ────────────────────────────────
-            _HeroBanner(studentAsync: studentAsync),
-            const SizedBox(height: 8),
-
-            // ── Quick stats ────────────────────────────────
-            studentAsync.when(
-              data: (s) => s == null
-                  ? const SizedBox.shrink()
-                  : _QuickStatsRow(student: s),
-              loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
-            ),
-
-            // ── Navigation grid ────────────────────────────
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: GridView.count(
-                crossAxisCount: MediaQuery.of(context).size.width > 600 ? 3 : 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-                childAspectRatio: 1.15,
+      body: SafeArea(
+        top: false,
+        child: studentAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => _ErrorPanel(message: 'Unable to load dashboard: $error'),
+          data: (student) {
+            if (student == null) {
+              return const _ErrorPanel(message: 'No student profile is active.');
+            }
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(28, 20, 28, 36),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _NavCard(
-                    title: 'Withdrawal',
-                    icon: Icons.exit_to_app_rounded,
-                    color: const Color(0xFFE53935),
-                    onTap: () => context.push('/withdrawal'),
+                  _IdentityPanel(student: student).animate().fadeIn(duration: 350.ms).slideY(begin: 0.04),
+                  const SizedBox(height: 22),
+                  _MetricsRow(student: student).animate().fadeIn(delay: 100.ms, duration: 350.ms),
+                  const SizedBox(height: 28),
+                  Text('Student Services', style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 14),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final width = constraints.maxWidth;
+                      final columns = width >= 1100 ? 4 : width >= 720 ? 3 : 2;
+                      return GridView.count(
+                        crossAxisCount: columns,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: width >= 720 ? 1.45 : 1.05,
+                        children: _services(context)
+                            .asMap()
+                            .entries
+                            .map((entry) => entry.value.animate().fadeIn(
+                                  delay: Duration(milliseconds: entry.key * 45),
+                                  duration: 260.ms,
+                                ))
+                            .toList(),
+                      );
+                    },
                   ),
-                  _NavCard(
-                    title: 'Academics',
-                    icon: Icons.school_rounded,
-                    color: AppColors.amityBlue,
-                    onTap: () => context.push('/academics'),
-                  ),
-                  _NavCard(
-                    title: 'Scholarships',
-                    icon: Icons.emoji_events_rounded,
-                    color: const Color(0xFFF9A825),
-                    onTap: () => context.push('/scholarship'),
-                  ),
-                  _NavCard(
-                    title: 'Grievance Desk',
-                    icon: Icons.gavel_rounded,
-                    color: const Color(0xFF7B1FA2),
-                    onTap: () => context.push('/grievance'),
-                  ),
-                  _NavCard(
-                    title: 'Documents',
-                    icon: Icons.folder_rounded,
-                    color: const Color(0xFF00897B),
-                    onTap: () => context.push('/documents'),
-                  ),
-                  _NavCard(
-                    title: 'Request Status',
-                    icon: Icons.track_changes_rounded,
-                    color: const Color(0xFF1565C0),
-                    onTap: () => context.push('/request-status'),
-                  ),
-                  _NavCard(
-                    title: 'Notices',
-                    icon: Icons.campaign_rounded,
-                    color: const Color(0xFFEF6C00),
-                    onTap: () => context.push('/notices'),
-                  ),
-                  _NavCard(
-                    title: 'AI Assistant',
-                    icon: Icons.smart_toy_rounded,
-                    color: AppColors.jade,
-                    onTap: () => context.push('/chat'),
-                  ),
-                ]
-                    .asMap()
-                    .entries
-                    .map(
-                      (e) => e.value.animate().fadeIn(
-                            delay: Duration(milliseconds: 80 * e.key),
-                            duration: 400.ms,
-                          ).slideY(begin: 0.15),
-                    )
-                    .toList(),
+                ],
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
   }
+
+  List<Widget> _services(BuildContext context) {
+    return [
+      _ServiceTile(
+        title: 'Withdrawal',
+        subtitle: 'Guidance, checklist, forms, status',
+        icon: Icons.assignment_return_rounded,
+        color: AppColors.danger,
+        route: '/withdrawal',
+      ),
+      _ServiceTile(
+        title: 'Academics',
+        subtitle: 'CGPA, attendance, exams, back papers',
+        icon: Icons.menu_book_rounded,
+        color: AppColors.primary,
+        route: '/academics',
+      ),
+      _ServiceTile(
+        title: 'Scholarships',
+        subtitle: 'Eligibility and applications',
+        icon: Icons.workspace_premium_rounded,
+        color: AppColors.gold,
+        route: '/scholarship',
+      ),
+      _ServiceTile(
+        title: 'Grievances',
+        subtitle: 'File and track student issues',
+        icon: Icons.rule_rounded,
+        color: const Color(0xFF6F4CB2),
+        route: '/grievance',
+      ),
+      _ServiceTile(
+        title: 'Documents',
+        subtitle: 'Upload, OCR, verification status',
+        icon: Icons.source_rounded,
+        color: AppColors.teal,
+        route: '/documents',
+      ),
+      _ServiceTile(
+        title: 'Request Status',
+        subtitle: 'Track workflow progress',
+        icon: Icons.timeline_rounded,
+        color: const Color(0xFF2E6EB5),
+        route: '/request-status',
+      ),
+      _ServiceTile(
+        title: 'Notices',
+        subtitle: 'Personalized university updates',
+        icon: Icons.campaign_rounded,
+        color: const Color(0xFFB96922),
+        route: '/notices',
+      ),
+      _ServiceTile(
+        title: 'AI Advisor',
+        subtitle: 'Guided chat for university services',
+        icon: Icons.support_agent_rounded,
+        color: AppColors.teal,
+        route: '/chat',
+      ),
+    ];
+  }
 }
 
-// ── Hero Banner ──────────────────────────────────────────────
-class _HeroBanner extends StatelessWidget {
-  const _HeroBanner({required this.studentAsync});
-  final AsyncValue<StudentProfile?> studentAsync;
+class _IdentityPanel extends StatelessWidget {
+  const _IdentityPanel({required this.student});
+
+  final StudentProfile student;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppColors.gradientStart, AppColors.gradientEnd],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: AppColors.panel,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.line),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 28),
-      child: studentAsync.when(
-        data: (student) => student == null
-            ? const Text('Profile not found', style: TextStyle(color: Colors.white))
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome back,',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white.withValues(alpha: 0.8),
-                    ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+          final details = [
+            _Detail(label: 'Student ID', value: student.id),
+            _Detail(label: 'Course', value: student.course),
+            _Detail(label: 'Branch', value: student.branch),
+            _Detail(label: 'Semester', value: '${student.semester}'),
+            _Detail(label: 'Hostel', value: student.hostelStatus),
+          ];
+
+          return Flex(
+            direction: compact ? Axis.vertical : Axis.horizontal,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (compact)
+                _IdentityCopy(student: student)
+              else
+                Expanded(
+                  flex: 2,
+                  child: _IdentityCopy(student: student),
+                ),
+              if (!compact) const SizedBox(width: 28) else const SizedBox(height: 18),
+              if (compact)
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: details.map((item) => _InfoPill(detail: item)).toList(),
+                )
+              else
+                Expanded(
+                  flex: 3,
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: details.map((item) => _InfoPill(detail: item)).toList(),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    student.name,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${student.course} • ${student.id}',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ],
-              ),
-        loading: () => const Padding(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          child: Center(child: CircularProgressIndicator(color: Colors.white)),
-        ),
-        error: (err, _) => Text(
-          'Error: $err',
-          style: const TextStyle(color: Colors.white),
-        ),
+                ),
+            ],
+          );
+        },
       ),
-    ).animate().fadeIn(duration: 500.ms);
+    );
   }
 }
 
-// ── Quick Stats Row ──────────────────────────────────────────
-class _QuickStatsRow extends StatelessWidget {
-  const _QuickStatsRow({required this.student});
+class _IdentityCopy extends StatelessWidget {
+  const _IdentityCopy({required this.student});
+
   final StudentProfile student;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: _StatChip(
-              label: 'CGPA',
-              value: student.cgpa.toStringAsFixed(1),
-              icon: Icons.trending_up_rounded,
-              color: AppColors.jade,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatChip(
-              label: 'Attendance',
-              value: '${student.attendance}%',
-              icon: Icons.calendar_today_rounded,
-              color: AppColors.amityBlue,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatChip(
-              label: 'Fee Status',
-              value: student.feeStatus,
-              icon: Icons.account_balance_wallet_rounded,
-              color: student.feeStatus == 'CLEAR'
-                  ? AppColors.successGreen
-                  : AppColors.urgentRed,
-            ),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(delay: 300.ms, duration: 400.ms);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Welcome, ${student.name}', style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 8),
+        Text(
+          'Use the kiosk to complete university services without waiting at multiple counters.',
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppColors.muted),
+        ),
+      ],
+    );
   }
 }
 
-class _StatChip extends StatelessWidget {
-  const _StatChip({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
+class _MetricsRow extends StatelessWidget {
+  const _MetricsRow({required this.student});
+
+  final StudentProfile student;
+
+  @override
+  Widget build(BuildContext context) {
+    final paid = student.feeStatus.toLowerCase().contains('paid') || student.feeStatus.toLowerCase().contains('clear');
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 720;
+        final cards = [
+          _MetricCard(label: 'CGPA', value: student.cgpa.toStringAsFixed(2), icon: Icons.trending_up_rounded, color: AppColors.teal),
+          _MetricCard(label: 'Attendance', value: '${student.attendance}%', icon: Icons.event_available_rounded, color: AppColors.primary),
+          _MetricCard(label: 'Fee Status', value: student.feeStatus, icon: Icons.account_balance_wallet_rounded, color: paid ? AppColors.success : AppColors.danger),
+        ];
+        if (compact) {
+          return Column(
+            children: cards.map((card) => Padding(padding: const EdgeInsets.only(bottom: 12), child: card)).toList(),
+          );
+        }
+        return Row(
+          children: cards
+              .map((card) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 12), child: card)))
+              .toList(),
+        );
+      },
+    );
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({required this.label, required this.value, required this.icon, required this.color});
+
   final String label;
   final String value;
   final IconData icon;
@@ -296,26 +273,28 @@ class _StatChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        child: Column(
+        padding: const EdgeInsets.all(18),
+        child: Row(
           children: [
-            Icon(icon, color: color, size: 26),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: color,
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
               ),
+              child: Icon(icon, color: color, size: 27),
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
-                  ),
-              textAlign: TextAlign.center,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: Theme.of(context).textTheme.bodyMedium),
+                  const SizedBox(height: 4),
+                  Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleLarge),
+                ],
+              ),
             ),
           ],
         ),
@@ -324,59 +303,144 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-// ── Navigation Card ──────────────────────────────────────────
-class _NavCard extends StatelessWidget {
-  const _NavCard({
+class _ServiceTile extends StatelessWidget {
+  const _ServiceTile({
     required this.title,
+    required this.subtitle,
     required this.icon,
     required this.color,
-    required this.onTap,
+    required this.route,
   });
+
   final String title;
+  final String subtitle;
   final IconData icon;
   final Color color;
-  final VoidCallback onTap;
+  final String route;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                color.withValues(alpha: 0.08),
-                color.withValues(alpha: 0.02),
-              ],
-            ),
-          ),
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => context.push(route),
+        child: Padding(
+          padding: const EdgeInsets.all(18),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, size: 36, color: color),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                textAlign: TextAlign.center,
+                    child: Icon(icon, color: color, size: 27),
+                  ),
+                  const Spacer(),
+                  const Icon(Icons.arrow_forward_rounded, color: AppColors.muted),
+                ],
               ),
+              const Spacer(),
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationButton extends StatelessWidget {
+  const _NotificationButton({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          tooltip: 'Notifications',
+          icon: const Icon(Icons.notifications_outlined),
+          onPressed: () => context.push('/notifications'),
+        ),
+        if (count > 0)
+          Positioned(
+            top: 14,
+            right: 8,
+            child: Container(
+              width: 18,
+              height: 18,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                color: AppColors.danger,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                count > 9 ? '9+' : '$count',
+                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.detail});
+
+  final _Detail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.primarySoft,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(detail.label, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 2),
+          Text(detail.value, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+}
+
+class _Detail {
+  const _Detail({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
+class _ErrorPanel extends StatelessWidget {
+  const _ErrorPanel({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(message, style: Theme.of(context).textTheme.titleMedium),
         ),
       ),
     );

@@ -114,7 +114,7 @@ class _WorkflowCard extends StatelessWidget {
     final typeIcon = switch (type) {
       'WITHDRAWAL' => Icons.exit_to_app_rounded,
       'GRIEVANCE' => Icons.gavel_rounded,
-      'SCHOLARSHIP' => Icons.emoji_events_rounded,
+      'SCHOLARSHIP' => Icons.workspace_premium_rounded,
       _ => Icons.track_changes_rounded,
     };
 
