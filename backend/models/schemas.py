@@ -123,6 +123,9 @@ class ChatResponse(BaseModel):
     ]
     intent: Optional[str] = None
     sentiment: Optional[str] = None
+    ai_source: Optional[str] = None
+    memory_summary: Optional[str] = None
+    escalation_recommended: bool = False
     withdrawal_submitted: bool = False
 
 

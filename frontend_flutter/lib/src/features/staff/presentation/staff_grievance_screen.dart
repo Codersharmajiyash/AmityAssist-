@@ -36,11 +36,11 @@ class _StaffGrievanceScreenState extends ConsumerState<StaffGrievanceScreen> {
                 children: [
                   _buildCategoryChip('All'),
                   const SizedBox(width: 8),
-                  _buildCategoryChip('Academics'),
+                  _buildCategoryChip('Academic'),
                   const SizedBox(width: 8),
                   _buildCategoryChip('Hostel'),
                   const SizedBox(width: 8),
-                  _buildCategoryChip('Finance'),
+                  _buildCategoryChip('Fee'),
                   const SizedBox(width: 8),
                   _buildCategoryChip('Infrastructure'),
                 ],

@@ -214,7 +214,7 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
                       height: 54,
                       child: FilledButton.icon(
                         onPressed: () {
-                          ref.read(staffActionsProvider).verifyDocument(doc['id'], 'VERIFIED', 'Looks good');
+                          ref.read(staffActionsProvider).verifyDocument(doc['id'], 'verified', 'Looks good');
                           setState(() => _selectedDocument = null);
                         },
                         icon: const Icon(Icons.verified),
@@ -230,7 +230,7 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
                       height: 54,
                       child: OutlinedButton.icon(
                         onPressed: () {
-                          ref.read(staffActionsProvider).verifyDocument(doc['id'], 'REJECTED', 'Failed verification');
+                          ref.read(staffActionsProvider).verifyDocument(doc['id'], 'fraud_detected', 'Failed verification');
                           setState(() => _selectedDocument = null);
                         },
                         icon: const Icon(Icons.cancel),

@@ -183,9 +183,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _dio.post('/auth/staff-login', data: {
+      final response = await _dio.post('/auth/staff/login', data: {
         'username': username,
-        'role': role,
       });
 
       if (response.statusCode == 200) {
@@ -195,14 +194,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         if (token != null) {
           await _prefs.setString(kJwtTokenKey, token);
           await _prefs.setString('staff_username', username);
-          await _prefs.setString('staff_role', role);
+          await _prefs.setString('staff_role', data['role'] as String? ?? role);
           await _prefs.setBool('is_staff', true);
 
           state = AuthState(
             token: token,
             isStaff: true,
             staffUsername: username,
-            staffRole: role,
+            staffRole: data['role'] as String? ?? role,
           );
           return true;
         }

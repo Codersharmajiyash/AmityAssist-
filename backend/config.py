@@ -31,6 +31,11 @@ class Settings:
     s3_secret_key: str = os.getenv("S3_SECRET_KEY", "minioadmin")
     s3_bucket_documents: str = os.getenv("S3_BUCKET_DOCUMENTS", "uniassist-documents")
 
+    llm_provider: str = os.getenv("LLM_PROVIDER", "local")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    llm_timeout_seconds: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "8"))
+
     cors_origins: tuple[str, ...] = tuple(
         origin.strip()
         for origin in os.getenv(
@@ -48,6 +53,10 @@ class Settings:
     @property
     def is_production(self) -> bool:
         return self.environment.lower() == "production"
+
+    @property
+    def llm_enabled(self) -> bool:
+        return self.llm_provider.lower() == "gemini" and bool(self.gemini_api_key)
 
 
 settings = Settings()

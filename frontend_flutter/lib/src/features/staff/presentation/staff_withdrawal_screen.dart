@@ -145,13 +145,13 @@ class _StaffWithdrawalScreenState extends ConsumerState<StaffWithdrawalScreen> {
                                 children: [
                                   TextButton(
                                     onPressed: () {
-                                      ref.read(staffActionsProvider).updateRequestStatus(id, 'APPROVED');
+                                      ref.read(staffActionsProvider).updateRequestStatus(id, 'approved');
                                     },
                                     child: const Text('Approve', style: TextStyle(color: AppColors.successGreen)),
                                   ),
                                   TextButton(
                                     onPressed: () {
-                                      ref.read(staffActionsProvider).updateRequestStatus(id, 'REJECTED');
+                                      ref.read(staffActionsProvider).updateRequestStatus(id, 'rejected');
                                     },
                                     child: const Text('Reject', style: TextStyle(color: AppColors.urgentRed)),
                                   ),

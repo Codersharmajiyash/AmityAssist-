@@ -7,7 +7,13 @@ final adminStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref
   final dio = ref.watch(apiClientProvider);
   try {
     final response = await dio.get('/admin/stats');
-    return response.data as Map<String, dynamic>;
+    final data = response.data as Map<String, dynamic>;
+    return {
+      ...data,
+      'active_grievances': data['active_grievances'] ?? data['open_grievances'] ?? 0,
+      'pending_documents': data['pending_documents'] ?? data['documents_pending_verification'] ?? 0,
+      'recent_activity': data['recent_activity'] ?? [],
+    };
   } catch (e) {
     // Offline Mock Fallback
     return {
@@ -27,7 +33,9 @@ final adminRequestsProvider = FutureProvider.autoDispose<List<dynamic>>((ref) as
   final dio = ref.watch(apiClientProvider);
   try {
     final response = await dio.get('/admin/requests');
-    return response.data as List<dynamic>;
+    return (response.data as List)
+        .map((item) => _normaliseWithdrawal(item as Map<String, dynamic>))
+        .toList();
   } catch (e) {
     // Offline Mock Fallback
     return [
@@ -64,7 +72,9 @@ final adminGrievancesProvider = FutureProvider.autoDispose<List<dynamic>>((ref) 
   final dio = ref.watch(apiClientProvider);
   try {
     final response = await dio.get('/admin/grievances');
-    return response.data as List<dynamic>;
+    return (response.data as List)
+        .map((item) => _normaliseGrievance(item as Map<String, dynamic>))
+        .toList();
   } catch (e) {
     // Offline Mock Fallback
     return [
@@ -95,7 +105,9 @@ final adminDocumentsProvider = FutureProvider.autoDispose<List<dynamic>>((ref) a
   final dio = ref.watch(apiClientProvider);
   try {
     final response = await dio.get('/admin/documents');
-    return response.data as List<dynamic>;
+    return (response.data as List)
+        .map((item) => _normaliseDocument(item as Map<String, dynamic>))
+        .toList();
   } catch (e) {
     // Offline Mock Fallback
     return [
@@ -134,7 +146,9 @@ class StaffActions {
 
   Future<void> updateRequestStatus(int id, String status) async {
     try {
-      await _dio.post('/admin/requests/$id/status', data: {'status': status});
+      await _dio.post('/admin/requests/$id/status', data: {
+        'status': status.toLowerCase(),
+      });
     } catch (_) {
       // Mock success for offline
       await Future.delayed(const Duration(milliseconds: 500));
@@ -145,7 +159,7 @@ class StaffActions {
 
   Future<void> batchApproveRequests(List<int> ids) async {
     for (final id in ids) {
-      await updateRequestStatus(id, 'APPROVED');
+      await updateRequestStatus(id, 'approved');
     }
   }
 
@@ -163,8 +177,8 @@ class StaffActions {
   Future<void> verifyDocument(int id, String status, String notes) async {
     try {
       await _dio.post('/admin/documents/$id/verify', data: {
-        'status': status,
-        'admin_notes': notes
+        'status': status.toLowerCase(),
+        'notes': notes
       });
     } catch (_) {
       // Mock success for offline
@@ -175,7 +189,79 @@ class StaffActions {
 
   Future<void> batchVerifyDocuments(List<int> ids) async {
     for (final id in ids) {
-      await verifyDocument(id, 'VERIFIED', 'Batch verified');
+      await verifyDocument(id, 'verified', 'Batch verified');
     }
+  }
+}
+
+Map<String, dynamic> _normaliseWithdrawal(Map<String, dynamic> item) {
+  final status = (item['status'] ?? 'pending').toString().toUpperCase();
+  return {
+    ...item,
+    'status': status,
+    'name': item['name'] ?? item['student_name'] ?? '',
+    'date': _datePart(item['timestamp'] ?? item['date']),
+    'reason': item['reason'] ?? 'Not recorded',
+  };
+}
+
+Map<String, dynamic> _normaliseGrievance(Map<String, dynamic> item) {
+  final category = _titleCase(item['category'] ?? 'general');
+  final status = (item['status'] ?? 'open').toString().toUpperCase();
+  return {
+    ...item,
+    'category': category,
+    'status': status,
+    'priority': item['priority'] ?? _priorityForCategory(category),
+    'subject': item['subject'] ?? item['description'] ?? 'Student grievance',
+    'date': _datePart(item['timestamp'] ?? item['date']),
+  };
+}
+
+Map<String, dynamic> _normaliseDocument(Map<String, dynamic> item) {
+  final ocr = item['ocr_data'] is Map<String, dynamic>
+      ? item['ocr_data'] as Map<String, dynamic>
+      : <String, dynamic>{};
+  final notes = (item['verification_notes'] ?? '').toString();
+  final verificationStatus = (item['verification_status'] ?? item['status'] ?? 'pending')
+      .toString()
+      .toUpperCase();
+  final flags = verificationStatus == 'FRAUD_DETECTED' && notes.isNotEmpty
+      ? notes.split(';').map((flag) => flag.trim()).where((flag) => flag.isNotEmpty).toList()
+      : <String>[];
+
+  return {
+    ...item,
+    'document_type': item['document_type'] ?? item['classification'] ?? ocr['document_type'] ?? 'Document',
+    'status': verificationStatus,
+    'ocr_confidence': (ocr['confidence_score'] is num)
+        ? (ocr['confidence_score'] as num).toDouble()
+        : 0.0,
+    'fraud_flags': item['fraud_flags'] ?? flags,
+    'upload_date': _datePart(item['timestamp'] ?? item['upload_date']),
+  };
+}
+
+String _datePart(dynamic value) {
+  if (value == null) return '--';
+  return value.toString().split(' ').first;
+}
+
+String _titleCase(dynamic value) {
+  final text = value.toString();
+  if (text.isEmpty) return text;
+  return text[0].toUpperCase() + text.substring(1).toLowerCase();
+}
+
+String _priorityForCategory(String category) {
+  switch (category.toLowerCase()) {
+    case 'fee':
+    case 'hostel':
+      return 'HIGH';
+    case 'exam':
+    case 'academic':
+      return 'MEDIUM';
+    default:
+      return 'LOW';
   }
 }

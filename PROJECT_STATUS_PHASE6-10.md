@@ -440,10 +440,10 @@ pip install -r backend/requirements.txt
 
 ## 📋 Summary
 
-**Completed:** Phases 0-10 (86 tests passing, full backend implementation)
-**Remaining:** Phases 11-20 (frontend completion, deployment, advanced features)
-**Current Focus:** Production-ready backend foundation with JWT auth, workflow management, notifications, and document intelligence
-**Next Priority:** Flutter kiosk completion + staff portal frontend + PostgreSQL/Redis/MinIO production migration
+**Completed:** Phases 0-14, plus Phase 16 staff portal frontend expansion and Phase 18 advanced conversational AI baseline (102 tests passing).
+**Remaining:** Phase 15 full student kiosk completion, Phase 17 native mobile depth, Phase 19 compliance/audit infrastructure, and Phase 20 feature parity/polish.
+**Current Focus:** Production-ready backend foundation with JWT auth, workflow management, notifications, analytics, document intelligence, staff portal integration, and contextual AI.
+**Next Priority:** Complete student kiosk parity in Flutter, then compliance/audit and final E2E validation.
 
 ---
 
@@ -458,6 +458,43 @@ Implemented:
 - Automated route coverage in `backend/tests/test_phase11.py`.
 
 All report endpoints require a valid staff JWT with an authorised operational role. Phase 12 must build its campus configuration on these reports without changing their current response fields.
+
+---
+
+## Phase 16: Staff Portal Frontend Expansion
+
+Implemented:
+
+- Flutter staff login now uses the current `POST /api/auth/staff/login` endpoint.
+- Staff dashboard consumes real `/api/admin/stats` response fields and normalizes legacy aliases for the UI.
+- Withdrawal queue consumes `/api/admin/requests`, normalizes lowercase backend statuses for uppercase UI tabs, and sends lowercase `approved` / `rejected` status updates back to FastAPI.
+- Grievance desk consumes `/api/admin/grievances`, maps backend `description`, `timestamp`, and lowercase categories into staff-facing cards, and resolves cases through `/api/admin/grievances/{id}/resolve`.
+- Document review consumes `/api/admin/documents`, maps `classification`, `ocr_data`, `verification_status`, and `verification_notes` into review cards, and sends valid `verified` / `fraud_detected` document decisions through `/api/admin/documents/{id}/verify`.
+- Batch approve and batch verify actions invalidate Riverpod providers so staff screens refresh after actions.
+
+Verification:
+
+- Backend staff/admin contracts covered through the full test suite.
+- Flutter analyzer could not be run on this machine because the Flutter CLI is not installed.
+
+---
+
+## Phase 18: Advanced Conversational AI
+
+Implemented:
+
+- New `backend/services/advanced_ai_service.py` service.
+- Contextual in-session memory with bounded recent turns and readable summaries.
+- Domain guardrails that keep out-of-scope prompts inside UniAssist student workflows.
+- Optional Gemini integration using `LLM_PROVIDER=gemini`, `GEMINI_API_KEY`, `GEMINI_MODEL`, and `LLM_TIMEOUT_SECONDS`.
+- Safe local-context fallback when no LLM key is configured, so the app remains testable offline.
+- Sentiment-aware escalation flagging for urgent negative messages.
+- Chat response metadata: `ai_source`, `memory_summary`, and `escalation_recommended`.
+- Automated Phase 18 tests in `backend/tests/test_phase18.py`.
+
+Verification:
+
+- Full backend suite passes: `102 passed`.
 
 ---
 

@@ -29,6 +29,7 @@ from .nlp_service import (
     route_intent,
     score_sentiment,
 )
+from .advanced_ai_service import advanced_reply, remember_turn, summarize_memory
 from .withdrawal_workflow import create_withdrawal_request
 
 # ---------------------------------------------------------------------------
@@ -50,6 +51,8 @@ def create_session(student_id: str) -> str:
         "grievance_description": None,
         "pending_scholarship_id": None,
         "pending_exam_id": None,
+        "recent_turns": [],
+        "memory_summary": "No prior context in this session.",
         "created_at": datetime.utcnow(),
     }
     return session_id
@@ -823,6 +826,7 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
 
     # Persist student's raw message
     _log_message(student_id, raw_message, "student")
+    remember_turn(session, "student", raw_message)
 
     if state in {"GRIEVANCE_CATEGORY", "GRIEVANCE_DESCRIPTION", "GRIEVANCE_CONFIRM"}:
         return _handle_grievance_state(session, raw_message)
@@ -861,14 +865,18 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
         sentiment = score_sentiment(raw_message)
 
         if intent == "unclear" and routed_intent == "unknown":
-            reply = (
-                "I could not map that to a supported student workflow yet. "
-                "Please ask about academics, scholarships, grievances, documents, "
-                "fees, hostel, internships, or withdrawal help."
-            )
-            _log_message(student_id, reply, "bot", "help", sentiment)
+            student = _fetch_student(student_id)
+            ai = advanced_reply(raw_message, student, session, language, voice)
+            _log_message(student_id, ai["reply"], "bot", "help", ai["sentiment"])
+            remember_turn(session, "bot", ai["reply"])
             return ChatResponse(
-                reply=reply, state="ASK_REASON", intent="help", sentiment=sentiment
+                reply=ai["reply"],
+                state="ASK_REASON",
+                intent="help",
+                sentiment=ai["sentiment"],
+                ai_source=ai["source"],
+                memory_summary=ai["memory_summary"],
+                escalation_recommended=ai["escalation_recommended"],
             )
 
         session["intent"] = intent
@@ -894,6 +902,7 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
             state="SUGGEST",
             intent=intent,
             sentiment=sentiment,
+            memory_summary=summarize_memory(session),
         )
 
     # ── State: SUGGEST ───────────────────────────────────────────────────────

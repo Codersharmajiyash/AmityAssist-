@@ -19,12 +19,12 @@ Completed baseline:
 - Phase 13 deployment foundation: production Compose, Kubernetes manifests, persistent infrastructure, and PostgreSQL migration extensions.
 - Phase 14 production hardening: configurable limits, security headers, telemetry, readiness probes, and guarded backup tooling.
 - Student Document Center now includes a recent-upload history with verification status and staff notes.
+- Phase 16 staff portal frontend expansion: Flutter staff dashboard, withdrawal queue actions, grievance resolution, document verification, batch workflow actions, and backend response normalization.
+- Phase 18 advanced conversational AI: contextual memory summaries, optional Gemini integration settings, safe local fallback, domain guardrails, sentiment metadata, and escalation flags.
 
 Remaining major work:
 
-- Staff portal frontend.
 - Kiosk-grade Flutter/Riverpod frontend for the complete student journey.
-- Full JWT/RBAC authentication.
 - PostgreSQL/Redis/MinIO runtime migration.
 - Production deployment, monitoring, audit hardening, and multi-campus configuration.
 
@@ -76,12 +76,14 @@ Student ID: STU001
 node --check frontend\js\app.js
 ```
 
-The current verified result is `61 passed`.
+The current verified result is `102 passed`.
 
 ## Main Local Prototype Endpoints
 
 ```text
 POST /api/auth/verify
+POST /api/auth/login
+POST /api/auth/staff/login
 POST /api/chat/message
 GET  /api/student/profile
 GET  /api/student/notices
@@ -118,6 +120,7 @@ GET  /api/health
 - Cache/session/queue: Redis target.
 - File storage: local uploads now, MinIO/S3 target.
 - Auth: prototype student verification now, JWT/RBAC target.
+- Advanced AI: local contextual fallback by default; set `LLM_PROVIDER=gemini` and `GEMINI_API_KEY` to enable Gemini.
 - Deployment: Docker Compose foundation included.
 
 ## Production deployment
