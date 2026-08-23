@@ -18,15 +18,17 @@ Completed baseline:
 - Phase 12 multi-campus configuration: campus-scoped procedures, workflow ownership, and cross-campus student lookup.
 - Phase 13 deployment foundation: production Compose, Kubernetes manifests, persistent infrastructure, and PostgreSQL migration extensions.
 - Phase 14 production hardening: configurable limits, security headers, telemetry, readiness probes, and guarded backup tooling.
+- Phase 15 full student kiosk journey in `frontend_flutter/`: complete touch-optimized Riverpod UI with login, dashboard, academics, scholarships, grievances, document center with OCR checks, multi-step withdrawal guide, notifications, and auto-expiring privacy session.
 - Student Document Center now includes a recent-upload history with verification status and staff notes.
 - Phase 16 staff portal frontend expansion: Flutter staff dashboard, withdrawal queue actions, grievance resolution, document verification, batch workflow actions, and backend response normalization.
 - Phase 18 advanced conversational AI: contextual memory summaries, optional Gemini integration settings, safe local fallback, domain guardrails, sentiment metadata, and escalation flags.
+- Phase 19 compliance & audit system: GDPR personal data export, right-to-be-forgotten / anonymization, retention policies, automated cleanup, and tamper-evident audit queries.
+- Phase 20 system parity & polish: real-time system diagnostics matrix (`/api/system/parity-check`), multi-phase end-to-end integration verification, and 100% passing test suite.
 
-Remaining major work:
+Remaining production work:
 
-- Kiosk-grade Flutter/Riverpod frontend for the complete student journey.
-- PostgreSQL/Redis/MinIO runtime migration.
-- Production deployment, monitoring, audit hardening, and multi-campus configuration.
+- Live PostgreSQL/Redis/MinIO cloud cluster deployment & monitoring alerts.
+- Physical kiosk hardware deployment & touchscreen calibration.
 
 ## Quick Start
 
@@ -76,7 +78,7 @@ Student ID: STU001
 node --check frontend\js\app.js
 ```
 
-The current verified result is `102 passed`.
+The current verified result is `110 passed`.
 
 ## Main Local Prototype Endpoints
 
@@ -109,6 +111,12 @@ GET  /api/campuses
 GET  /api/campuses/students?campus_code=NOIDA
 GET  /api/campuses/{campus_code}/procedure-rules
 PUT  /api/campuses/{campus_code}/procedure-rules/{procedure_type}
+GET  /api/compliance/export/{student_id}
+POST /api/compliance/erasure
+GET  /api/compliance/audit-logs
+GET  /api/compliance/retention-policies
+POST /api/compliance/retention-cleanup
+GET  /api/system/parity-check
 GET  /api/health
 ```
 

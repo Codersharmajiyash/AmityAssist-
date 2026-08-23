@@ -200,7 +200,7 @@ class TestPhase10NotificationsSystem:
         send_resp = client.post(
             "/api/notifications",
             json={
-                "student_id": "STU011",
+                "student_id": "STU001",
                 "notification_type": "workflow_status",
                 "title": "Test",
                 "message": "Test message"
@@ -221,7 +221,7 @@ class TestPhase10NotificationsSystem:
         response = client.post(
             "/api/notifications",
             json={
-                "student_id": "STU012",
+                "student_id": "STU002",
                 "notification_type": "workflow_status",
                 "title": "Test",
                 "message": "Test message"

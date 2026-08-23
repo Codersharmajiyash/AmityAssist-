@@ -27,7 +27,7 @@ from backend.middleware.observability import ObservabilityMiddleware, telemetry
 from backend.database.connection import get_connection
 from backend.services.cache_service import cache_service
 from backend.security.rbac import require_any_role
-from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications, forms, reports, campuses
+from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications, forms, reports, campuses, compliance, system, services
 
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit_default])
@@ -70,10 +70,10 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_ho
 # ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=list(settings.cors_origins),
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_origins=list(settings.cors_origins) if settings.is_production else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -89,6 +89,9 @@ app.include_router(admin.router)
 app.include_router(reports.router)
 app.include_router(campuses.router)
 app.include_router(forms.router)
+app.include_router(compliance.router)
+app.include_router(system.router)
+app.include_router(services.router)
 
 
 @app.get("/api/health", tags=["System"])

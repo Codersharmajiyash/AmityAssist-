@@ -146,4 +146,61 @@ class KioskTheme {
       ),
     );
   }
+
+  static ThemeData get highContrast {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: Colors.black,
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFFFFD700), // Gold
+        secondary: Color(0xFF00FFFF), // Cyan
+        surface: Color(0xFF121212),
+        error: Color(0xFFFF4444),
+        onPrimary: Colors.black,
+        onSurface: Colors.white,
+      ),
+      textTheme: const TextTheme(
+        headlineLarge: TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: Colors.white),
+        headlineMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white),
+        headlineSmall: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+        titleLarge: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: Color(0xFFFFD700)),
+        titleMedium: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: Colors.white),
+        bodyLarge: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
+        bodyMedium: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFFE0E0E0)),
+        labelLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.black,
+        foregroundColor: Color(0xFFFFD700),
+        elevation: 2,
+        iconTheme: IconThemeData(color: Color(0xFFFFD700)),
+        titleTextStyle: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFFFFD700)),
+      ),
+      cardTheme: CardThemeData(
+        color: const Color(0xFF1A1A1A),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFFFFD700), width: 2),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFFFFD700),
+          foregroundColor: Colors.black,
+          textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFFFD700),
+          foregroundColor: Colors.black,
+          textStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      ),
+    );
+  }
 }

@@ -53,6 +53,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authProvider);
 
     return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          tooltip: 'Back to Welcome Kiosk',
+          onPressed: () => context.go('/'),
+        ),
+        title: const Text('Sign In to UniAssist', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.public_rounded, size: 18),
+            label: const Text('Guest Services (No Login)'),
+            onPressed: () => context.go('/services'),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -64,7 +80,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   constraints: const BoxConstraints(maxWidth: 1120),
                   child: Flex(
                     direction: wide ? Axis.horizontal : Axis.vertical,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (wide)
                         Expanded(
@@ -123,7 +139,7 @@ class _IntroPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      minHeight: wide ? 560 : 320,
+      constraints: BoxConstraints(minHeight: wide ? 560 : 320),
       padding: const EdgeInsets.all(34),
       decoration: BoxDecoration(
         color: AppColors.primary,

@@ -138,6 +138,13 @@ class DashboardScreen extends ConsumerWidget {
         route: '/notices',
       ),
       _ServiceTile(
+        title: 'Download Forms',
+        subtitle: 'Official formats, applications & requisitions',
+        icon: Icons.folder_open_rounded,
+        color: const Color(0xFF0F766E),
+        route: '/forms',
+      ),
+      _ServiceTile(
         title: 'AI Advisor',
         subtitle: 'Guided chat for university services',
         icon: Icons.support_agent_rounded,

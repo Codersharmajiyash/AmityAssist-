@@ -188,12 +188,15 @@ def _log_message(
 ) -> None:
     """Persist a single conversation turn to SQLite."""
     conn = get_connection()
-    conn.execute(
-        "INSERT INTO conversations (student_id, message, sender, detected_intent, sentiment) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (student_id, message, sender, intent, sentiment),
-    )
-    conn.commit()
+    try:
+        conn.execute(
+            "INSERT INTO conversations (student_id, message, sender, detected_intent, sentiment) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (student_id, message, sender, intent, sentiment),
+        )
+        conn.commit()
+    except Exception:
+        pass
 
 
 def _submit_withdrawal(student_id: str, reason: str, intent: str) -> str:

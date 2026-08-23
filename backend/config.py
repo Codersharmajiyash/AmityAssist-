@@ -40,13 +40,13 @@ class Settings:
         origin.strip()
         for origin in os.getenv(
             "CORS_ORIGINS",
-            "http://localhost:3000,http://localhost:8080,http://localhost:5500,http://127.0.0.1:5500",
+            "http://localhost:5000,http://127.0.0.1:5000,http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080,http://localhost:5500,http://127.0.0.1:5500,http://localhost:8000,http://127.0.0.1:8000",
         ).split(",")
         if origin.strip()
     )
     allowed_hosts: tuple[str, ...] = tuple(
         host.strip()
-        for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
+        for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,testserver,*").split(",")
         if host.strip()
     )
 

@@ -392,8 +392,8 @@ verifyForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const role = document.querySelector('input[name="role"]:checked')?.value || "student";
-    const rawId = studentIdInput.value.trim();
-    const rawEmail = emailInput.value.trim();
+    const rawId = studentIdInput ? studentIdInput.value.trim() : "";
+    const rawEmail = emailInput ? emailInput.value.trim() : "";
 
     if (!rawId && !rawEmail && role === "student") {
         showVerifyError("Please enter your Student ID or institutional email.");
@@ -439,7 +439,13 @@ verifyForm.addEventListener("submit", async (e) => {
 
     // Student Logic
     const payload = {};
-    if (rawId) payload.student_id = rawId;
+    if (rawId) {
+        if (rawId.includes("@")) {
+            payload.email = rawId;
+        } else {
+            payload.student_id = rawId;
+        }
+    }
     if (rawEmail) payload.email = rawEmail;
 
     try {
@@ -510,9 +516,12 @@ function seedAdvisorGreeting(message) {
 }
 
 function setVerifyLoading(loading) {
+    if (!verifyBtn) return;
     verifyBtn.disabled = loading;
-    verifyBtn.querySelector(".btn__text").hidden = loading;
-    verifyBtn.querySelector(".btn__spinner").hidden = !loading;
+    const text = verifyBtn.querySelector(".btn__text");
+    if (text) text.hidden = loading;
+    const spinner = verifyBtn.querySelector(".btn__spinner");
+    if (spinner) spinner.hidden = !loading;
 }
 
 function logoutSession() {
@@ -561,14 +570,61 @@ function logoutSession() {
 }
 
 function showVerifyError(msg) {
+    if (!verifyError) return;
     verifyError.hidden = false;
     verifyError.textContent = msg;
 }
 
 function clearVerifyError() {
+    if (!verifyError) return;
     verifyError.hidden = true;
     verifyError.textContent = "";
 }
+
+window.updateRoleView = function(role) {
+    const label = $("login-input-label");
+    const demoStudent = $("quick-demo-student");
+    const demoStaff = $("quick-demo-staff");
+    clearVerifyError();
+
+    if (role === "staff") {
+        if (label) label.textContent = "Staff Username";
+        if (studentIdInput) {
+            studentIdInput.placeholder = "e.g. registrar_staff, finance_staff";
+            studentIdInput.value = "registrar_staff";
+        }
+        if (demoStudent) demoStudent.style.display = "none";
+        if (demoStaff) demoStaff.style.display = "flex";
+    } else {
+        if (label) label.textContent = "Student ID or Email";
+        if (studentIdInput) {
+            studentIdInput.placeholder = "e.g. STU001 or aisha.malik@uniassist.edu";
+            studentIdInput.value = "STU001";
+        }
+        if (demoStudent) demoStudent.style.display = "flex";
+        if (demoStaff) demoStaff.style.display = "none";
+    }
+};
+
+window.quickFillStudent = function(id) {
+    const radio = document.getElementById("role-student-radio");
+    if (radio) {
+        radio.checked = true;
+        updateRoleView("student");
+    }
+    if (studentIdInput) studentIdInput.value = id;
+    if (verifyForm) verifyForm.dispatchEvent(new Event("submit"));
+};
+
+window.quickFillStaff = function(username) {
+    const radio = document.getElementById("role-staff-radio");
+    if (radio) {
+        radio.checked = true;
+        updateRoleView("staff");
+    }
+    if (studentIdInput) studentIdInput.value = username;
+    if (verifyForm) verifyForm.dispatchEvent(new Event("submit"));
+};
 
 function currentTime() {
     return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -1233,3 +1289,56 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 });
+
+function toggleGuestServicesModal(show) {
+    const modal = $("guest-services-modal");
+    if (modal) {
+        modal.style.display = show ? "flex" : "none";
+    }
+}
+
+function showGuestTab(tabId, btn) {
+    document.querySelectorAll(".guest-tab-content").forEach((el) => {
+        el.style.display = "none";
+    });
+    const target = $(tabId);
+    if (target) target.style.display = "block";
+
+    if (btn && btn.parentElement) {
+        btn.parentElement.querySelectorAll("button").forEach((b) => {
+            b.style.background = "";
+            b.style.color = "";
+        });
+        btn.style.background = "var(--amity-blue)";
+        btn.style.color = "white";
+    }
+}
+
+async function openPublicAssistant(initialMessage) {
+    // If not verified, create a lightweight guest session and switch to chat screen
+    if (!state.sessionId) {
+        try {
+            const resp = await fetch(`${API_BASE}/api/chat/message`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: initialMessage || "Hello, I need assistance." })
+            });
+            const data = await resp.json();
+            state.sessionId = "guest_session";
+            state.isVerified = true;
+            state.studentName = "Guest Visitor";
+            state.studentId = "GUEST";
+            document.body.classList.remove("auth-view");
+            switchTab("chat-screen", $("nav-chat"));
+            appendMessage(initialMessage || "Hello, I need assistance.", true);
+            appendMessage(data.reply || "Welcome to UniAssist. How can I help you?", false);
+            return;
+        } catch (_) {}
+    }
+    document.body.classList.remove("auth-view");
+    switchTab("chat-screen", $("nav-chat"));
+    if (initialMessage) {
+        messageInput.value = initialMessage;
+        chatForm.dispatchEvent(new Event("submit"));
+    }
+}
