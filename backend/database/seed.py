@@ -304,6 +304,25 @@ CREATE TABLE IF NOT EXISTS notification_templates (
     default_priority TEXT NOT NULL DEFAULT 'normal',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS compliance_requests (
+    id              TEXT PRIMARY KEY,
+    student_id      TEXT NOT NULL,
+    request_type    TEXT NOT NULL CHECK(request_type IN ('export', 'erasure', 'rectification', 'restriction')),
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'rejected')),
+    reason          TEXT,
+    metadata        TEXT,
+    requested_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    completed_at    DATETIME,
+    FOREIGN KEY(student_id) REFERENCES students(id)
+);
+
+CREATE TABLE IF NOT EXISTS data_retention_policies (
+    entity_name     TEXT PRIMARY KEY,
+    retention_days  INTEGER NOT NULL,
+    description     TEXT NOT NULL,
+    last_cleanup_at DATETIME
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -680,6 +699,13 @@ _NOTIFICATION_TEMPLATES = [
 ]
 
 
+_SAMPLE_RETENTION_POLICIES = [
+    ("conversations", 365, "Student conversational logs kept for 1 year for academic audit and support quality."),
+    ("audit_logs", 730, "System and administrative action audit trails kept for 2 years for statutory compliance."),
+    ("notifications", 180, "Student alerts and dispatched notifications kept for 6 months."),
+    ("notification_logs", 180, "Delivery event logs kept for 6 months."),
+]
+
 def init_db() -> None:
     """Create tables and insert rich sample lifecycle data — safe to call multiple times."""
     conn = get_connection()
@@ -718,6 +744,8 @@ def init_db() -> None:
         cursor.execute("DROP TABLE IF EXISTS notification_logs")
         cursor.execute("DROP TABLE IF EXISTS notifications")
         cursor.execute("DROP TABLE IF EXISTS notification_templates")
+        cursor.execute("DROP TABLE IF EXISTS compliance_requests")
+        cursor.execute("DROP TABLE IF EXISTS data_retention_policies")
         conn.commit()
 
     # Create all tables
@@ -820,6 +848,11 @@ def init_db() -> None:
             (template_id, template_key, title_template, message_template, notif_type, priority)
         )
 
+    # Seed data retention policies
+    cursor.executemany(
+        "INSERT OR IGNORE INTO data_retention_policies (entity_name, retention_days, description) VALUES (?, ?, ?)",
+        _SAMPLE_RETENTION_POLICIES
+    )
+
     conn.commit()
-    print("[DB] Expanded Student Lifecycle Database seeded successfully.")
     print("[DB] Expanded Student Lifecycle Database seeded successfully.")

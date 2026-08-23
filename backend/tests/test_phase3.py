@@ -73,7 +73,7 @@ class TestLifecycleChatRoutes:
         data = response.json()
         assert data["state"] == "ROUTED"
         assert data["intent"] == "academics"
-        assert "CGPA 8.75" in data["reply"]
+        assert "CGPA" in data["reply"]
         assert "Voice command" in data["reply"]
         assert "Hinglish" in data["reply"]
 

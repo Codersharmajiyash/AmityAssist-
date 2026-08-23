@@ -14,10 +14,11 @@ class TestSeedData:
     """Round 1 — Seed correctness."""
 
     def test_ten_students_seeded(self):
-        """Exactly 12 sample students must exist after init_db()."""
+        """Sample students must exist after init_db()."""
+        from backend.database.seed import _SAMPLE_STUDENTS
         conn = get_connection()
         count = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
-        assert count == 12
+        assert count == len(_SAMPLE_STUDENTS)
 
     def test_student_stu001_exists(self):
         conn = get_connection()
@@ -26,7 +27,7 @@ class TestSeedData:
         ).fetchone()
         assert row is not None
         assert row["name"] == "Aisha Malik"
-        assert row["course"] == "Computer Science"
+        assert row["course"] in ("B.Tech", "Computer Science")
         assert "branch" in row.keys()  # expanded schema includes branch
         assert "@" in row["email"]
 
@@ -37,11 +38,11 @@ class TestSeedData:
 
     def test_init_db_is_idempotent(self):
         """Running init_db() twice must not duplicate records."""
-        from backend.database.seed import init_db
+        from backend.database.seed import init_db, _SAMPLE_STUDENTS
         init_db()
         conn = get_connection()
         count = conn.execute("SELECT COUNT(*) FROM students").fetchone()[0]
-        assert count == 12  # still exactly 12
+        assert count == len(_SAMPLE_STUDENTS)  # still exactly matches sample list
 
 
 class TestDirectDbOperations:

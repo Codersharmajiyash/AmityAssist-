@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/kiosk_theme.dart';
+import '../features/kiosk/presentation/kiosk_welcome_screen.dart';
+import '../features/services/presentation/guest_services_screen.dart';
 import '../features/auth/application/auth_provider.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
@@ -12,6 +14,7 @@ import '../features/dashboard/presentation/academics_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/dashboard/presentation/document_center_screen.dart';
 import '../features/dashboard/presentation/request_status_screen.dart';
+import '../features/forms/presentation/forms_catalog_screen.dart';
 import '../features/grievance/presentation/grievance_screen.dart';
 import '../features/notices/presentation/notices_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
@@ -31,10 +34,13 @@ class UniAssistApp extends ConsumerWidget {
     final router = GoRouter(
       initialLocation: '/',
       routes: [
-        GoRoute(path: '/', builder: (context, state) => const LoginScreen()),
+        GoRoute(path: '/', builder: (context, state) => const KioskWelcomeScreen()),
+        GoRoute(path: '/services', builder: (context, state) => const GuestServicesScreen()),
+        GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
         GoRoute(path: '/dashboard', builder: (context, state) => const _KioskSession(child: DashboardScreen())),
         GoRoute(path: '/request-status', builder: (context, state) => const _KioskSession(child: RequestStatusScreen())),
         GoRoute(path: '/documents', builder: (context, state) => const _KioskSession(child: DocumentCenterScreen())),
+        GoRoute(path: '/forms', builder: (context, state) => const _KioskSession(child: FormsCatalogScreen())),
         GoRoute(path: '/academics', builder: (context, state) => const _KioskSession(child: AcademicsScreen())),
         GoRoute(path: '/scholarship', builder: (context, state) => const _KioskSession(child: ScholarshipScreen())),
         GoRoute(path: '/grievance', builder: (context, state) => const _KioskSession(child: GrievanceScreen())),

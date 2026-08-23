@@ -95,7 +95,8 @@ class TokenResponse(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    session_id: str = Field(..., min_length=16, max_length=64)
+    session_id: Optional[str] = Field(None, min_length=16, max_length=64)
+    student_id: Optional[str] = Field(None, min_length=3, max_length=20)
     message: str = Field(..., min_length=1, max_length=2000)
 
     @field_validator("message", mode="before")
