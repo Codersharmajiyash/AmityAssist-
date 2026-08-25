@@ -60,6 +60,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ── Restore persisted JWT session on app start ────────────
   void _restoreSession() {
     final token = _prefs.getString(kJwtTokenKey);
+    
+    // Clear out old dummy tokens if they somehow got cached
+    if (token == 'local_demo_token') {
+      logout();
+      return;
+    }
+
     final studentId = _prefs.getString('student_id');
     final isStaff = _prefs.getBool('is_staff') ?? false;
     final staffRole = _prefs.getString('staff_role');
@@ -109,44 +116,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     } on DioException catch (e) {
-      // If server unreachable, fall back to verify endpoint for demo
-      if (e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.connectionError) {
-        return _fallbackVerify(studentId);
-      }
-      final msg = e.response?.data?['detail'] ?? 'Network error occurred.';
+      final msg = e.response?.data?['detail'] ?? 'Network error occurred. Ensure backend is running.';
       state = state.copyWith(isLoading: false, error: msg.toString());
       return false;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: 'An unexpected error occurred.');
       return false;
     }
-  }
-
-  /// Fallback to /auth/verify for demo environments without JWT support.
-  Future<bool> _fallbackVerify(String studentId) async {
-    // True fallback: mock a successful login for UI testing when backend is down
-    try {
-      final sid = studentId.toUpperCase();
-      const placeholderToken = 'local_demo_token';
-      await _prefs.setString(kJwtTokenKey, placeholderToken);
-      await _prefs.setString('student_id', sid);
-      await _prefs.setBool('is_staff', false);
-
-      state = AuthState(
-        token: placeholderToken,
-        studentId: sid,
-        isStaff: false,
-      );
-      return true;
-    } catch (_) {
-      // Fall through
-    }
-    state = state.copyWith(
-      isLoading: false,
-      error: 'Unable to connect. Please try again.',
-    );
-    return false;
   }
 
   // ── Staff JWT login ───────────────────────────────────────

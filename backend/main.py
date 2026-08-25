@@ -62,19 +62,20 @@ app.mount("/forms", StaticFiles(directory=str(forms_dir)), name="forms")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
+# ── CORS (added first so it wraps all other middleware — handles preflight) ──
+cors_kwargs = {"allow_origins": list(settings.cors_origins)} if settings.is_production else {"allow_origin_regex": ".*"}
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    **cors_kwargs
+)
+
 # ── Security headers ──────────────────────────────────────────────────────────
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(ObservabilityMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
-
-# ── CORS ──────────────────────────────────────────────────────────────────────
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=list(settings.cors_origins) if settings.is_production else ["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 app.include_router(auth.router)
