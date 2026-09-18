@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'api_config.dart';
 import 'services/offline_cache_service.dart';
 
 /// Key used to persist the JWT token in SharedPreferences.
@@ -11,10 +12,7 @@ final apiClientProvider = Provider<Dio>((ref) {
   final prefs = ref.watch(sharedPreferencesProvider);
 
   final dio = Dio(BaseOptions(
-    // Localhost IP address for Android emulator is 10.0.2.2.
-    // For desktop/web, it is 127.0.0.1.
-    // We default to 127.0.0.1 for desktop testing.
-    baseUrl: 'http://127.0.0.1:8000/api',
+    baseUrl: ApiConfig.apiUrl,
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
     headers: {

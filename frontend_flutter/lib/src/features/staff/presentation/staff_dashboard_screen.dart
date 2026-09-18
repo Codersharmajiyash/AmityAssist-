@@ -6,11 +6,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../../auth/application/auth_provider.dart';
 import '../application/staff_provider.dart';
-import 'staff_notesheet_screen.dart';
-import 'staff_registry_screen.dart';
-import 'staff_document_ocr_screen.dart';
-import 'staff_accreditation_screen.dart';
-import 'staff_institution_screen.dart';
 
 
 class StaffDashboardScreen extends ConsumerWidget {

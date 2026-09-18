@@ -1,3 +1,5 @@
+import '../../../core/api_config.dart';
+
 class WithdrawalGuide {
   const WithdrawalGuide({
     required this.title,
@@ -107,10 +109,7 @@ class WithdrawalForm {
   final String issuingDepartment;
 
   String get fullDownloadUrl {
-    if (downloadUrl.startsWith('http')) {
-      return downloadUrl;
-    }
-    return 'http://127.0.0.1:8000$downloadUrl';
+    return ApiConfig.fullUrl(downloadUrl);
   }
 }
 

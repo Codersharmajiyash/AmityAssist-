@@ -1,24 +1,24 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
 
-class StaffRegistryScreen extends StatefulWidget {
+class StaffRegistryScreen extends ConsumerStatefulWidget {
   const StaffRegistryScreen({super.key});
 
   @override
-  State<StaffRegistryScreen> createState() => _StaffRegistryScreenState();
+  ConsumerState<StaffRegistryScreen> createState() => _StaffRegistryScreenState();
 }
 
-class _StaffRegistryScreenState extends State<StaffRegistryScreen> {
+class _StaffRegistryScreenState extends ConsumerState<StaffRegistryScreen> {
   bool _isLoading = true;
   List<dynamic> _roster = [];
   String _selectedBranch = 'CSE';
   int _suspendedCount = 0;
   int _debarredCount = 0;
 
-  final List<String> _branches = ['CSE', 'ECE', 'MBA', 'Biotech'];
+  final List<String> _branches = ['CSE', 'ECE', 'MBA', 'Biotech', 'ME'];
   final List<String> _statuses = ['ACTIVE', 'UNDER_CLEARANCE', 'WITHDRAWN', 'SUSPENDED', 'DEBARRED'];
 
   @override
@@ -30,20 +30,21 @@ class _StaffRegistryScreenState extends State<StaffRegistryScreen> {
   Future<void> _fetchRoster() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:8000/api/registry/roster/$_selectedBranch'));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+      final dio = ref.read(apiClientProvider);
+      final res = await dio.get('/registry/roster/$_selectedBranch');
+      if (mounted) {
+        final data = res.data as Map<String, dynamic>;
         setState(() {
           _roster = data['roster'] ?? [];
           _suspendedCount = data['suspended_count'] ?? 0;
           _debarredCount = data['debarred_count'] ?? 0;
           _isLoading = false;
         });
-      } else {
-        setState(() => _isLoading = false);
       }
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -77,7 +78,7 @@ class _StaffRegistryScreenState extends State<StaffRegistryScreen> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedStatus,
+                  initialValue: selectedStatus,
                   decoration: const InputDecoration(labelText: 'Operational Status', border: OutlineInputBorder()),
                   items: _statuses
                       .map((s) => DropdownMenuItem(value: s, child: Text(s)))
@@ -125,17 +126,17 @@ class _StaffRegistryScreenState extends State<StaffRegistryScreen> {
 
                 Navigator.pop(ctx);
                 try {
-                  final updateRes = await http.post(
-                    Uri.parse('http://127.0.0.1:8000/api/registry/status/update'),
-                    headers: {'Content-Type': 'application/json'},
-                    body: jsonEncode({
+                  final dio = ref.read(apiClientProvider);
+                  final updateRes = await dio.post(
+                    '/registry/status/update',
+                    data: {
                       'student_id': studentId,
                       'new_status': selectedStatus,
                       'reason': reason,
                       'updated_by': officerController.text.trim(),
-                    }),
+                    },
                   );
-                  if (updateRes.statusCode == 200) {
+                  if (mounted && updateRes.statusCode == 200) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Student $studentId status updated to $selectedStatus!'),
@@ -156,10 +157,10 @@ class _StaffRegistryScreenState extends State<StaffRegistryScreen> {
 
   void _showHistoryDialog(String studentId) async {
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:8000/api/registry/history/$studentId'));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final history = (data['history'] as List?) ?? [];
+      final dio = ref.read(apiClientProvider);
+      final res = await dio.get('/registry/history/$studentId');
+      final data = res.data as Map<String, dynamic>;
+      final history = (data['history'] as List?) ?? [];
 
         if (!mounted) return;
         showDialog(
@@ -186,7 +187,6 @@ class _StaffRegistryScreenState extends State<StaffRegistryScreen> {
             actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
           ),
         );
-      }
     } catch (_) {}
   }
 
