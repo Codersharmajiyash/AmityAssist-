@@ -278,8 +278,9 @@ class PolicySearchService:
         cls,
         query: str,
         student_id: str | None = None,
+        page_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Synthesize zero-hallucination guidance combining live student profile with FTS5 policy clauses."""
+        """Synthesize zero-hallucination guidance combining live student profile, FTS5 policy clauses, and ambient screen awareness."""
         conn = get_connection()
         policies = cls.search_policies(query, limit=3)
 
@@ -329,7 +330,7 @@ class PolicySearchService:
                 recommended_action = "Contact Academic Advisor"
                 action_url = "/chat"
 
-            return {
+            res = {
                 "answer": answer,
                 "domain": "Academics",
                 "citations": [matching_clause],
@@ -337,9 +338,7 @@ class PolicySearchService:
                 "action_url": action_url,
                 "voice_speech_text": answer,
             }
-
-        # 2. Withdrawal & Caution Deposit Offset domain
-        if any(w in q_lower for w in ["withdrawal", "refund", "deposit", "offset", "lost id", "id card", "caution"]):
+        elif any(w in q_lower for w in ["withdrawal", "refund", "deposit", "offset", "lost id", "id card", "caution"]):
             offset_policy = next((p for p in policies if p["clause_code"] == "ORD-FIN-14.4"), DEFAULT_POLICIES[2])
             wth_policy = next((p for p in policies if p["clause_code"] == "ORD-WTH-14.1"), DEFAULT_POLICIES[1])
 
@@ -361,7 +360,7 @@ class PolicySearchService:
                 action_url = "/withdrawal"
                 recommended_action = "Start Withdrawal Procedure"
 
-            return {
+            res = {
                 "answer": answer,
                 "domain": "Withdrawal & Refunds",
                 "citations": [wth_policy, offset_policy],
@@ -369,15 +368,13 @@ class PolicySearchService:
                 "action_url": action_url,
                 "voice_speech_text": answer,
             }
-
-        # 3. General Policy Matching Synthesis
-        if policies:
+        elif policies:
             top_p = policies[0]
             answer = (
                 f"{student_name}, according to {top_p['clause_code']} ({top_p['title']}): "
                 f"{top_p['content']}"
             )
-            return {
+            res = {
                 "answer": answer,
                 "domain": top_p["category"],
                 "citations": policies,
@@ -385,18 +382,28 @@ class PolicySearchService:
                 "action_url": top_p["action_url"],
                 "voice_speech_text": answer,
             }
+        else:
+            fallback_msg = (
+                f"{student_name}, I could not find a specific university ordinance matching your inquiry. "
+                "UniAssist provides guidance for Academics, Attendance Condonation, Withdrawal Refunds, "
+                "Smart Caution Deposit Offsets, Backpapers, Grievances, and Scholarships. Please try asking with one of these topics."
+            )
+            res = {
+                "answer": fallback_msg,
+                "domain": "General",
+                "citations": [],
+                "recommended_action": "Browse Forms & Policies",
+                "action_url": "/forms",
+                "voice_speech_text": fallback_msg,
+            }
 
-        # Fallback for unindexed topics
-        fallback_msg = (
-            f"{student_name}, I could not find a specific university ordinance matching your inquiry. "
-            "UniAssist provides guidance for Academics, Attendance Condonation, Withdrawal Refunds, "
-            "Smart Caution Deposit Offsets, Backpapers, Grievances, and Scholarships. Please try asking with one of these topics."
-        )
-        return {
-            "answer": fallback_msg,
-            "domain": "General",
-            "citations": [],
-            "recommended_action": "Browse Forms & Policies",
-            "action_url": "/forms",
-            "voice_speech_text": fallback_msg,
-        }
+        # Ambient Screen Awareness Enhancement
+        if page_context:
+            scr_name = page_context.get("screen_name") or "the current page"
+            primary_act = page_context.get("primary_action")
+            if primary_act:
+                res["screen_instruction"] = f"On this {scr_name}, you can click '{primary_act}' to proceed immediately."
+                res["highlight_target"] = primary_act
+                res["voice_speech_text"] = f"{res['voice_speech_text']} Also, since you are on the {scr_name}, you can click '{primary_act}'."
+
+        return res

@@ -7,6 +7,7 @@ INSERT OR IGNORE makes repeated startups idempotent without duplicating data.
 
 import json
 import uuid
+import json
 from .connection import get_connection
 
 # ---------------------------------------------------------------------------
@@ -1065,8 +1066,6 @@ def init_db() -> None:
     conn.commit()
 
     # Phase 23: Seed Proctorial Disciplinary Notesheet for Suspended Student STU005
-    from ..services.notesheet_service import NotesheetService
-    NotesheetService.init_tables()
     notesheet_id = "ns-seed-disc-088"
     ref_no = "NS-DISC-2026-088"
     ns_content = json.dumps({

@@ -19,6 +19,7 @@ router = APIRouter(prefix="/api/policy", tags=["Policy Intelligence & FTS5"])
 class PolicyGuideRequest(BaseModel):
     query: str = Field(..., min_length=2, max_length=500, description="Inquiry regarding university policy")
     student_id: Optional[str] = Field(None, description="Optional student ID for personalization")
+    page_context: Optional[dict[str, Any]] = Field(None, description="Active client screen context")
 
 
 @router.get("/search")
@@ -39,7 +40,11 @@ async def search_policies(
 @router.post("/guide")
 async def get_policy_guidance(body: PolicyGuideRequest) -> dict[str, Any]:
     """Hybrid RAG endpoint: combines student profile with FTS5 policy clauses for zero-hallucination guidance."""
-    guidance = PolicySearchService.hybrid_guidance(query=body.query, student_id=body.student_id)
+    guidance = PolicySearchService.hybrid_guidance(
+        query=body.query,
+        student_id=body.student_id,
+        page_context=body.page_context,
+    )
     return guidance
 
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,6 +8,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/api_client.dart';
 import '../../../core/services/voice_service.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import '../../../core/services/tts_service.dart';
+import '../../../core/services/stt_service.dart';
+import '../../../core/services/page_context_service.dart';
 import '../../auth/application/auth_provider.dart';
 import 'chat_screen.dart';
 
@@ -426,12 +430,23 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
   Map<String, dynamic>? _guidance;
   String? _errorMessage;
 
+  StreamSubscription<String>? _sttSub;
+  StreamSubscription<bool>? _ttsSub;
+
   @override
   void initState() {
     super.initState();
+    _ttsSub = TtsService().onSpeakingStateChanged.listen((speaking) {
+      if (mounted) setState(() => _isSpeaking = speaking);
+    });
+
+    _sttSub = SttService().onTranscriptChanged.listen((transcript) {
+      if (mounted) setState(() => _queryController.text = transcript);
+    });
+
     if (widget.autoStartVoice) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _toggleVoice();
+        _greetAndListen();
       });
     }
   }
@@ -485,6 +500,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
         }
         setState(() {
           _guidance = data;
+          _guidance = data;
           _isLoading = false;
         });
 
@@ -503,6 +519,24 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
         });
       }
     }
+  }
+
+  void _startListening() {
+    setState(() => _isListening = true);
+    SttService().startListening(
+      onResult: (spokenText) {
+        if (mounted) {
+          setState(() {
+            _isListening = false;
+            _queryController.text = spokenText;
+          });
+          _askPolicy(spokenText);
+        }
+      },
+      onError: () {
+        if (mounted) setState(() => _isListening = false);
+      },
+    );
   }
 
   Future<void> _toggleVoice() async {
@@ -623,7 +657,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                   icon: Icon(
                     _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
                     color: _isListening ? Colors.redAccent : AppColors.primary,
-                    size: 24,
+                    size: 22,
                   ),
                   tooltip: 'Push to Talk (Voice Query)',
                   onPressed: _toggleVoice,
@@ -633,10 +667,10 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Ask AI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  child: const Text('Ask', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
               ],
             ),

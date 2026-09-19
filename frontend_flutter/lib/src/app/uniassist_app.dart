@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/theme/kiosk_theme.dart';
 import '../features/kiosk/presentation/assistant_fab.dart';
+import '../core/services/page_context_service.dart';
 import '../features/kiosk/presentation/kiosk_welcome_screen.dart';
 import '../features/services/presentation/guest_services_screen.dart';
 import '../features/auth/application/auth_provider.dart';
@@ -39,6 +40,11 @@ class UniAssistApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = GoRouter(
       initialLocation: '/',
+      observers: [
+        _PageContextObserver((route) {
+          ref.read(pageContextProvider.notifier).setRoute(route);
+        }),
+      ],
       routes: [
         GoRoute(path: '/', builder: (context, state) => const KioskWelcomeScreen()),
         GoRoute(path: '/services', builder: (context, state) => const GuestServicesScreen()),
@@ -151,5 +157,32 @@ class _StaffSession extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _PageContextObserver extends NavigatorObserver {
+  final void Function(String route) onRouteChanged;
+  _PageContextObserver(this.onRouteChanged);
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    final name = route.settings.name ?? route.settings.arguments?.toString() ?? '';
+    if (name.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        onRouteChanged(name);
+      });
+    }
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    final name = newRoute?.settings.name ?? '';
+    if (name.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        onRouteChanged(name);
+      });
+    }
   }
 }

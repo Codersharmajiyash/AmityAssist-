@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../../../core/utils/download_service.dart';
+import '../../../core/services/page_context_service.dart';
 import '../../auth/application/auth_provider.dart';
 import 'withdrawal_providers.dart';
 
@@ -14,7 +16,7 @@ class WithdrawalHomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final guide = ref.watch(withdrawalGuideProvider);
 
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         title: const Text('Withdrawal Services'),
       ),
@@ -197,6 +199,44 @@ class WithdrawalHomeScreen extends ConsumerWidget {
         label: const Text('Initiate Withdrawal'),
       ),
     );
+
+    final highlight = ref.watch(buttonHighlightProvider);
+    final isTargeted = highlight != null && highlight.toLowerCase().contains('withdrawal');
+
+    if (isTargeted) {
+      return Stack(
+        children: [
+          scaffold,
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: IgnorePointer(
+              child: Container(
+                width: 200,
+                height: 56,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: Colors.blueAccent, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.blueAccent.withValues(alpha: 0.5),
+                      blurRadius: 20,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+              ).animate(onPlay: (controller) => controller.repeat(reverse: true)).scale(
+                    begin: const Offset(1.0, 1.0),
+                    end: const Offset(1.08, 1.08),
+                    duration: 600.ms,
+                  ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return scaffold;
   }
 }
 
