@@ -4,6 +4,8 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/api_client.dart';
+import '../../../core/services/voice_service.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../../auth/application/auth_provider.dart';
 import 'chat_screen.dart';
@@ -436,11 +438,13 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
 
   @override
   void dispose() {
+    WebVoiceBridge.stopListening();
+    WebVoiceBridge.stopSpeaking();
     _queryController.dispose();
     super.dispose();
   }
 
-  Future<void> _askPolicy(String query) async {
+  Future<void> _askPolicy(String query, {bool speak = false}) async {
     final cleanQ = query.trim();
     if (cleanQ.isEmpty) return;
 
@@ -451,25 +455,45 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     });
 
     try {
+      final dio = ref.read(apiClientProvider);
       final studentId = ref.read(authProvider).studentId ?? 'STU001';
-      final dio = Dio(BaseOptions(
-        baseUrl: 'http://127.0.0.1:8000/api',
-        connectTimeout: const Duration(seconds: 8),
-      ));
 
-      final resp = await dio.post(
-        '/policy/guide',
-        data: {
-          'query': cleanQ,
-          'student_id': studentId,
-        },
-      );
+      Response resp;
+      try {
+        resp = await dio.post(
+          '/voice/query',
+          data: {
+            'spoken_text': cleanQ,
+            'student_id': studentId,
+            'language': 'en-IN',
+          },
+        );
+      } catch (_) {
+        resp = await dio.post(
+          '/policy/guide',
+          data: {
+            'query': cleanQ,
+            'student_id': studentId,
+          },
+        );
+      }
 
       if (mounted) {
+        final data = Map<String, dynamic>.from(resp.data as Map);
+        if (!data.containsKey('answer') && data.containsKey('response_text')) {
+          data['answer'] = data['response_text'];
+        }
         setState(() {
-          _guidance = Map<String, dynamic>.from(resp.data as Map);
+          _guidance = data;
           _isLoading = false;
         });
+
+        if (speak) {
+          final speech = data['speech_text'] ?? data['answer'] ?? '';
+          if (speech.isNotEmpty) {
+            _speakGuidance(speech.toString());
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -483,47 +507,63 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
 
   Future<void> _toggleVoice() async {
     if (_isListening) {
+      WebVoiceBridge.stopListening();
       setState(() => _isListening = false);
       return;
     }
 
-    setState(() => _isListening = true);
+    setState(() {
+      _isListening = true;
+      _errorMessage = null;
+    });
 
-    // Kiosk voice query simulation / speech synthesis
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Listening... Speak your university policy question now.'),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    // After 1.8s, simulate voice command captured
-    await Future.delayed(const Duration(milliseconds: 1800));
-    if (mounted && _isListening) {
-      setState(() {
-        _isListening = false;
-      });
-      _askPolicy('Can I offset lost ID card fee from caution deposit?');
-    }
-  }
-
-  void _speakGuidance(String text) {
-    setState(() => _isSpeaking = true);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Row(
           children: [
-            Icon(Icons.record_voice_over_rounded, color: Colors.white, size: 20),
+            Icon(Icons.mic_rounded, color: Colors.white, size: 20),
             SizedBox(width: 8),
-            Text('Speaking guidance through kiosk audio speakers...'),
+            Text('Listening... Speak your university question now.'),
           ],
         ),
+        duration: Duration(seconds: 4),
         backgroundColor: AppColors.primary,
-        duration: Duration(seconds: 3),
       ),
     );
 
-    Future.delayed(const Duration(seconds: 4), () {
+    WebVoiceBridge.startListening(
+      lang: 'en-IN',
+      onResult: (text) {
+        if (mounted) {
+          setState(() => _isListening = false);
+          _queryController.text = text;
+          _askPolicy(text, speak: true);
+        }
+      },
+      onError: (err) {
+        if (mounted) {
+          setState(() => _isListening = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Voice: $err. You can also tap any quick prompt below.'),
+              duration: const Duration(seconds: 4),
+              backgroundColor: Colors.orange.shade800,
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  void _speakGuidance(String text) {
+    if (text.isEmpty) return;
+    setState(() => _isSpeaking = true);
+    WebVoiceBridge.speak(
+      text,
+      lang: 'en-IN',
+      rate: 0.95,
+    );
+    Future.delayed(const Duration(seconds: 5), () {
       if (mounted) setState(() => _isSpeaking = false);
     });
   }

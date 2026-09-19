@@ -1,3 +1,5 @@
+import '../../../core/api_config.dart';
+
 class FormItem {
   const FormItem({
     required this.id,
@@ -36,10 +38,6 @@ class FormItem {
   }
 
   String get fullDownloadUrl {
-    if (downloadUrl.startsWith('http')) {
-      return downloadUrl;
-    }
-    // Localhost backend base URL
-    return 'http://127.0.0.1:8000$downloadUrl';
+    return ApiConfig.fullUrl(downloadUrl);
   }
 }

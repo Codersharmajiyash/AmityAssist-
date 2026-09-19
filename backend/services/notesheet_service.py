@@ -17,6 +17,11 @@ from ..database.connection import get_connection
 STAGE_HIERARCHY = ["SUPERVISOR", "HOD", "HOI", "PRO_VC", "VC"]
 
 class NotesheetService:
+    @classmethod
+    def init_tables(cls) -> None:
+        """Ensure notesheet tables exist (managed in database migrations/seed)."""
+        pass
+
     @staticmethod
     def _now_iso() -> str:
         return datetime.now(timezone.utc).isoformat()

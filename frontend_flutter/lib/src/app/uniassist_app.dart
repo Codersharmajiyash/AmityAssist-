@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/theme/kiosk_theme.dart';
+import '../features/kiosk/presentation/assistant_fab.dart';
 import '../features/kiosk/presentation/kiosk_welcome_screen.dart';
 import '../features/services/presentation/guest_services_screen.dart';
 import '../features/auth/application/auth_provider.dart';
@@ -54,15 +55,15 @@ class UniAssistApp extends ConsumerWidget {
         GoRoute(path: '/notifications', builder: (context, state) => const _KioskSession(child: NotificationsScreen())),
         GoRoute(path: '/notices', builder: (context, state) => const _KioskSession(child: NoticesScreen())),
         GoRoute(path: '/chat', builder: (context, state) => const _KioskSession(child: ChatScreen())),
-        GoRoute(path: '/staff', builder: (context, state) => const StaffDashboardScreen()),
-        GoRoute(path: '/staff/withdrawals', builder: (context, state) => const StaffWithdrawalScreen()),
-        GoRoute(path: '/staff/grievances', builder: (context, state) => const StaffGrievanceScreen()),
-        GoRoute(path: '/staff/documents', builder: (context, state) => const StaffDocumentScreen()),
-        GoRoute(path: '/staff/notesheets', builder: (context, state) => const StaffNotesheetScreen()),
-        GoRoute(path: '/staff/registry', builder: (context, state) => const StaffRegistryScreen()),
-        GoRoute(path: '/staff/ocr', builder: (context, state) => const StaffDocumentOcrScreen()),
-        GoRoute(path: '/staff/accreditation', builder: (context, state) => const StaffAccreditationScreen()),
-        GoRoute(path: '/staff/institution', builder: (context, state) => const StaffInstitutionScreen()),
+        GoRoute(path: '/staff', builder: (context, state) => const _StaffSession(child: StaffDashboardScreen())),
+        GoRoute(path: '/staff/withdrawals', builder: (context, state) => const _StaffSession(child: StaffWithdrawalScreen())),
+        GoRoute(path: '/staff/grievances', builder: (context, state) => const _StaffSession(child: StaffGrievanceScreen())),
+        GoRoute(path: '/staff/documents', builder: (context, state) => const _StaffSession(child: StaffDocumentScreen())),
+        GoRoute(path: '/staff/notesheets', builder: (context, state) => const _StaffSession(child: StaffNotesheetScreen())),
+        GoRoute(path: '/staff/registry', builder: (context, state) => const _StaffSession(child: StaffRegistryScreen())),
+        GoRoute(path: '/staff/ocr', builder: (context, state) => const _StaffSession(child: StaffDocumentOcrScreen())),
+        GoRoute(path: '/staff/accreditation', builder: (context, state) => const _StaffSession(child: StaffAccreditationScreen())),
+        GoRoute(path: '/staff/institution', builder: (context, state) => const _StaffSession(child: StaffInstitutionScreen())),
       ],
     );
 
@@ -120,7 +121,35 @@ class _KioskSessionState extends ConsumerState<_KioskSession> {
       onPointerDown: (_) => _resetTimer(),
       onPointerMove: (_) => _resetTimer(),
       behavior: HitTestBehavior.translucent,
-      child: widget.child,
+      child: Stack(
+        children: [
+          widget.child,
+          const Positioned(
+            right: 24,
+            bottom: 24,
+            child: AssistantFab(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StaffSession extends StatelessWidget {
+  const _StaffSession({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        child,
+        const Positioned(
+          right: 24,
+          bottom: 24,
+          child: AssistantFab(),
+        ),
+      ],
     );
   }
 }

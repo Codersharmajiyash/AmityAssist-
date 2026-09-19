@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../../../core/widgets/uniassist_logo.dart';
 
@@ -207,7 +208,7 @@ class AdvisorNotifier extends StateNotifier<ChatState> {
   Future<void> _queryBackendPolicy(String query, List<ChatMessage> newMessages) async {
     try {
       final res = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/policy/guide'),
+        Uri.parse('${ApiConfig.apiUrl}/policy/guide'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'query': query}),
       );

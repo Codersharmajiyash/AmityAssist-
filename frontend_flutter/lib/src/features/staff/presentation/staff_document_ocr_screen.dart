@@ -1,20 +1,20 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
 
 /// Phase 25: Staff Document OCR Cockpit.
 /// Displays uploaded documents with extracted OCR fields and identity
 /// cross-check indicators (MATCH / MISMATCH / NOT_FOUND).
-class StaffDocumentOcrScreen extends StatefulWidget {
+class StaffDocumentOcrScreen extends ConsumerStatefulWidget {
   const StaffDocumentOcrScreen({super.key});
 
   @override
-  State<StaffDocumentOcrScreen> createState() => _StaffDocumentOcrScreenState();
+  ConsumerState<StaffDocumentOcrScreen> createState() => _StaffDocumentOcrScreenState();
 }
 
-class _StaffDocumentOcrScreenState extends State<StaffDocumentOcrScreen> {
+class _StaffDocumentOcrScreenState extends ConsumerState<StaffDocumentOcrScreen> {
   bool _isLoading = true;
   List<dynamic> _documents = [];
   String _filterStatus = 'ALL';
@@ -28,18 +28,19 @@ class _StaffDocumentOcrScreenState extends State<StaffDocumentOcrScreen> {
   Future<void> _fetchDocuments() async {
     setState(() => _isLoading = true);
     try {
-      final res = await http.get(Uri.parse('http://127.0.0.1:8000/api/documents/admin/audit-log'));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
+      final dio = ref.read(apiClientProvider);
+      final res = await dio.get('/documents/admin/audit-log');
+      if (mounted) {
+        final data = res.data as List;
         setState(() {
           _documents = data;
           _isLoading = false;
         });
-      } else {
-        setState(() => _isLoading = false);
       }
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

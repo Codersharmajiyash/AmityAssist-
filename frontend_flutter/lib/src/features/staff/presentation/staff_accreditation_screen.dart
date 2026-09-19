@@ -1,20 +1,22 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api_client.dart';
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import '../../../core/utils/download_service.dart';
 
 /// Phase 27: Staff Accreditation Hub.
 /// Displays CO/PO attainment reports with color-coded cells,
 /// branch/semester filters, and 1-click CSV/PDF export.
-class StaffAccreditationScreen extends StatefulWidget {
+class StaffAccreditationScreen extends ConsumerStatefulWidget {
   const StaffAccreditationScreen({super.key});
 
   @override
-  State<StaffAccreditationScreen> createState() => _StaffAccreditationScreenState();
+  ConsumerState<StaffAccreditationScreen> createState() => _StaffAccreditationScreenState();
 }
 
-class _StaffAccreditationScreenState extends State<StaffAccreditationScreen>
+class _StaffAccreditationScreenState extends ConsumerState<StaffAccreditationScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
@@ -41,19 +43,30 @@ class _StaffAccreditationScreenState extends State<StaffAccreditationScreen>
   Future<void> _fetchReports() async {
     setState(() => _isLoading = true);
     try {
-      String coUrl = 'http://127.0.0.1:8000/api/accreditation/co-attainment?branch=$_selectedBranch';
-      if (_selectedSemester != null) coUrl += '&semester=$_selectedSemester';
-      final coRes = await http.get(Uri.parse(coUrl));
+      final client = ref.read(apiClientProvider);
+      String coPath = '/accreditation/co-attainment?branch=$_selectedBranch';
+      if (_selectedSemester != null) coPath += '&semester=$_selectedSemester';
+      final coRes = await client.get(coPath);
 
-      final poRes = await http.get(
-          Uri.parse('http://127.0.0.1:8000/api/accreditation/po-attainment?branch=$_selectedBranch'));
+      final poRes = await client.get(
+        '/accreditation/po-attainment?branch=$_selectedBranch',
+      );
 
-      if (coRes.statusCode == 200) _coReport = jsonDecode(coRes.body);
-      if (poRes.statusCode == 200) _poReport = jsonDecode(poRes.body);
-
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          if (coRes.data is Map<String, dynamic>) {
+            _coReport = coRes.data as Map<String, dynamic>;
+          }
+          if (poRes.data is Map<String, dynamic>) {
+            _poReport = poRes.data as Map<String, dynamic>;
+          }
+          _isLoading = false;
+        });
+      }
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -168,7 +181,13 @@ class _StaffAccreditationScreenState extends State<StaffAccreditationScreen>
   }
 
   void _downloadExport(String format) {
-    // In real app, this would trigger file download
+    final exportUrl = ApiConfig.fullUrl(
+      '/api/accreditation/export?branch=$_selectedBranch&format=$format${_selectedSemester != null ? "&semester=$_selectedSemester" : ""}',
+    );
+    DownloadService.downloadFile(
+      exportUrl,
+      fileName: 'naac_${_selectedBranch.toLowerCase()}_attainment.$format',
+    );
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Downloading NAAC report as ${format.toUpperCase()}...'),

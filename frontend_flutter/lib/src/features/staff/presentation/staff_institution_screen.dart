@@ -1,20 +1,20 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
 
 /// Phase 28: Staff Institution Configurator.
 /// Admin Settings screen for university branding, dynamic clearance chain
 /// management, and custom refund slab editing.
-class StaffInstitutionScreen extends StatefulWidget {
+class StaffInstitutionScreen extends ConsumerStatefulWidget {
   const StaffInstitutionScreen({super.key});
 
   @override
-  State<StaffInstitutionScreen> createState() => _StaffInstitutionScreenState();
+  ConsumerState<StaffInstitutionScreen> createState() => _StaffInstitutionScreenState();
 }
 
-class _StaffInstitutionScreenState extends State<StaffInstitutionScreen>
+class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   bool _isLoading = true;
@@ -38,17 +38,29 @@ class _StaffInstitutionScreenState extends State<StaffInstitutionScreen>
   Future<void> _fetchAll() async {
     setState(() => _isLoading = true);
     try {
-      final configRes = await http.get(Uri.parse('http://127.0.0.1:8000/api/institution/config'));
-      final chainRes = await http.get(Uri.parse('http://127.0.0.1:8000/api/institution/clearance-chain'));
-      final slabRes = await http.get(Uri.parse('http://127.0.0.1:8000/api/institution/refund-slabs'));
+      final client = ref.read(apiClientProvider);
+      final configRes = await client.get('/institution/config');
+      final chainRes = await client.get('/institution/clearance-chain');
+      final slabRes = await client.get('/institution/refund-slabs');
 
-      if (configRes.statusCode == 200) _config = jsonDecode(configRes.body);
-      if (chainRes.statusCode == 200) _clearanceChain = jsonDecode(chainRes.body)['chain'] ?? [];
-      if (slabRes.statusCode == 200) _refundSlabs = jsonDecode(slabRes.body)['slabs'] ?? [];
-
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          if (configRes.data is Map<String, dynamic>) {
+            _config = configRes.data as Map<String, dynamic>;
+          }
+          if (chainRes.data is Map<String, dynamic>) {
+            _clearanceChain = (chainRes.data as Map<String, dynamic>)['chain'] as List? ?? [];
+          }
+          if (slabRes.data is Map<String, dynamic>) {
+            _refundSlabs = (slabRes.data as Map<String, dynamic>)['slabs'] as List? ?? [];
+          }
+          _isLoading = false;
+        });
+      }
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 

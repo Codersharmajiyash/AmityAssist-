@@ -5,6 +5,7 @@ Security note: All INSERT statements use parameterised queries.
 INSERT OR IGNORE makes repeated startups idempotent without duplicating data.
 """
 
+import json
 import uuid
 from .connection import get_connection
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../../../core/utils/download_service.dart';
 import '../../../core/widgets/uniassist_logo.dart';
@@ -382,7 +383,7 @@ class _TokenTrackingResultDialogState extends State<_TokenTrackingResultDialog> 
 
     try {
       final dio = Dio(BaseOptions(
-        baseUrl: 'http://127.0.0.1:8000/api',
+        baseUrl: ApiConfig.apiUrl,
         connectTimeout: const Duration(seconds: 8),
       ));
       final resp = await dio.get('/withdrawal/track/${widget.referenceNo.trim()}');
@@ -567,7 +568,7 @@ class _TokenTrackingResultDialogState extends State<_TokenTrackingResultDialog> 
                 child: OutlinedButton.icon(
                   onPressed: () {
                     DownloadService.downloadFile(
-                      'http://127.0.0.1:8000/api/withdrawal/$ref/slip',
+                      '${ApiConfig.apiUrl}/withdrawal/$ref/slip',
                       fileName: 'TOKEN-$ref.pdf',
                     );
                     ScaffoldMessenger.of(context).showSnackBar(

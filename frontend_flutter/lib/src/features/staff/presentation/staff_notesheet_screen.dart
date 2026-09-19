@@ -1,18 +1,17 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:http/http.dart' as http;
 
+import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
 
-class StaffNotesheetScreen extends StatefulWidget {
+class StaffNotesheetScreen extends ConsumerStatefulWidget {
   const StaffNotesheetScreen({super.key});
 
   @override
-  State<StaffNotesheetScreen> createState() => _StaffNotesheetScreenState();
+  ConsumerState<StaffNotesheetScreen> createState() => _StaffNotesheetScreenState();
 }
 
-class _StaffNotesheetScreenState extends State<StaffNotesheetScreen> {
+class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
   bool _isLoading = true;
   List<dynamic> _notesheets = [];
   String? _selectedCategory;
@@ -29,45 +28,42 @@ class _StaffNotesheetScreenState extends State<StaffNotesheetScreen> {
   Future<void> _fetchNotesheets() async {
     setState(() => _isLoading = true);
     try {
-      String url = 'http://127.0.0.1:8000/api/notesheets';
-      final params = <String, String>{};
+      final dio = ref.read(apiClientProvider);
+      final params = <String, dynamic>{};
       if (_currentStageFilter != 'ALL') {
         params['stage'] = _currentStageFilter;
       }
       if (_selectedCategory != null && _selectedCategory != 'All') {
-        params['category'] = _selectedCategory!;
-      }
-      if (params.isNotEmpty) {
-        url += '?${Uri(queryParameters: params).query}';
+        params['category'] = _selectedCategory;
       }
 
-      final res = await http.get(Uri.parse(url));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+      final res = await dio.get('/notesheets', queryParameters: params);
+      if (mounted) {
+        final data = res.data as Map<String, dynamic>;
         setState(() {
           _notesheets = data['notesheets'] ?? [];
           _isLoading = false;
         });
-      } else {
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() => _isLoading = false);
       }
-    } catch (_) {
-      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _performAction(String refNo, String action, String stage) async {
     try {
-      final res = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/notesheets/$refNo/action'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
+      final dio = ref.read(apiClientProvider);
+      final res = await dio.post(
+        '/notesheets/$refNo/action',
+        data: {
           'officer_id': 'STAFF_CURRENT',
           'officer_name': 'Senior Administrative Officer',
           'role': stage,
           'action': action,
           'comments': 'Signed and processed via Staff Digital Notesheet Cockpit',
-        }),
+        },
       );
 
       if (mounted) {
@@ -82,7 +78,7 @@ class _StaffNotesheetScreenState extends State<StaffNotesheetScreen> {
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Action failed: ${res.body}'),
+              content: Text('Action failed: ${res.data}'),
               backgroundColor: AppColors.urgentRed,
             ),
           );
@@ -91,7 +87,10 @@ class _StaffNotesheetScreenState extends State<StaffNotesheetScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.urgentRed),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppColors.urgentRed,
+          ),
         );
       }
     }
@@ -128,7 +127,7 @@ class _StaffNotesheetScreenState extends State<StaffNotesheetScreen> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedField,
+                  initialValue: selectedField,
                   decoration: const InputDecoration(labelText: 'Field to Modify', border: OutlineInputBorder()),
                   items: content.keys
                       .map((k) => DropdownMenuItem(value: k, child: Text(k)))
@@ -175,18 +174,18 @@ class _StaffNotesheetScreenState extends State<StaffNotesheetScreen> {
 
                 Navigator.pop(ctx);
                 try {
-                  final editRes = await http.post(
-                    Uri.parse('http://127.0.0.1:8000/api/notesheets/$refNo/edit-field'),
-                    headers: {'Content-Type': 'application/json'},
-                    body: jsonEncode({
+                  final dio = ref.read(apiClientProvider);
+                  final editRes = await dio.post(
+                    '/notesheets/$refNo/edit-field',
+                    data: {
                       'officer_id': 'STAFF_OFFICER',
                       'officer_role': ns['current_stage'] ?? 'HOD',
                       'field_name': selectedField,
                       'new_value': valController.text.trim(),
                       'reason': reason,
-                    }),
+                    },
                   );
-                  if (editRes.statusCode == 200) {
+                  if (mounted && editRes.statusCode == 200) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('In-flight correction saved with audit log!'), backgroundColor: AppColors.successGreen),
                     );

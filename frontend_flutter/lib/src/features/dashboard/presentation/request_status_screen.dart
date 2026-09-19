@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/api_client.dart';
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../../../core/utils/download_service.dart';
 import '../../auth/application/auth_provider.dart';
@@ -467,7 +468,7 @@ class _ClearanceVoucherCard extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () {
                   DownloadService.downloadFile(
-                    'http://127.0.0.1:8000/api/withdrawal/$refNo/slip',
+                    '${ApiConfig.apiUrl}/withdrawal/$refNo/slip',
                     fileName: 'TOKEN-$refNo.pdf',
                   );
                   ScaffoldMessenger.of(context).showSnackBar(
