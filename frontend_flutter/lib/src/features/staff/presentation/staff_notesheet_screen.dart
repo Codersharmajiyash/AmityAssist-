@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import 'digital_signature_dialog.dart';
 
 class StaffNotesheetScreen extends ConsumerStatefulWidget {
   const StaffNotesheetScreen({super.key});
@@ -52,7 +53,7 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
     }
   }
 
-  Future<void> _performAction(String refNo, String action, String stage) async {
+  Future<void> _performAction(String refNo, String action, String stage, {String? customComments}) async {
     try {
       final dio = ref.read(apiClientProvider);
       final res = await dio.post(
@@ -62,7 +63,7 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
           'officer_name': 'Senior Administrative Officer',
           'role': stage,
           'action': action,
-          'comments': 'Signed and processed via Staff Digital Notesheet Cockpit',
+          'comments': customComments ?? 'Signed and processed via Staff Digital Notesheet Cockpit',
         },
       );
 
@@ -96,107 +97,122 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
     }
   }
 
-  void _showInFlightEditDialog(Map<String, dynamic> ns) {
-    final content = ns['content'] is Map ? ns['content'] as Map<String, dynamic> : <String, dynamic>{};
+  void _openSignatureFlow(String refNo, String stage) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => DigitalSignatureDialog(
+        officerName: 'Dr. Suresh Sharma',
+        officerRole: stage,
+        stage: stage,
+      ),
+    );
+
+    if (result != null) {
+      final comments = "${result['comments']} [${result['signature']}]";
+      _performAction(refNo, stage == 'VC' ? 'APPROVE' : 'FORWARD', stage, customComments: comments);
+    }
+  }
+
+  void _showWordEditDialog(Map<String, dynamic> ns) {
+    final content = ns['content'] is Map ? Map<String, dynamic>.from(ns['content'] as Map) : <String, dynamic>{};
     final refNo = ns['reference_no'];
-    String selectedField = content.keys.isNotEmpty ? content.keys.first : 'course_code';
-    final valController = TextEditingController(text: content[selectedField]?.toString() ?? '');
+    final controllers = <String, TextEditingController>{};
+    for (final entry in content.entries) {
+      controllers[entry.key] = TextEditingController(text: entry.value?.toString() ?? '');
+    }
     final reasonController = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.edit_note_rounded, color: AppColors.amityBlue),
-              const SizedBox(width: 8),
-              Text('In-Flight Edit: $refNo'),
-            ],
-          ),
-          content: SizedBox(
-            width: 480,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.description_rounded, color: AppColors.amityBlue),
+            const SizedBox(width: 8),
+            Text('Word-Style Document Editor: $refNo'),
+          ],
+        ),
+        content: SizedBox(
+          width: 580,
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Correct typographical errors or course codes in-flight without resetting the approval hierarchy.',
+                  'Edit any paragraph or field directly like a Word document. All modifications are tracked with an audit trail.',
                   style: TextStyle(fontSize: 13, color: Colors.black54),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedField,
-                  decoration: const InputDecoration(labelText: 'Field to Modify', border: OutlineInputBorder()),
-                  items: content.keys
-                      .map((k) => DropdownMenuItem(value: k, child: Text(k)))
-                      .toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setDialogState(() {
-                        selectedField = val;
-                        valController.text = content[val]?.toString() ?? '';
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: valController,
-                  decoration: const InputDecoration(labelText: 'New Corrected Value', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
+                ...content.keys.map((k) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextField(
+                      controller: controllers[k],
+                      decoration: InputDecoration(
+                        labelText: k.replaceAll('_', ' ').toUpperCase(),
+                        border: const OutlineInputBorder(),
+                      ),
+                      maxLines: k.contains('reason') || k.contains('notes') ? 3 : 1,
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
                 TextField(
                   controller: reasonController,
-                  maxLines: 2,
                   decoration: const InputDecoration(
                     labelText: 'Mandatory Audit Justification',
-                    hintText: 'e.g., Corrected course code typo from CS101 to CSE101',
+                    hintText: 'e.g. Corrected course details and updated disciplinary findings.',
                     border: OutlineInputBorder(),
                   ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.amityBlue),
-              onPressed: () async {
-                final reason = reasonController.text.trim();
-                if (reason.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Audit reason is mandatory')),
-                  );
-                  return;
-                }
-
-                Navigator.pop(ctx);
-                try {
-                  final dio = ref.read(apiClientProvider);
-                  final editRes = await dio.post(
-                    '/notesheets/$refNo/edit-field',
-                    data: {
-                      'officer_id': 'STAFF_OFFICER',
-                      'officer_role': ns['current_stage'] ?? 'HOD',
-                      'field_name': selectedField,
-                      'new_value': valController.text.trim(),
-                      'reason': reason,
-                    },
-                  );
-                  if (mounted && editRes.statusCode == 200) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('In-flight correction saved with audit log!'), backgroundColor: AppColors.successGreen),
-                    );
-                    _fetchNotesheets();
-                  }
-                } catch (_) {}
-              },
-              child: const Text('Apply Correction', style: TextStyle(color: Colors.white)),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.amityBlue),
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Audit reason is mandatory for document modifications')),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+              try {
+                final dio = ref.read(apiClientProvider);
+                for (final entry in controllers.entries) {
+                  final newVal = entry.value.text.trim();
+                  if (newVal != content[entry.key]?.toString()) {
+                    await dio.post(
+                      '/notesheets/$refNo/edit-field',
+                      data: {
+                        'officer_id': 'STAFF_OFFICER',
+                        'officer_role': ns['current_stage'] ?? 'HOD',
+                        'field_name': entry.key,
+                        'new_value': newVal,
+                        'reason': reason,
+                      },
+                    );
+                  }
+                }
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Document updated and audit logged!'), backgroundColor: AppColors.successGreen),
+                  );
+                  _fetchNotesheets();
+                }
+              } catch (_) {}
+            },
+            icon: const Icon(Icons.save_rounded, size: 18),
+            label: const Text('Save Changes to Document'),
+          ),
+        ],
       ),
     );
   }
@@ -205,7 +221,7 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Digital Notesheet Hierarchy & In-Flight Edits'),
+        title: const Text('Digital Notesheet Word Editor & Signatures'),
         backgroundColor: AppColors.amityBlue,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchNotesheets, tooltip: 'Refresh'),
@@ -257,31 +273,69 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
                           final stage = ns['current_stage'] ?? '';
                           final status = ns['status'] ?? '';
                           final content = ns['content'] is Map ? ns['content'] as Map : {};
+                          final signatures = ns['signatures'] is List ? ns['signatures'] as List : [];
 
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.amityBlue.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(refNo, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.amityBlue)),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                                      ),
-                                      Container(
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 24),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                // Document Official Header
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                                    border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                                  ),
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final isNarrow = constraints.maxWidth < 650;
+                                      final iconAndTitle = Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Container(
+                                            width: 38,
+                                            height: 38,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.amityBlue,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: const Icon(Icons.school_rounded, color: Colors.white, size: 24),
+                                          ),
+                                          const SizedBox(width: 14),
+                                          Flexible(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'AMITY UNIVERSITY • OFFICIAL ACADEMIC & ADMINISTRATIVE NOTESHEET',
+                                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 0.5, color: AppColors.amityBlue),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  'Reference No: $refNo • Category: ${ns['category'] ?? 'General'}',
+                                                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      );
+
+                                      final statusBadge = Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                         decoration: BoxDecoration(
                                           color: status == 'APPROVED'
@@ -293,35 +347,165 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
                                           '$stage ($status)',
                                           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                                         ),
+                                      );
+
+                                      if (isNarrow) {
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            iconAndTitle,
+                                            const SizedBox(height: 10),
+                                            statusBadge,
+                                          ],
+                                        );
+                                      }
+
+                                      return Row(
+                                        children: [
+                                          Expanded(child: iconAndTitle),
+                                          const SizedBox(width: 12),
+                                          statusBadge,
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                ),
+
+                                // Document Body (Word-file style)
+                                Padding(
+                                  padding: const EdgeInsets.all(28),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Container(
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFAFAFA),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: Colors.grey.shade200),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: content.entries.map((entry) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(bottom: 12),
+                                              child: Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  SizedBox(
+                                                    width: 180,
+                                                    child: Text(
+                                                      '${entry.key.replaceAll('_', ' ').toUpperCase()}:',
+                                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
+                                                    ),
+                                                  ),
+                                                  Expanded(
+                                                    child: Text(
+                                                      entry.value?.toString() ?? '',
+                                                      style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }).toList(),
+                                        ),
+                                      ),
+
+                                      const SizedBox(height: 24),
+                                      const Divider(),
+                                      const SizedBox(height: 14),
+
+                                      // Digital Signatures Section
+                                      Row(
+                                        children: const [
+                                          Icon(Icons.verified_user_rounded, color: AppColors.amityBlue, size: 20),
+                                          SizedBox(width: 8),
+                                          Text('OFFICIAL SIGNATURES & VERIFICATIONS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 0.5)),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // Signature Blocks
+                                      Wrap(
+                                        spacing: 16,
+                                        runSpacing: 16,
+                                        children: _stages.map((stg) {
+                                          final sig = signatures.firstWhere((s) => s['stage'] == stg, orElse: () => null);
+                                          final isSigned = sig != null;
+
+                                          return Container(
+                                            width: 220,
+                                            padding: const EdgeInsets.all(14),
+                                            decoration: BoxDecoration(
+                                              color: isSigned ? Colors.blue.shade50 : Colors.grey.shade50,
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: isSigned ? AppColors.amityBlue.withValues(alpha: 0.4) : Colors.grey.shade300,
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Text(stg, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.amityBlue)),
+                                                    const Spacer(),
+                                                    Icon(
+                                                      isSigned ? Icons.check_circle_rounded : Icons.pending_outlined,
+                                                      size: 16,
+                                                      color: isSigned ? AppColors.successGreen : Colors.grey,
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                if (isSigned) ...[
+                                                  Text(sig['officer_name'] ?? 'Officer', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    '${sig['action']} • ${sig['signed_at']?.toString().substring(0, 10) ?? ''}',
+                                                    style: const TextStyle(fontSize: 11, color: Colors.black54),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    'Seal: ${sig['comments'] ?? 'Signed'}',
+                                                    maxLines: 2,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: const TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.black87),
+                                                  ),
+                                                ] else ...[
+                                                  const SizedBox(height: 10),
+                                                  const Text('Pending signature', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                                                ],
+                                              ],
+                                            ),
+                                          );
+                                        }).toList(),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
-                                  Text('Student ID: ${ns['student_id'] ?? 'N/A'} | Category: ${ns['category'] ?? 'General'}'),
-                                  const SizedBox(height: 8),
+                                ),
 
-                                  // Content Preview Chip
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade50,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.grey.shade300),
-                                    ),
-                                    child: Text(
-                                      'Content Fields: ${content.entries.map((e) => '${e.key}: ${e.value}').join(' | ')}',
-                                      style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                                    ),
+                                // Document Actions Bar
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
                                   ),
-
-                                  const SizedBox(height: 16),
-                                  Row(
+                                  child: Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
                                       OutlinedButton.icon(
-                                        icon: const Icon(Icons.edit, size: 16),
-                                        label: const Text('In-Flight Edit'),
-                                        onPressed: status == 'IN_REVIEW' ? () => _showInFlightEditDialog(ns) : null,
+                                        icon: const Icon(Icons.edit_document, size: 16),
+                                        label: const Text('Edit Document Text'),
+                                        onPressed: status == 'IN_REVIEW' ? () => _showWordEditDialog(ns) : null,
                                       ),
                                       const SizedBox(width: 12),
                                       OutlinedButton.icon(
@@ -330,21 +514,18 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
                                         onPressed: status == 'IN_REVIEW' ? () => _performAction(refNo, 'REJECT', stage) : null,
                                       ),
                                       const SizedBox(width: 12),
-                                      ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
+                                      FilledButton.icon(
+                                        style: FilledButton.styleFrom(
                                           backgroundColor: stage == 'VC' ? AppColors.successGreen : AppColors.amityBlue,
                                         ),
-                                        icon: Icon(stage == 'VC' ? Icons.check_circle : Icons.send, size: 16, color: Colors.white),
-                                        label: Text(
-                                          stage == 'VC' ? 'Final Approve' : 'Forward ➔ Next Stage',
-                                          style: const TextStyle(color: Colors.white),
-                                        ),
-                                        onPressed: status == 'IN_REVIEW' ? () => _performAction(refNo, stage == 'VC' ? 'APPROVE' : 'FORWARD', stage) : null,
+                                        icon: Icon(stage == 'VC' ? Icons.verified : Icons.draw_rounded, size: 18),
+                                        label: Text(stage == 'VC' ? 'Sign & Final Approve' : 'Add Signature & Forward'),
+                                        onPressed: status == 'IN_REVIEW' ? () => _openSignatureFlow(refNo, stage) : null,
                                       ),
                                     ],
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           );
                         },

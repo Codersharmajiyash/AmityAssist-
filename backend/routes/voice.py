@@ -20,6 +20,7 @@ class VoiceQueryRequest(BaseModel):
     spoken_text: str = Field(..., min_length=1, max_length=500, description="Transcribed voice text from microphone")
     student_id: Optional[str] = Field(None, description="Optional student ID for personalization")
     language: str = Field("en-IN", description="BCP 47 language tag e.g. en-IN, hi-IN")
+    page_context: Optional[dict[str, Any]] = Field(None, description="Active client screen context")
 
 
 @router.post("/query")
@@ -28,11 +29,12 @@ async def process_voice_query(body: VoiceQueryRequest) -> dict[str, Any]:
     guidance = PolicySearchService.hybrid_guidance(
         query=body.spoken_text,
         student_id=body.student_id,
+        page_context=body.page_context,
     )
 
     clean_speech = guidance.get("voice_speech_text") or guidance.get("answer", "")
     # Strip complex marks/citations for natural text-to-speech cadence
-    clean_speech = clean_speech.replace("₹", "Rupees ").replace("ORD-", "Ordinance ")
+    clean_speech = clean_speech.replace("₹", "Rupees ").replace("INR ", "Rupees ").replace("ORD-", "Ordinance ")
 
     return {
         "transcription": body.spoken_text,
@@ -47,4 +49,6 @@ async def process_voice_query(body: VoiceQueryRequest) -> dict[str, Any]:
         "citations": guidance.get("citations", []),
         "recommended_action": guidance.get("recommended_action"),
         "action_url": guidance.get("action_url"),
+        "highlight_target": guidance.get("highlight_target"),
+        "screen_instruction": guidance.get("screen_instruction"),
     }

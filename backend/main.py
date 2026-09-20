@@ -1,13 +1,4 @@
-"""
-FastAPI application entry point.
-
-Startup sequence:
-  1. Database schema created and sample data seeded (lifespan hook)
-  2. Rate limiter attached
-  3. Security headers middleware registered
-  4. CORS configured (lock down allow_origins in production)
-  5. API routes mounted
-"""
+# FastAPI application entry point with hybrid voice guidance.
 
 from contextlib import asynccontextmanager
 

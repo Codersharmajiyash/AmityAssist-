@@ -12,10 +12,8 @@ import '../../auth/application/auth_provider.dart';
 final grievanceHistoryProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final dio = ref.watch(apiClientProvider);
-  final studentId = ref.watch(authProvider).studentId;
+  final studentId = ref.watch(authProvider).studentId ?? 'GUEST';
   final cache = ref.watch(offlineCacheProvider);
-
-  if (studentId == null) return [];
 
   try {
     final response = await dio.get('/student/grievances', queryParameters: {
@@ -77,21 +75,66 @@ class _GrievanceScreenState extends ConsumerState<GrievanceScreen>
     final studentId = ref.read(authProvider).studentId;
 
     try {
-      if (studentId != null) {
-        await dio.post('/student/grievances', data: {
-          'student_id': studentId,
-          'category': _category,
-          'description': _descController.text,
-        });
-      }
+      final studentTarget = studentId ?? 'GUEST';
+      final response = await dio.post('/student/grievances', data: {
+        'student_id': studentTarget,
+        'category': _category,
+        'description': _descController.text.trim(),
+      });
 
       if (mounted) {
         _descController.clear();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Grievance filed successfully!')),
+        final data = response.data is Map ? response.data as Map<String, dynamic> : <String, dynamic>{};
+        final ticketId = data['ticket_id'] ?? 'GRV-2026-REG';
+        final assigned = data['assigned_to'] ?? 'Department Coordinator';
+        final sla = data['sla_hours'] ?? 48;
+
+        showDialog(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: const [
+                Icon(Icons.verified_rounded, color: AppColors.successGreen, size: 28),
+                SizedBox(width: 10),
+                Text('Complaint Registered'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Your official grievance tracking number is:'),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.amityBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.amityBlue),
+                  ),
+                  child: Text(
+                    ticketId.toString(),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.amityBlue),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('• Routed to: $assigned'),
+                Text('• Resolution SLA: within $sla hours'),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogCtx);
+                  ref.invalidate(grievanceHistoryProvider);
+                  _tabController.animateTo(1);
+                },
+                child: const Text('View in History'),
+              ),
+            ],
+          ),
         );
-        ref.invalidate(grievanceHistoryProvider);
-        _tabController.animateTo(1); // Switch to history tab
       }
     } on DioException catch (e) {
       if (mounted) {
@@ -251,7 +294,9 @@ class _GrievanceHistoryTile extends StatelessWidget {
     final category = grievance['category'] ?? '';
     final description = grievance['description'] ?? '';
     final resolution = grievance['resolution'] ?? '';
-    final date = grievance['created_at'] ?? grievance['date'] ?? '';
+    final date = grievance['timestamp'] ?? grievance['created_at'] ?? grievance['date'] ?? '';
+    final ticketId = grievance['ticket_id'] ?? 'GRV-2026-${grievance['id'] ?? '001'}';
+    final assigned = grievance['assigned_to'] ?? 'Department Coordinator';
 
     final statusColor = switch (status.toUpperCase()) {
       'RESOLVED' => AppColors.successGreen,
@@ -270,6 +315,23 @@ class _GrievanceHistoryTile extends StatelessWidget {
           children: [
             Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.amityBlue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.amityBlue.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    ticketId.toString(),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.amityBlue,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -293,7 +355,17 @@ class _GrievanceHistoryTile extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (date.isNotEmpty)
-                  Text(date, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text(date.toString().substring(0, date.toString().length > 16 ? 16 : date.toString().length),
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.route_outlined, size: 14, color: Colors.black54),
+                const SizedBox(width: 4),
+                Text('Assigned Desk: $assigned',
+                    style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500)),
               ],
             ),
             const SizedBox(height: 12),

@@ -142,27 +142,42 @@ class _DigitalCounselorModalState extends ConsumerState<DigitalCounselorModal> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Row(
-                          children: [
-                            Text(
-                              'AI Digital Counselor',
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+                          children: const [
+                            Flexible(
+                              child: Text(
+                                'AI Digital Counselor',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             SizedBox(width: 8),
                             _OnlinePill(),
                           ],
                         ),
-                        SizedBox(height: 2),
-                        Text(
+                        const SizedBox(height: 2),
+                        const Text(
                           'Guided procedures, ordinances & voice intelligence.',
-                          style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                    icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -453,10 +468,26 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
 
   @override
   void dispose() {
+    TtsService().stop();
+    SttService().stopListening();
     WebVoiceBridge.stopListening();
     WebVoiceBridge.stopSpeaking();
+    _sttSub?.cancel();
+    _ttsSub?.cancel();
     _queryController.dispose();
     super.dispose();
+  }
+
+  void _greetAndListen() {
+    final pageContext = ref.read(pageContextProvider);
+    final greeting =
+        "Hello! You are on the ${pageContext.screenName}. Ask me any question, or ask what you can do on this screen.";
+    TtsService().speak(
+      greeting,
+      onComplete: () {
+        if (mounted) _startListening();
+      },
+    );
   }
 
   Future<void> _askPolicy(String query, {bool speak = false}) async {
@@ -471,7 +502,9 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
 
     try {
       final dio = ref.read(apiClientProvider);
-      final studentId = ref.read(authProvider).studentId ?? 'STU001';
+      final auth = ref.read(authProvider);
+      final studentId = auth.isAuthenticated ? auth.studentId : null;
+      final pageContext = ref.read(pageContextProvider);
 
       Response resp;
       try {
@@ -481,6 +514,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
             'spoken_text': cleanQ,
             'student_id': studentId,
             'language': 'en-IN',
+            'page_context': pageContext.toJson(),
           },
         );
       } catch (_) {
@@ -489,6 +523,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
           data: {
             'query': cleanQ,
             'student_id': studentId,
+            'page_context': pageContext.toJson(),
           },
         );
       }
@@ -500,9 +535,15 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
         }
         setState(() {
           _guidance = data;
-          _guidance = data;
           _isLoading = false;
         });
+
+        // Trigger pulse highlight if target button exists
+        if (data['highlight_target'] != null) {
+          ref
+              .read(buttonHighlightProvider.notifier)
+              .triggerHighlight(data['highlight_target'].toString());
+        }
 
         if (speak) {
           final speech = data['speech_text'] ?? data['answer'] ?? '';
@@ -530,7 +571,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
             _isListening = false;
             _queryController.text = spokenText;
           });
-          _askPolicy(spokenText);
+          _askPolicy(spokenText, speak: true);
         }
       },
       onError: () {

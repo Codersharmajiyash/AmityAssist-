@@ -4,6 +4,7 @@ Student lifecycle API endpoints.
 Provides personalized data for dashboard, academics, scholarships,
 notices, grievances, internships, and back-paper registration.
 """
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from ..database.connection import get_connection
 from ..models.schemas import BackpaperRequest, GrievanceCreate, ScholarshipApply
@@ -233,27 +234,68 @@ async def file_grievance(body: GrievanceCreate):
     if body.category not in allowed:
         raise HTTPException(status_code=400, detail=f"Category must be one of: {', '.join(allowed)}")
     conn = get_connection()
-    conn.execute(
+    cursor = conn.cursor()
+    cursor.execute(
         "INSERT INTO grievances (student_id, category, description) VALUES (?, ?, ?)",
         (body.student_id, body.category, body.description)
     )
     conn.commit()
-    return {"message": "Grievance filed successfully. You will receive a response within 3 working days."}
+    grievance_id = cursor.lastrowid
+    year = datetime.now(timezone.utc).year
+    ticket_id = f"GRV-{year}-{grievance_id:04d}"
+
+    dept_routing = {
+        "academic": "Department Academic Coordinator",
+        "fee": "Finance & Accounts Office",
+        "hostel": "Chief Warden & Hostel Office",
+        "exam": "Controller of Examinations",
+        "scholarship": "Dean of Student Welfare (Scholarships Desk)"
+    }.get(body.category, "Proctorial Board")
+
+    return {
+        "message": "Grievance registered and assigned to department coordinator.",
+        "ticket_id": ticket_id,
+        "id": grievance_id,
+        "category": body.category,
+        "assigned_to": dept_routing,
+        "sla_hours": 48 if body.category in ("academic", "fee") else 72,
+        "status": "open",
+    }
 
 def _fetch_grievances(student_id: str):
     """Return all grievances for a student."""
     conn = get_connection()
-    student = conn.execute(
-        "SELECT id FROM students WHERE id = ?",
-        (_normalise_student_id(student_id),),
-    ).fetchone()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found.")
+    norm_id = _normalise_student_id(student_id)
+    if norm_id != "GUEST":
+        student = conn.execute(
+            "SELECT id FROM students WHERE id = ?",
+            (norm_id,),
+        ).fetchone()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found.")
     rows = conn.execute(
         "SELECT * FROM grievances WHERE student_id = ? ORDER BY timestamp DESC",
-        (_normalise_student_id(student_id),)
+        (norm_id,)
     ).fetchall()
-    return [dict(r) for r in rows]
+    
+    dept_routing = {
+        "academic": "Department Academic Coordinator",
+        "fee": "Finance & Accounts Office",
+        "hostel": "Chief Warden & Hostel Office",
+        "exam": "Controller of Examinations",
+        "scholarship": "Dean of Student Welfare (Scholarships Desk)"
+    }
+    
+    res = []
+    for r in rows:
+        d = dict(r)
+        gid = d.get("id", 0)
+        d["ticket_id"] = f"GRV-2026-{gid:04d}"
+        cat = d.get("category", "academic")
+        d["assigned_to"] = dept_routing.get(cat, "Proctorial Board")
+        d["sla_hours"] = 48 if cat in ("academic", "fee") else 72
+        res.append(d)
+    return res
 
 
 @router.get("/grievances")
