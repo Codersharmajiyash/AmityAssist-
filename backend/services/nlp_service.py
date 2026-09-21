@@ -187,7 +187,8 @@ def detect_language(text: str) -> Language:
     hinglish_markers = {
         "bata", "batao", "kya", "kaise", "kitna", "kitni", "mera", "meri",
         "mujhe", "chahiye", "karna", "karo", "hai", "fees", "madad",
-        "shikayat", "pareshani", "college", "padhai",
+        "shikayat", "pareshani", "college", "padhai", "nahi", "hoga",
+        "sahi", "problem", "status", "help", "service",
     }
     if set(_tokenize(text)) & hinglish_markers:
         return "hinglish"
