@@ -653,6 +653,24 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
       {'label': 'Backpaper Exam Fee (ORD-12.1)', 'q': 'What is the backpaper exam fee and deadline?'},
     ];
 
+    final stopButton = IconButton(
+      tooltip: 'Stop response',
+      icon: Icon(
+        _isSpeaking || _isListening ? Icons.stop_circle_rounded : Icons.stop_rounded,
+        color: _isSpeaking || _isListening ? Colors.redAccent : AppColors.primary,
+        size: 22,
+      ),
+      onPressed: () {
+        TtsService().stop();
+        WebVoiceBridge.stopListening();
+        SttService().stopListening();
+        setState(() {
+          _isListening = false;
+          _isSpeaking = false;
+        });
+      },
+    );
+
     final citations = (_guidance != null && _guidance!['citations'] is List)
         ? (_guidance!['citations'] as List)
         : const [];
@@ -703,6 +721,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                   tooltip: 'Push to Talk (Voice Query)',
                   onPressed: _toggleVoice,
                 ),
+                stopButton,
                 ElevatedButton(
                   onPressed: () => _askPolicy(_queryController.text),
                   style: ElevatedButton.styleFrom(

@@ -388,6 +388,16 @@ def _language_prefix(language: str, voice: bool) -> str:
     return ""
 
 
+def _is_stop_command(raw_message: str) -> bool:
+    text = raw_message.strip().lower()
+    stop_tokens = (
+        "stop", "stop response", "stop the response", "cancel response",
+        "abort", "abort response", "end chat", "close chat", "halt",
+        "mute", "pause", "cancel voice", "stop voice"
+    )
+    return text in stop_tokens or any(token in text for token in ("stop response", "stop the response", "cancel response", "abort response"))
+
+
 def _is_lifecycle_query(raw_message: str, voice: bool) -> bool:
     lower = raw_message.lower()
     command_markers = (
@@ -830,6 +840,14 @@ def process_message(session_id: str, raw_message: str) -> ChatResponse:
     # Persist student's raw message
     _log_message(student_id, raw_message, "student")
     remember_turn(session, "student", raw_message)
+
+    if _is_stop_command(raw_message):
+        session["state"] = "ASK_REASON"
+        session["intent"] = None
+        session["reason"] = None
+        reply = "Response stopped. You can ask a new question or continue with the assistant from the start."
+        _log_message(student_id, reply, "bot", "help", "neutral")
+        return ChatResponse(reply=reply, state="ASK_REASON", intent="help", sentiment="neutral")
 
     if state in {"GRIEVANCE_CATEGORY", "GRIEVANCE_DESCRIPTION", "GRIEVANCE_CONFIRM"}:
         return _handle_grievance_state(session, raw_message)

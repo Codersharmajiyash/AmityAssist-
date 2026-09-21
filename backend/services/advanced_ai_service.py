@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from ..config import settings
+from .local_llm_service import generate_local_policy_answer
 from .nlp_service import route_intent, score_sentiment
 
 
@@ -161,67 +162,69 @@ def synthesize_guidance_with_gemini(
     page_context: dict[str, Any] | None = None,
 ) -> str | None:
     """Synthesize concise spoken voice response from retrieved university policy/form citations."""
-    if not settings.llm_enabled:
-        return None
-
-    facts = "\n".join(
-        [
-            f"- [{c.get('clause_code', 'ORD')}] {c.get('title', '')}: {c.get('content', '')}"
-            for c in citations[:3]
-        ]
-    )
-
-    prompt = textwrap.dedent(
-        f"""
-        You are UniAssist, the official university digital counselor and voice guide.
-        Answer the user query concisely, warmly, and empathetically using ONLY the verified university policy/form facts provided below.
-
-        Strict Rules:
-        1. Never contradict or invent fees, room numbers, deadlines, or SLAs.
-        2. If the user asks what to do after getting a form, specify:
-           - Required supporting documents/attachments
-           - Exact submission desk/office/room
-           - Turnaround SLA
-        3. If the user asks where you can take them or asks for navigation, guide them to the appropriate portal.
-        4. Keep your answer under 3 to 4 clear spoken sentences suitable for text-to-speech reading. Avoid markdown bolding or asterisks.
-
-        Verified University Knowledge:
-        {facts}
-
-        Active Student Context:
-        {student or 'Guest / Public Visitor'}
-
-        Active Screen:
-        {page_context or {}}
-
-        User Query:
-        {query}
-        """
-    ).strip()
-
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-    )
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    try:
-        response = httpx.post(
-            url,
-            json=payload,
-            timeout=settings.llm_timeout_seconds,
+    if settings.llm_enabled:
+        facts = "\n".join(
+            [
+                f"- [{c.get('clause_code', 'ORD')}] {c.get('title', '')}: {c.get('content', '')}"
+                for c in citations[:3]
+            ]
         )
-        response.raise_for_status()
-        data = response.json()
-        text = (
-            data.get("candidates", [{}])[0]
-            .get("content", {})
-            .get("parts", [{}])[0]
-            .get("text")
+
+        prompt = textwrap.dedent(
+            f"""
+            You are UniAssist, the official university digital counselor and voice guide.
+            Answer the user query concisely, warmly, and empathetically using ONLY the verified university policy/form facts provided below.
+
+            Strict Rules:
+            1. Never contradict or invent fees, room numbers, deadlines, or SLAs.
+            2. If the user asks what to do after getting a form, specify:
+               - Required supporting documents/attachments
+               - Exact submission desk/office/room
+               - Turnaround SLA
+            3. If the user asks where you can take them or asks for navigation, guide them to the appropriate portal.
+            4. Keep your answer under 3 to 4 clear spoken sentences suitable for text-to-speech reading. Avoid markdown bolding or asterisks.
+
+            Verified University Knowledge:
+            {facts}
+
+            Active Student Context:
+            {student or 'Guest / Public Visitor'}
+
+            Active Screen:
+            {page_context or {}}
+
+            User Query:
+            {query}
+            """
+        ).strip()
+
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
         )
-        return text.strip() if text else None
-    except Exception:
-        return None
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+        try:
+            response = httpx.post(
+                url,
+                json=payload,
+                timeout=settings.llm_timeout_seconds,
+            )
+            response.raise_for_status()
+            data = response.json()
+            text = (
+                data.get("candidates", [{}])[0]
+                .get("content", {})
+                .get("parts", [{}])[0]
+                .get("text")
+            )
+            if text and text.strip():
+                return text.strip()
+        except Exception:
+            pass
+
+    local_answer = generate_local_policy_answer(query, citations, student, page_context)
+    return local_answer if local_answer else None
 
 
 def advanced_reply(
