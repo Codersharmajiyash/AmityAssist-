@@ -125,3 +125,26 @@ This task list tracks the active 4-phase execution milestone:
   - `[x]` Automated test suite in `backend/tests/test_institution_config.py`.
   - `[x]` Full regression test run: All 176 tests passing with 100% success.
 
+---
+
+### Phase 30: Production Features & Procedure Setup Wizard [COMPLETED ✅]
+- `[x]` **Feature 1: Multi-language Voice Switcher & Chat Stop Button:**
+  - `[x]` Multi-language ChoiceChips (`English`, `Hindi`, `Hinglish`) in `digital_counselor_modal.dart`.
+  - `[x]` Dynamic "Stop Generating" control in chat tab.
+  - `[x]` Non-web compilation stubs for WebVoiceBridge, SttService, and TtsService.
+- `[x]` **Feature 2: Collaborative Notesheet Word (.docx) Export:**
+  - `[x]` Installed `python-docx` and built `backend/services/notesheet_docx_service.py`.
+  - `[x]` Added `GET /api/notesheets/{id_or_ref}/docx` streaming response endpoint.
+  - `[x]` Added "Download Word (.docx)" action button to `staff_notesheet_screen.dart`.
+- `[x]` **Feature 3: Interactive Procedure Setup Wizard:**
+  - `[x]` Database schema: `custom_procedures` and `custom_procedure_steps` in `seed.py`.
+  - `[x]` Backend service: `backend/services/procedure_service.py` with CRUD, step sequencing, and checklist management.
+  - `[x]` API router: `backend/routes/procedures.py` registered in `backend/main.py`.
+  - `[x]` Automated test suite: `backend/tests/test_procedure_wizard.py` (6/6 passing).
+  - `[x]` Frontend UI: `staff_procedure_wizard_screen.dart` with 4-stage interactive wizard, step reordering, and document chips.
+  - `[x]` Route `/staff/procedures` added in `uniassist_app.dart` and quick action card in `staff_dashboard_screen.dart`.
+- `[x]` **Feature 4: Documentation & Verification:**
+  - `[x]` Updated `README.md` with Phase 30 summary, all new API endpoints, and updated test count (182 tests).
+  - `[x]` All 182 pytest backend tests passing with 100% success.
+  - `[x]` Flutter analyze has 0 issues and all Flutter widget tests pass.
+

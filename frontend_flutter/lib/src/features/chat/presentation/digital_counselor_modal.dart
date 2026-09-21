@@ -365,7 +365,18 @@ class _DigitalCounselorModalState extends ConsumerState<DigitalCounselorModal> {
                                       },
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
+                                  const SizedBox(width: 4),
+                                  // Stop Generating / Stop TTS button in chat tab
+                                  IconButton(
+                                    tooltip: 'Stop response / Stop speaking',
+                                    icon: const Icon(Icons.stop_circle_rounded, size: 22),
+                                    color: Colors.redAccent,
+                                    onPressed: () {
+                                      TtsService().stop();
+                                      WebVoiceBridge.stopSpeaking();
+                                    },
+                                  ),
+                                  const SizedBox(width: 4),
                                   IconButton(
                                     tooltip: 'Switch to Voice AI',
                                     icon: const Icon(Icons.mic_rounded, color: AppColors.teal),
@@ -445,6 +456,14 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
   Map<String, dynamic>? _guidance;
   String? _errorMessage;
 
+  // Language selector state
+  String _selectedLanguage = 'en-IN';
+  static const _languageOptions = [
+    {'code': 'en-IN', 'label': 'English', 'icon': '🇬🇧'},
+    {'code': 'hi-IN', 'label': 'हिन्दी', 'icon': '🇮🇳'},
+    {'code': 'hi-Latn', 'label': 'Hinglish', 'icon': '🔤'},
+  ];
+
   StreamSubscription<String>? _sttSub;
   StreamSubscription<bool>? _ttsSub;
 
@@ -480,10 +499,12 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
 
   void _greetAndListen() {
     final pageContext = ref.read(pageContextProvider);
-    final greeting =
-        "Hello! You are on the ${pageContext.screenName}. Ask me any question, or ask what you can do on this screen.";
+    final greeting = _selectedLanguage == 'hi-IN'
+        ? "नमस्ते! आप ${pageContext.screenName} पर हैं। कोई भी प्रश्न पूछें।"
+        : "Hello! You are on the ${pageContext.screenName}. Ask me any question, or ask what you can do on this screen.";
     TtsService().speak(
       greeting,
+      lang: _selectedLanguage == 'hi-Latn' ? 'en-IN' : _selectedLanguage,
       onComplete: () {
         if (mounted) _startListening();
       },
@@ -513,7 +534,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
           data: {
             'spoken_text': cleanQ,
             'student_id': studentId,
-            'language': 'en-IN',
+            'language': _selectedLanguage,
             'page_context': pageContext.toJson(),
           },
         );
@@ -565,6 +586,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
   void _startListening() {
     setState(() => _isListening = true);
     SttService().startListening(
+      lang: _selectedLanguage == 'hi-Latn' ? 'en-IN' : _selectedLanguage,
       onResult: (spokenText) {
         if (mounted) {
           setState(() {
@@ -607,7 +629,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     );
 
     WebVoiceBridge.startListening(
-      lang: 'en-IN',
+      lang: _selectedLanguage == 'hi-Latn' ? 'en-IN' : _selectedLanguage,
       onResult: (text) {
         if (mounted) {
           setState(() => _isListening = false);
@@ -635,7 +657,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     setState(() => _isSpeaking = true);
     WebVoiceBridge.speak(
       text,
-      lang: 'en-IN',
+      lang: _selectedLanguage == 'hi-Latn' ? 'en-IN' : _selectedLanguage,
       rate: 0.95,
     );
     Future.delayed(const Duration(seconds: 5), () {
@@ -676,10 +698,39 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
         : const [];
 
     return SingleChildScrollView(
+      key: ValueKey('policy_voice_tab_$_selectedLanguage'),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Language Selector Row
+          Row(
+            children: _languageOptions.map((opt) {
+              final isSelected = _selectedLanguage == opt['code'];
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  selected: isSelected,
+                  label: Text(
+                    '${opt['icon']} ${opt['label']}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? Colors.white : AppColors.ink,
+                    ),
+                  ),
+                  selectedColor: AppColors.primary,
+                  backgroundColor: Colors.white,
+                  side: BorderSide(color: isSelected ? AppColors.primary : AppColors.line),
+                  onSelected: (val) {
+                    if (val) setState(() => _selectedLanguage = opt['code']!);
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+
           // Search & Voice input bar
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -704,7 +755,11 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                     controller: _queryController,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                     decoration: InputDecoration(
-                      hintText: _isListening ? 'Listening to voice...' : 'Search university ordinances or ask a question...',
+                      hintText: _isListening
+                          ? (_selectedLanguage == 'hi-IN' ? 'सुन रहे हैं...' : 'Listening to voice...')
+                          : (_selectedLanguage == 'hi-IN'
+                              ? 'विश्वविद्यालय अध्यादेश खोजें या प्रश्न पूछें...'
+                              : 'Search university ordinances or ask a question...'),
                       hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
                       border: InputBorder.none,
                     ),
@@ -730,7 +785,10 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text('Ask', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  child: Text(
+                    _selectedLanguage == 'hi-IN' ? 'पूछें' : 'Ask',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
                 ),
               ],
             ),

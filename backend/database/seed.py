@@ -418,6 +418,32 @@ CREATE TABLE IF NOT EXISTS institution_refund_slabs (
     refund_percent  REAL NOT NULL,
     policy_note     TEXT
 );
+
+CREATE TABLE IF NOT EXISTS custom_procedures (
+    id              TEXT PRIMARY KEY,
+    title           TEXT NOT NULL,
+    department      TEXT NOT NULL,
+    category        TEXT NOT NULL,
+    description     TEXT,
+    sla_days        INTEGER NOT NULL DEFAULT 7,
+    required_docs   TEXT NOT NULL DEFAULT '[]',
+    is_active       INTEGER NOT NULL DEFAULT 1,
+    created_by      TEXT NOT NULL DEFAULT 'STAFF',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS custom_procedure_steps (
+    id              TEXT PRIMARY KEY,
+    procedure_id    TEXT NOT NULL,
+    step_number     INTEGER NOT NULL,
+    title           TEXT NOT NULL,
+    description     TEXT,
+    responsible_desk TEXT NOT NULL,
+    sla_days        INTEGER NOT NULL DEFAULT 2,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(procedure_id) REFERENCES custom_procedures(id) ON DELETE CASCADE
+);
 """
 
 # ---------------------------------------------------------------------------
@@ -856,6 +882,39 @@ _DEFAULT_REFUND_SLABS = [
     ("After 90 days", 91, 9999, 0.0, "No refund applicable after 90 days per Ordinance 11.3(d)."),
 ]
 
+_SAMPLE_CUSTOM_PROCEDURES = [
+    (
+        "proc-hostel-swap",
+        "Hostel Room Change Application",
+        "Hostel Administration",
+        "ACCOMMODATION",
+        "Application workflow for swapping or transferring hostel rooms across hostel blocks.",
+        5,
+        '["Hostel Fee Receipt", "No-Objection Certificate from Current Roommate", "Medical Certificate (if applicable)"]',
+        1,
+        "STAFF_ADMIN",
+    ),
+    (
+        "proc-bonafide-cert",
+        "Bonafide & Character Certificate Request",
+        "Registrar Office",
+        "ACADEMIC_RECORDS",
+        "Standard issuance procedure for student bonafide and character certificates for visa/passport/internship.",
+        3,
+        '["Student ID Card Copy", "Latest Semester Grade Card"]',
+        1,
+        "STAFF_ADMIN",
+    ),
+]
+
+_SAMPLE_CUSTOM_PROCEDURE_STEPS = [
+    ("step-hswap-1", "proc-hostel-swap", 1, "Warden Clearance & Room Verification", "Warden checks room condition and roommate concurrence.", "Hostel Warden", 2),
+    ("step-hswap-2", "proc-hostel-swap", 2, "Estate Office Inventory Audit", "Estate officer verifies furniture, key return, and meter reading.", "Estate Office", 1),
+    ("step-hswap-3", "proc-hostel-swap", 3, "Chief Warden Final Approval & Key Issue", "Chief Warden approves new room allotment and issues keys.", "Chief Warden", 2),
+    ("step-bonafide-1", "proc-bonafide-cert", 1, "Academic Verification", "Verification of active student enrollment and lack of disciplinary action.", "Academic Cell", 1),
+    ("step-bonafide-2", "proc-bonafide-cert", 2, "Assistant Registrar Sign-off & Seal", "Certificate generated, digitally signed, and stamped.", "Assistant Registrar", 2),
+]
+
 def init_db() -> None:
     """Create tables and insert rich sample lifecycle data — safe to call multiple times."""
     conn = get_connection()
@@ -1125,6 +1184,15 @@ def init_db() -> None:
     cursor.executemany(
         "INSERT OR IGNORE INTO institution_refund_slabs (slab_label, min_days, max_days, refund_percent, policy_note) VALUES (?, ?, ?, ?, ?)",
         _DEFAULT_REFUND_SLABS,
+    )
+    # Phase 30: Seed custom procedures and steps
+    cursor.executemany(
+        "INSERT OR IGNORE INTO custom_procedures (id, title, department, category, description, sla_days, required_docs, is_active, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        _SAMPLE_CUSTOM_PROCEDURES,
+    )
+    cursor.executemany(
+        "INSERT OR IGNORE INTO custom_procedure_steps (id, procedure_id, step_number, title, description, responsible_desk, sla_days) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        _SAMPLE_CUSTOM_PROCEDURE_STEPS,
     )
     conn.commit()
 

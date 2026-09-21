@@ -139,6 +139,18 @@ class StaffDashboardScreen extends ConsumerWidget {
                               onTap: () => context.push('/staff/registry'),
                             ).animate().fadeIn(delay: 400.ms).scale(),
                           ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: _buildActionCard(
+                              context: context,
+                              title: 'Procedure Setup Wizard',
+                              value: 'Builder',
+                              subtitle: 'Custom Workflows, Steps & SLA Engine',
+                              icon: Icons.auto_fix_high_rounded,
+                              color: const Color(0xFF00796B),
+                              onTap: () => context.push('/staff/procedures'),
+                            ).animate().fadeIn(delay: 450.ms).scale(),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 24),

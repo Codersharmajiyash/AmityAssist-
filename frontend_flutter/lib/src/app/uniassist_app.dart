@@ -30,6 +30,7 @@ import '../features/staff/presentation/staff_registry_screen.dart';
 import '../features/staff/presentation/staff_document_ocr_screen.dart';
 import '../features/staff/presentation/staff_accreditation_screen.dart';
 import '../features/staff/presentation/staff_institution_screen.dart';
+import '../features/staff/presentation/staff_procedure_wizard_screen.dart';
 import '../features/withdrawal/presentation/withdrawal_flow_screen.dart';
 import '../features/withdrawal/presentation/withdrawal_home_screen.dart';
 
@@ -70,6 +71,7 @@ class UniAssistApp extends ConsumerWidget {
         GoRoute(path: '/staff/ocr', builder: (context, state) => const _StaffSession(child: StaffDocumentOcrScreen())),
         GoRoute(path: '/staff/accreditation', builder: (context, state) => const _StaffSession(child: StaffAccreditationScreen())),
         GoRoute(path: '/staff/institution', builder: (context, state) => const _StaffSession(child: StaffInstitutionScreen())),
+        GoRoute(path: '/staff/procedures', builder: (context, state) => const _StaffSession(child: StaffProcedureWizardScreen())),
       ],
     );
 

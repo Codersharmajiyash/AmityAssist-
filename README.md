@@ -33,6 +33,7 @@ Completed baseline:
 - Phase 27 academic accreditation & CO/PO reporting engine: automated Course Outcome (CO1–CO4) and Program Outcome (PO1–PO12) attainment matrix calculation, cohort summaries, and 1-click NAAC Criterion 2.6 CSV/PDF export.
 - Phase 28 multi-university white-label configurator: institution branding settings (name, crest URL, theme colors), dynamic clearance chain desk configuration, and custom refund day slabs.
 - Phase 29 intelligent search & policy guidance: SQLite FTS5 sub-5ms BM25 ordinance search, hybrid RAG guidance, and push-to-talk voice endpoints.
+- Phase 30 production features: Multi-language voice/counselor switcher (English, Hindi, Hinglish) & dynamic AI stop button; Notesheet Word (.docx) export with official institutional headers, signature audit trails, and digital verification seal; and Interactive Procedure Setup Wizard allowing university admins to design custom multi-desk sequential approval workflows, document checklists, and SLA targets.
 
 Remaining production work:
 
@@ -86,7 +87,7 @@ Student ID: STU001
 py -m pytest
 ```
 
-The current verified result is `176 passed` with 0 failures.
+The current verified result is `182 passed` with 0 failures.
 
 ## Main Local Prototype Endpoints
 
@@ -117,6 +118,7 @@ POST /api/admin/documents/{id}/verify
 POST /api/notesheets
 GET  /api/notesheets
 GET  /api/notesheets/{id_or_ref}
+GET  /api/notesheets/{id_or_ref}/docx
 POST /api/notesheets/{id_or_ref}/action
 POST /api/notesheets/{id_or_ref}/edit-field
 GET  /api/registry/status/{student_id}
@@ -127,6 +129,10 @@ GET  /api/registry/events
 GET  /api/policy/search?q=...
 POST /api/policy/guide
 POST /api/voice/query
+GET  /api/procedures
+GET  /api/procedures/{procedure_id}
+POST /api/procedures
+DELETE /api/procedures/{procedure_id}
 GET  /api/accreditation/co-attainment
 GET  /api/accreditation/po-attainment
 GET  /api/accreditation/cohort-summary

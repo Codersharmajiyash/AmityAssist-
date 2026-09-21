@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api_client.dart';
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import 'digital_signature_dialog.dart';
 
@@ -502,6 +504,15 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
+                                      OutlinedButton.icon(
+                                        icon: const Icon(Icons.download_rounded, size: 16, color: AppColors.amityBlue),
+                                        label: const Text('Download DOCX'),
+                                        onPressed: () {
+                                          final url = '${ApiConfig.serverUrl}/api/notesheets/$refNo/docx';
+                                          launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                        },
+                                      ),
+                                      const SizedBox(width: 12),
                                       OutlinedButton.icon(
                                         icon: const Icon(Icons.edit_document, size: 16),
                                         label: const Text('Edit Document Text'),

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from ..services.notesheet_service import NotesheetService, STAGE_HIERARCHY
+from ..services.notesheet_docx_service import generate_notesheet_docx
 
 router = APIRouter(prefix="/api/notesheets", tags=["Digital Notesheet"])
 
@@ -124,3 +126,22 @@ async def edit_notesheet_field(id_or_ref: str, req: NotesheetEditFieldRequest):
         return {"success": True, "notesheet": ns}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{id_or_ref}/docx", summary="Download Notesheet as Word Document")
+async def download_notesheet_docx(id_or_ref: str):
+    """Generate and download the notesheet as a formatted .docx Word document."""
+    try:
+        ns = NotesheetService.get_notesheet(id_or_ref)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    docx_bytes = generate_notesheet_docx(ns)
+    ref = ns.get("reference_no", id_or_ref)
+    filename = f"Notesheet_{ref}.docx"
+
+    return Response(
+        content=docx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
