@@ -12,6 +12,45 @@ import 'withdrawal_providers.dart';
 class WithdrawalHomeScreen extends ConsumerWidget {
   const WithdrawalHomeScreen({super.key});
 
+  void _handleInitiate(BuildContext context, WidgetRef ref) {
+    final auth = ref.read(authProvider);
+    if (!auth.isAuthenticated) {
+      showDialog(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.lock_person_rounded, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text('Student Sign-In Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: const Text(
+            'Official university withdrawal, clearance gate tracking, and fee refund calculations require verified student identity.\n\nPlease sign in with your student credentials to proceed.',
+            style: TextStyle(height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(dialogCtx);
+                context.push('/login');
+              },
+              icon: const Icon(Icons.login_rounded, size: 18),
+              label: const Text('Sign In as Student'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    context.push('/withdrawal/flow');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final guide = ref.watch(withdrawalGuideProvider);
@@ -19,6 +58,20 @@ class WithdrawalHomeScreen extends ConsumerWidget {
     final scaffold = Scaffold(
       appBar: AppBar(
         title: const Text('Withdrawal Services'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: FilledButton.icon(
+              onPressed: () => _handleInitiate(context, ref),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+              label: const Text('Initiate Withdrawal'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+        ],
       ),
       body: guide.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -32,6 +85,67 @@ class WithdrawalHomeScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Quick Hero Action Banner
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.primary, Color(0xFF26467A)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.assignment_turned_in_rounded, color: Colors.white, size: 28),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ready to Apply?',
+                            style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Start your 4-gate automated clearance and calculate refund eligibility.',
+                            style: TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: () => _handleInitiate(context, ref),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.primary,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Start Now', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
               _SectionCard(
                 title: data.title,
                 subtitle: data.summary,
@@ -152,50 +266,34 @@ class WithdrawalHomeScreen extends ConsumerWidget {
                       .toList(),
                 ),
               ),
+              const SizedBox(height: 16),
+              Center(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () => _handleInitiate(context, ref),
+                    icon: const Icon(Icons.add_task_rounded),
+                    label: const Text('Initiate Official Withdrawal Application', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 80),
             ],
           );
         },
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          final auth = ref.read(authProvider);
-          if (!auth.isAuthenticated) {
-            showDialog(
-              context: context,
-              builder: (dialogCtx) => AlertDialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                title: Row(
-                  children: [
-                    const Icon(Icons.lock_person_rounded, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    const Text('Student Sign-In Required', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                content: const Text(
-                  'Official university withdrawal, clearance gate tracking, and fee refund calculations require verified student identity.\n\nPlease sign in with your student credentials to proceed.',
-                  style: TextStyle(height: 1.4),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogCtx),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: () {
-                      Navigator.pop(dialogCtx);
-                      context.push('/login');
-                    },
-                    icon: const Icon(Icons.login_rounded, size: 18),
-                    label: const Text('Sign In as Student'),
-                  ),
-                ],
-              ),
-            );
-            return;
-          }
-          context.push('/withdrawal/flow');
-        },
-        icon: const Icon(Icons.add),
+        onPressed: () => _handleInitiate(context, ref),
+        backgroundColor: AppColors.teal,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_task_rounded),
         label: const Text('Initiate Withdrawal'),
       ),
     );
@@ -209,7 +307,7 @@ class WithdrawalHomeScreen extends ConsumerWidget {
           scaffold,
           Positioned(
             bottom: 16,
-            right: 16,
+            left: 16,
             child: IgnorePointer(
               child: Container(
                 width: 200,

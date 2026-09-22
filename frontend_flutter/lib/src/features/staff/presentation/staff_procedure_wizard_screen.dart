@@ -296,6 +296,18 @@ class _StaffProcedureWizardScreenState
           ),
         ),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton.icon(
+              onPressed: _openCreateWizardModal,
+              icon: const Icon(Icons.add_task_rounded, size: 16),
+              label: const Text('New Procedure'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.teal,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh Procedures',
@@ -303,6 +315,7 @@ class _StaffProcedureWizardScreenState
           ),
         ],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateWizardModal,
         backgroundColor: AppColors.teal,

@@ -10,7 +10,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Point DB at a temp location before importing anything that opens a connection
-os.environ.setdefault("CHATBOT_ENV", "test")
+os.environ["CHATBOT_ENV"] = "test"
+os.environ["LLM_PROVIDER"] = "local"
+os.environ["GEMINI_API_KEY"] = ""
 
 from backend.main import app  # noqa: E402 — import after env var set
 from backend.database.seed import init_db  # noqa: E402
