@@ -4,9 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
 
-/// Phase 28: Staff Institution Configurator.
+/// Phase 28 + Phase 30: Staff Institution Configurator.
 /// Admin Settings screen for university branding, dynamic clearance chain
-/// management, and custom refund slab editing.
+/// management, custom refund slab editing, module switchboard, and procedure step customizer.
 class StaffInstitutionScreen extends ConsumerStatefulWidget {
   const StaffInstitutionScreen({super.key});
 
@@ -21,11 +21,77 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
   Map<String, dynamic> _config = {};
   List<dynamic> _clearanceChain = [];
   List<dynamic> _refundSlabs = [];
+  Map<String, dynamic> _modules = {};
+  List<dynamic> _procedureSteps = [];
+  final String _selectedProcedureCode = 'withdrawal';
+
+  static const List<Map<String, String>> _availableModules = [
+    {
+      'id': 'dashboard',
+      'title': 'Student & Admin Dashboard',
+      'description': 'Central statistics, status cards, and metric overviews.',
+      'icon': 'dashboard',
+    },
+    {
+      'id': 'academics',
+      'title': 'Academic Cell & Course Records',
+      'description': 'Credits, semester tracking, and curriculum mapping.',
+      'icon': 'school',
+    },
+    {
+      'id': 'withdrawal',
+      'title': 'Withdrawal & Clearance Cockpit',
+      'description': 'Multi-gate student exit workflow, caution refund offsets.',
+      'icon': 'exit_to_app',
+    },
+    {
+      'id': 'forms',
+      'title': 'Forms & Applications Catalog',
+      'description': '31+ downloadable academic, financial, and logistics forms.',
+      'icon': 'folder_shared',
+    },
+    {
+      'id': 'grievance',
+      'title': 'Student Grievance Redressal Desk',
+      'description': 'Mandatory SLA ticket logging, tracking, and staff escalation.',
+      'icon': 'support_agent',
+    },
+    {
+      'id': 'scholarships',
+      'title': 'Scholarships & Financial Aid',
+      'description': 'Merit renewal criteria and tuition concessions.',
+      'icon': 'monetization_on',
+    },
+    {
+      'id': 'hostel',
+      'title': 'Hostel & Accommodation Desk',
+      'description': 'Room allocation, warden clearance, mess records.',
+      'icon': 'apartment',
+    },
+    {
+      'id': 'examinations',
+      'title': 'Examination & Rechecking Portal',
+      'description': 'Exam eligibility, re-evaluation, and Form EX-02.',
+      'icon': 'assignment',
+    },
+    {
+      'id': 'voice_ai',
+      'title': 'AI Counselor & Voice Assistance',
+      'description': 'Hands-free speech navigation, bilingual counsel.',
+      'icon': 'record_voice_over',
+    },
+    {
+      'id': 'documents',
+      'title': 'Verified Documents & Vault',
+      'description': 'Digital document verification, bonafide certificates.',
+      'icon': 'verified_user',
+    },
+  ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     _fetchAll();
   }
 
@@ -42,6 +108,8 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
       final configRes = await client.get('/institution/config');
       final chainRes = await client.get('/institution/clearance-chain');
       final slabRes = await client.get('/institution/refund-slabs');
+      final modulesRes = await client.get('/institution/modules');
+      final stepsRes = await client.get('/procedures/$_selectedProcedureCode/steps');
 
       if (mounted) {
         setState(() {
@@ -54,12 +122,59 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
           if (slabRes.data is Map<String, dynamic>) {
             _refundSlabs = (slabRes.data as Map<String, dynamic>)['slabs'] as List? ?? [];
           }
+          if (modulesRes.data is Map<String, dynamic>) {
+            _modules = (modulesRes.data as Map<String, dynamic>)['modules'] as Map<String, dynamic>? ?? {};
+          }
+          if (stepsRes.data is Map<String, dynamic>) {
+            _procedureSteps = (stepsRes.data as Map<String, dynamic>)['steps'] as List? ?? [];
+          }
           _isLoading = false;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _fetchSteps() async {
+    try {
+      final client = ref.read(apiClientProvider);
+      final stepsRes = await client.get('/procedures/$_selectedProcedureCode/steps');
+      if (mounted && stepsRes.data is Map<String, dynamic>) {
+        setState(() {
+          _procedureSteps = (stepsRes.data as Map<String, dynamic>)['steps'] as List? ?? [];
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleModule(String moduleId, bool enabled) async {
+    setState(() {
+      _modules[moduleId] = enabled;
+    });
+
+    try {
+      final client = ref.read(apiClientProvider);
+      await client.put(
+        '/institution/modules',
+        data: {'modules': _modules},
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${enabled ? "Enabled" : "Disabled"} module: $moduleId'),
+            duration: const Duration(seconds: 1),
+            backgroundColor: enabled ? AppColors.successGreen : Colors.grey.shade700,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update module switchboard'), backgroundColor: AppColors.urgentRed),
+        );
       }
     }
   }
@@ -84,10 +199,13 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
+          isScrollable: true,
           tabs: const [
             Tab(icon: Icon(Icons.branding_watermark), text: 'Branding'),
             Tab(icon: Icon(Icons.linear_scale), text: 'Clearance Chain'),
             Tab(icon: Icon(Icons.account_balance_wallet), text: 'Refund Slabs'),
+            Tab(icon: Icon(Icons.toggle_on_rounded), text: 'Switchboard'),
+            Tab(icon: Icon(Icons.format_list_numbered_rounded), text: 'Procedure Steps'),
           ],
         ),
       ),
@@ -99,6 +217,8 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
                 _buildBrandingTab(),
                 _buildClearanceChainTab(),
                 _buildRefundSlabsTab(),
+                _buildModulesTab(),
+                _buildProcedureStepsTab(),
               ],
             ),
     );
@@ -226,7 +346,7 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
                   children: [
                     Container(
                       width: 36, height: 36,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.amityBlue,
                         shape: BoxShape.circle,
                       ),
@@ -342,6 +462,415 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Module Switchboard Tab ─────────────────────────────────────────────────
+  Widget _buildModulesTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.toggle_on_rounded, color: Color(0xFF00695C), size: 28),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Dynamic Module Switchboard', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text(
+                    'Toggle features and navigation tabs on or off for this institution',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          ..._availableModules.map((m) {
+            final modId = m['id']!;
+            final isEnabled = _modules[modId] ?? true;
+
+            IconData iconData;
+            switch (m['icon']) {
+              case 'dashboard':
+                iconData = Icons.dashboard_rounded;
+                break;
+              case 'school':
+                iconData = Icons.school_rounded;
+                break;
+              case 'exit_to_app':
+                iconData = Icons.exit_to_app_rounded;
+                break;
+              case 'folder_shared':
+                iconData = Icons.folder_shared_rounded;
+                break;
+              case 'support_agent':
+                iconData = Icons.support_agent_rounded;
+                break;
+              case 'monetization_on':
+                iconData = Icons.monetization_on_rounded;
+                break;
+              case 'apartment':
+                iconData = Icons.apartment_rounded;
+                break;
+              case 'assignment':
+                iconData = Icons.assignment_rounded;
+                break;
+              case 'record_voice_over':
+                iconData = Icons.record_voice_over_rounded;
+                break;
+              default:
+                iconData = Icons.verified_user_rounded;
+            }
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: SwitchListTile(
+                value: isEnabled,
+                activeThumbColor: const Color(0xFF00695C),
+                secondary: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: (isEnabled ? const Color(0xFF00695C) : Colors.grey).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(iconData, color: isEnabled ? const Color(0xFF00695C) : Colors.grey),
+                ),
+                title: Text(
+                  m['title']!,
+                  style: TextStyle(fontWeight: FontWeight.w600, color: isEnabled ? AppColors.ink : Colors.grey.shade600),
+                ),
+                subtitle: Text(
+                  m['description']!,
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+                onChanged: (val) => _toggleModule(modId, val),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ── Procedure Steps Customizer Tab ────────────────────────────────────────
+  Widget _buildProcedureStepsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.format_list_numbered_rounded, color: Color(0xFF00695C), size: 28),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Procedure Step Customizer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  Text(
+                    'Customize steps, SLA timelines, and responsible departments',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: _showAddStepDialog,
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add Step'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF00695C),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_procedureSteps.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(40),
+                child: Text('No steps configured for $_selectedProcedureCode.', style: TextStyle(color: Colors.grey.shade600)),
+              ),
+            )
+          else
+            ..._procedureSteps.map((s) {
+              final stepNum = s['step_number'] ?? 0;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00695C).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '$stepNum',
+                            style: const TextStyle(color: Color(0xFF00695C), fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    s['title'] ?? '',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    s['timeline_text'] ?? '1-2 days',
+                                    style: const TextStyle(color: Colors.blue, fontSize: 11, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Department: ${s['department'] ?? '—'}',
+                              style: TextStyle(color: Colors.grey.shade700, fontSize: 12, fontWeight: FontWeight.w500),
+                            ),
+                            if (s['description'] != null && s['description'].toString().isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                s['description'].toString(),
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20, color: Color(0xFF00695C)),
+                        tooltip: 'Edit Step',
+                        onPressed: () => _showEditStepDialog(s),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.urgentRed),
+                        tooltip: 'Delete Step',
+                        onPressed: () => _confirmDeleteStep(stepNum),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  void _showAddStepDialog() {
+    final titleCtrl = TextEditingController();
+    final deptCtrl = TextEditingController(text: 'Department Desk');
+    final timelineCtrl = TextEditingController(text: '1-2 days');
+    final descCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Procedure Step', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(labelText: 'Step Title *', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: deptCtrl,
+                decoration: const InputDecoration(labelText: 'Responsible Department *', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: timelineCtrl,
+                decoration: const InputDecoration(labelText: 'Timeline SLA (e.g. 24 hours) *', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Description / Instructions', border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (titleCtrl.text.trim().isEmpty || deptCtrl.text.trim().isEmpty) return;
+              Navigator.of(ctx).pop();
+              try {
+                final client = ref.read(apiClientProvider);
+                await client.post(
+                  '/procedures/$_selectedProcedureCode/steps',
+                  data: {
+                    'title': titleCtrl.text.trim(),
+                    'department': deptCtrl.text.trim(),
+                    'timeline_text': timelineCtrl.text.trim(),
+                    'description': descCtrl.text.trim(),
+                  },
+                );
+                await _fetchSteps();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Step added successfully'), backgroundColor: AppColors.successGreen),
+                  );
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to add step'), backgroundColor: AppColors.urgentRed),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00695C), foregroundColor: Colors.white),
+            child: const Text('Add Step'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditStepDialog(Map<String, dynamic> step) {
+    final stepNum = step['step_number'] ?? 1;
+    final titleCtrl = TextEditingController(text: step['title'] ?? '');
+    final deptCtrl = TextEditingController(text: step['department'] ?? '');
+    final timelineCtrl = TextEditingController(text: step['timeline_text'] ?? '');
+    final descCtrl = TextEditingController(text: step['description'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit Step $stepNum', style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                decoration: const InputDecoration(labelText: 'Step Title', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: deptCtrl,
+                decoration: const InputDecoration(labelText: 'Responsible Department', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: timelineCtrl,
+                decoration: const InputDecoration(labelText: 'Timeline SLA', border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                final client = ref.read(apiClientProvider);
+                await client.put(
+                  '/procedures/$_selectedProcedureCode/steps/$stepNum',
+                  data: {
+                    'title': titleCtrl.text.trim(),
+                    'department': deptCtrl.text.trim(),
+                    'timeline_text': timelineCtrl.text.trim(),
+                    'description': descCtrl.text.trim(),
+                  },
+                );
+                await _fetchSteps();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Step updated successfully'), backgroundColor: AppColors.successGreen),
+                  );
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to update step'), backgroundColor: AppColors.urgentRed),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00695C), foregroundColor: Colors.white),
+            child: const Text('Save Changes'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteStep(int stepNumber) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete Step $stepNumber?'),
+        content: const Text('This will delete the step and re-index all subsequent steps to maintain continuous numbering.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.of(ctx).pop();
+              try {
+                final client = ref.read(apiClientProvider);
+                await client.delete('/procedures/$_selectedProcedureCode/steps/$stepNumber');
+                await _fetchSteps();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Step $stepNumber deleted'), backgroundColor: AppColors.urgentRed),
+                  );
+                }
+              } catch (_) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to delete step'), backgroundColor: AppColors.urgentRed),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.urgentRed, foregroundColor: Colors.white),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
