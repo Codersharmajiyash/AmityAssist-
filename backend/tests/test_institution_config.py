@@ -129,6 +129,17 @@ class TestInstitutionConfig:
         assert chain[0]["desk_code"] == "LAB"
         assert chain[0]["sequence_order"] == 1
 
+        # Reset clearance chain back to default 4-desk baseline
+        client.put(
+            "/api/institution/clearance-chain",
+            json={"desks": [
+                {"desk_code": "LIBRARY", "desk_name": "Library Clearance Desk", "description": "Verify all borrowed books returned"},
+                {"desk_code": "HOSTEL", "desk_name": "Hostel Clearance Desk", "description": "Verify room handover and hostel dues"},
+                {"desk_code": "ACCOUNTS", "desk_name": "Accounts & Finance Desk", "description": "Verify fee payment records"},
+                {"desk_code": "REGISTRAR", "desk_name": "Registrar Office", "description": "Final academic records verification"},
+            ]},
+        )
+
     def test_empty_config_update_rejected(self, client):
         """Empty config update payload is rejected."""
         res = client.put(

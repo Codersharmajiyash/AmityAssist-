@@ -233,3 +233,180 @@ class ProcedureService:
         cursor.execute("DELETE FROM custom_procedures WHERE id = ?", (procedure_id,))
         conn.commit()
         return cursor.rowcount > 0
+
+    # ── Standard Procedure Step Customizer (e.g. Withdrawal Procedure) ─────────
+    @classmethod
+    def get_steps(cls, procedure_code: str = "withdrawal") -> List[Dict[str, Any]]:
+        """Retrieve the ordered steps for a standard or custom procedure."""
+        conn = get_connection()
+        rows = conn.execute(
+            """SELECT id, procedure_code, step_number, title, description, department, timeline_text, status_after
+               FROM procedure_steps
+               WHERE procedure_code = ?
+               ORDER BY step_number ASC""",
+            (procedure_code,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    @classmethod
+    def add_step(
+        cls,
+        procedure_code: str,
+        title: str,
+        department: str,
+        timeline_text: str = "1-2 days",
+        description: str = "",
+        status_after: str = "in_progress",
+        insert_at_step: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Add a new procedure step, optionally inserting at a specific step number."""
+        title = title.strip()
+        department = department.strip()
+        if not title:
+            raise ValueError("Step title cannot be empty")
+        if not department:
+            raise ValueError("Department cannot be empty")
+
+        conn = get_connection()
+        existing = cls.get_steps(procedure_code)
+        total = len(existing)
+
+        if insert_at_step is None or insert_at_step > total:
+            target_step = total + 1
+        else:
+            target_step = max(1, insert_at_step)
+            # Shift existing steps down safely using temporary negative index
+            conn.execute(
+                "UPDATE procedure_steps SET step_number = -step_number WHERE procedure_code = ? AND step_number >= ?",
+                (procedure_code, target_step),
+            )
+            conn.execute(
+                "UPDATE procedure_steps SET step_number = (-step_number) + 1 WHERE procedure_code = ? AND step_number < 0",
+                (procedure_code,),
+            )
+
+        conn.execute(
+            """INSERT INTO procedure_steps
+               (procedure_code, step_number, title, description, department, timeline_text, status_after)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (procedure_code, target_step, title, description.strip(), department, timeline_text.strip(), status_after),
+        )
+        conn.commit()
+
+        return {
+            "success": True,
+            "procedure_code": procedure_code,
+            "step_number": target_step,
+            "total_steps": total + 1,
+            "steps": cls.get_steps(procedure_code),
+        }
+
+    @classmethod
+    def update_step(
+        cls,
+        procedure_code: str,
+        step_number: int,
+        title: Optional[str] = None,
+        description: Optional[str] = None,
+        department: Optional[str] = None,
+        timeline_text: Optional[str] = None,
+        status_after: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update an existing procedure step's attributes."""
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT * FROM procedure_steps WHERE procedure_code = ? AND step_number = ?",
+            (procedure_code, step_number),
+        ).fetchone()
+        if not row:
+            raise ValueError(f"Step {step_number} not found for procedure '{procedure_code}'")
+
+        new_title = title.strip() if title is not None else row["title"]
+        new_desc = description.strip() if description is not None else row["description"]
+        new_dept = department.strip() if department is not None else row["department"]
+        new_timeline = timeline_text.strip() if timeline_text is not None else row["timeline_text"]
+        new_status = status_after.strip() if status_after is not None else row["status_after"]
+
+        conn.execute(
+            """UPDATE procedure_steps
+               SET title = ?, description = ?, department = ?, timeline_text = ?, status_after = ?
+               WHERE procedure_code = ? AND step_number = ?""",
+            (new_title, new_desc, new_dept, new_timeline, new_status, procedure_code, step_number),
+        )
+        conn.commit()
+
+        return {
+            "success": True,
+            "procedure_code": procedure_code,
+            "step_number": step_number,
+            "steps": cls.get_steps(procedure_code),
+        }
+
+    @classmethod
+    def delete_step(cls, procedure_code: str, step_number: int) -> Dict[str, Any]:
+        """Remove a procedure step and recompact subsequent step numbers."""
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT id FROM procedure_steps WHERE procedure_code = ? AND step_number = ?",
+            (procedure_code, step_number),
+        ).fetchone()
+        if not row:
+            raise ValueError(f"Step {step_number} not found for procedure '{procedure_code}'")
+
+        conn.execute(
+            "DELETE FROM procedure_steps WHERE procedure_code = ? AND step_number = ?",
+            (procedure_code, step_number),
+        )
+        # Shift subsequent steps safely using temporary negative index
+        conn.execute(
+            "UPDATE procedure_steps SET step_number = -step_number WHERE procedure_code = ? AND step_number > ?",
+            (procedure_code, step_number),
+        )
+        conn.execute(
+            "UPDATE procedure_steps SET step_number = (-step_number) - 1 WHERE procedure_code = ? AND step_number < 0",
+            (procedure_code,),
+        )
+        conn.commit()
+
+        remaining = cls.get_steps(procedure_code)
+        return {
+            "success": True,
+            "procedure_code": procedure_code,
+            "deleted_step": step_number,
+            "remaining_steps": len(remaining),
+            "steps": remaining,
+        }
+
+    @classmethod
+    def reorder_steps(cls, procedure_code: str, ordered_step_ids: List[int]) -> Dict[str, Any]:
+        """Reorder steps to match the sequence of provided step IDs."""
+        if not ordered_step_ids:
+            raise ValueError("ordered_step_ids list cannot be empty")
+
+        conn = get_connection()
+        # Verify all IDs exist for this procedure
+        existing = cls.get_steps(procedure_code)
+        existing_ids = {s["id"] for s in existing}
+        for sid in ordered_step_ids:
+            if sid not in existing_ids:
+                raise ValueError(f"Step ID {sid} does not belong to procedure '{procedure_code}'")
+
+        # Temporarily negate all step numbers to avoid unique collision
+        conn.execute(
+            "UPDATE procedure_steps SET step_number = -id WHERE procedure_code = ?",
+            (procedure_code,),
+        )
+
+        for new_num, sid in enumerate(ordered_step_ids, start=1):
+            conn.execute(
+                "UPDATE procedure_steps SET step_number = ? WHERE id = ?",
+                (new_num, sid),
+            )
+        conn.commit()
+
+        return {
+            "success": True,
+            "procedure_code": procedure_code,
+            "total_steps": len(ordered_step_ids),
+            "steps": cls.get_steps(procedure_code),
+        }

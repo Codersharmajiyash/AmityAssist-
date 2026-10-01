@@ -219,3 +219,55 @@ class InstitutionService:
             "slabs": cls.get_refund_slabs(),
             "updated_at": now,
         }
+
+    # ── Feature & Tab Switchboard (Dynamic Module Enablement) ─────────────────
+    DEFAULT_MODULES: Dict[str, bool] = {
+        "dashboard": True,
+        "academics": True,
+        "withdrawal": True,
+        "forms": True,
+        "grievance": True,
+        "scholarships": True,
+        "hostel": True,
+        "examinations": True,
+        "voice_ai": True,
+        "documents": True,
+    }
+
+    @classmethod
+    def get_modules(cls) -> Dict[str, bool]:
+        """Retrieve current enabled/disabled state for all system modules."""
+        import json
+        config = cls.get_config()
+        raw_modules = config.get("enabled_modules")
+        modules = dict(cls.DEFAULT_MODULES)
+        if raw_modules:
+            try:
+                parsed = json.loads(raw_modules)
+                if isinstance(parsed, dict):
+                    for k, v in parsed.items():
+                        modules[k] = bool(v)
+            except Exception:
+                pass
+        return modules
+
+    @classmethod
+    def update_modules(cls, updates: Dict[str, bool]) -> Dict[str, Any]:
+        """Update module enabled states and persist to institution_config."""
+        import json
+        current = cls.get_modules()
+        for k, v in updates.items():
+            current[k.strip().lower()] = bool(v)
+
+        cls.update_config({"enabled_modules": json.dumps(current)})
+        return {
+            "success": True,
+            "modules": current,
+            "updated_at": cls._now_iso(),
+        }
+
+    @classmethod
+    def is_module_enabled(cls, module_name: str) -> bool:
+        """Check whether a specific module is active for the current institution."""
+        modules = cls.get_modules()
+        return modules.get(module_name.strip().lower(), True)

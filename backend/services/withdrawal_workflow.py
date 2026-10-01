@@ -21,9 +21,15 @@ CLEARANCE_DEPARTMENTS = ["LIBRARY", "HOSTEL", "ACCOUNTS", "REGISTRAR"]
 
 
 def generate_reference() -> str:
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT value FROM institution_config WHERE key = 'short_name'").fetchone()
+        short_name = (row["value"].strip() if row and row["value"] else "AMITY").upper()
+    except Exception:
+        short_name = "AMITY"
     year = datetime.utcnow().year
     suffix = secrets.token_hex(2).upper()
-    return f"AMITY-WTH-{year}-{suffix}"
+    return f"{short_name}-WTH-{year}-{suffix}"
 
 
 def _ensure_clearance_tables() -> None:
@@ -188,14 +194,33 @@ def create_withdrawal_request(student_id: str, reason: str, intent: str) -> str:
             ),
         )
 
-    # Initialize 4 sequential clearance gates
-    for order, dept in enumerate(CLEARANCE_DEPARTMENTS, start=1):
-        conn.execute(
-            """INSERT INTO clearance_gates
-               (reference_no, department, sequence_order, status, dues_amount)
-               VALUES (?, ?, ?, 'PENDING', 0.0)""",
-            (reference, dept, order),
-        )
+    # Initialize clearance gates dynamically from institution_clearance_chain or fallback
+    try:
+        active_chain = conn.execute(
+            """SELECT desk_code, sequence_order
+               FROM institution_clearance_chain
+               WHERE is_active = 1
+               ORDER BY sequence_order ASC"""
+        ).fetchall()
+    except Exception:
+        active_chain = []
+
+    if active_chain:
+        for gate in active_chain:
+            conn.execute(
+                """INSERT INTO clearance_gates
+                   (reference_no, department, sequence_order, status, dues_amount)
+                   VALUES (?, ?, ?, 'PENDING', 0.0)""",
+                (reference, gate["desk_code"], gate["sequence_order"]),
+            )
+    else:
+        for order, dept in enumerate(CLEARANCE_DEPARTMENTS, start=1):
+            conn.execute(
+                """INSERT INTO clearance_gates
+                   (reference_no, department, sequence_order, status, dues_amount)
+                   VALUES (?, ?, ?, 'PENDING', 0.0)""",
+                (reference, dept, order),
+            )
 
     conn.execute(
         """INSERT INTO workflow_events
@@ -230,8 +255,19 @@ def process_department_clearance(
     _ensure_clearance_tables()
     conn = get_connection()
     dept = department.upper().strip()
-    if dept not in CLEARANCE_DEPARTMENTS:
-        raise ValueError(f"Invalid department gate '{department}'. Must be one of: {CLEARANCE_DEPARTMENTS}")
+
+    # Dynamic check against configured clearance chain or standard fallback
+    try:
+        active_desks = [
+            r["desk_code"].upper()
+            for r in conn.execute("SELECT desk_code FROM institution_clearance_chain").fetchall()
+        ]
+    except Exception:
+        active_desks = []
+    allowed_depts = set(CLEARANCE_DEPARTMENTS).union(active_desks)
+
+    if dept not in allowed_depts:
+        raise ValueError(f"Invalid department gate '{department}'. Must be one of: {sorted(list(allowed_depts))}")
 
     gate = conn.execute(
         "SELECT * FROM clearance_gates WHERE reference_no = ? AND department = ?",

@@ -97,6 +97,9 @@ def test_hybrid_behavior():
     else:
         print(">>> Scenario 3 NOTE: No GEMINI_API_KEY set in .env; system defaulted safely to local engine.")
 
+    # ALWAYS reset back to local test environment baseline
+    set_config("local", "")
+
     print("\n" + "=" * 65)
     print("ALL 3 HYBRID SCENARIOS VERIFIED: SYSTEM IS 100% PORTABLE & RESILIENT!")
     print("=" * 65)

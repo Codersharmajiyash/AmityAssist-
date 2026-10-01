@@ -53,6 +53,10 @@ class RefundSlabsUpdateRequest(BaseModel):
     slabs: List[RefundSlabItem] = Field(..., min_length=1)
 
 
+class ModulesUpdateRequest(BaseModel):
+    modules: Dict[str, bool] = Field(..., description="Map of module IDs to enabled boolean")
+
+
 # ── Institution Branding ──────────────────────────────────────────────────────
 
 @router.get("/config", summary="Get Institution Configuration")
@@ -68,6 +72,25 @@ async def update_config(req: ConfigUpdateRequest):
         result = InstitutionService.update_config(req.updates)
         return result
     except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Module Switchboard (Dynamic Module Enablement) ───────────────────────────
+
+@router.get("/modules", summary="Get Active Modules Switchboard")
+async def get_modules():
+    """Retrieve all system modules and their active/disabled toggle states."""
+    modules = InstitutionService.get_modules()
+    return {"status": "success", "modules": modules}
+
+
+@router.put("/modules", summary="Update Active Modules Switchboard")
+async def update_modules(req: ModulesUpdateRequest):
+    """Update module activation states across the institution."""
+    try:
+        result = InstitutionService.update_modules(req.modules)
+        return {"status": "success", "message": "Modules switchboard updated successfully", **result}
+    except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
