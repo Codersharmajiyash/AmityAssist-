@@ -101,3 +101,24 @@ def system_parity_check() -> Dict[str, Any]:
         "phase_parity_matrix": phase_matrix,
         "completed_phases_count": len(phase_matrix),
     }
+
+
+
+# ==============================================================================
+# Phase 5: Desktop Auto-Launcher & Version Checker
+# ==============================================================================
+
+@router.get("/version", summary="Check Active Production Version")
+def get_system_version():
+    """
+    Returns active build number, min compatible client version,
+    and download URLs for native binaries.
+    """
+    return {
+        "server_version": "2.4.0",
+        "min_client_version": "2.0.0",
+        "build_date": "2026-10-27",
+        "desktop_exe_url": "https://uniassist.university.edu/dist/UniAssist.exe",
+        "android_apk_url": "https://uniassist.university.edu/dist/UniAssist.apk",
+        "changelog": "Added bank-grade cancelled cheque validation and hierarchical notesheet approvals.",
+    }

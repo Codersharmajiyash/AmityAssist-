@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
@@ -63,6 +64,12 @@ class WithdrawalFlowScreen extends ConsumerStatefulWidget {
 }
 
 class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
+  // Phase 4: Bank Detail Input State Controllers
+  final _accountHolderController = TextEditingController();
+  final _accountNumberController = TextEditingController();
+  final _confirmAccountController = TextEditingController();
+  final _ifscCodeController = TextEditingController();
+  String _accountRelationship = 'Student';
   int _currentStep = 0;
   String? _reason;
   bool _isSubmitting = false;
@@ -78,6 +85,16 @@ class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
     'Personal Reasons',
     'Other'
   ];
+
+
+  @override
+  void dispose() {
+    _accountHolderController.dispose();
+    _accountNumberController.dispose();
+    _confirmAccountController.dispose();
+    _ifscCodeController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -238,6 +255,23 @@ class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
 
       final data = response.data as Map<String, dynamic>;
       final refNo = data['reference_no']?.toString() ?? 'AMITY-WTH-2026';
+
+      // Phase 4: Save structured bank details to Confidential Vault
+      if (_accountHolderController.text.trim().isNotEmpty &&
+          _accountNumberController.text.trim().isNotEmpty &&
+          _ifscCodeController.text.trim().isNotEmpty) {
+        try {
+          await dio.post('/withdrawal/$refNo/bank-details', data: {
+            'account_holder_name': _accountHolderController.text.trim(),
+            'account_number': _accountNumberController.text.trim(),
+            'confirm_account_number': _confirmAccountController.text.trim().isNotEmpty
+                ? _confirmAccountController.text.trim()
+                : _accountNumberController.text.trim(),
+            'ifsc_code': _ifscCodeController.text.trim().toUpperCase(),
+            'relationship': _accountRelationship,
+          });
+        } catch (_) {}
+      }
       final voucher = data['voucher'] as Map<String, dynamic>?;
       final refundAmt = voucher?['net_refundable_amount']?.toString() ?? '119,000.00';
 
@@ -395,7 +429,261 @@ class _WithdrawalFlowScreenState extends ConsumerState<WithdrawalFlowScreen> {
     }
   }
 
+  // ── Phase 4: Visual Sample Cheque Modal ──────────────────────────────────────
+  void showSampleChequeGuide(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.account_balance_wallet_rounded, color: Color(0xFF0A192F)),
+            SizedBox(width: 10),
+            Text('Cancelled Cheque Specimen Guide', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'A cancelled cheque proves your bank details to the Finance Office so your refund can be wired via NEFT.',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              // Visual Cheque Specimen Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blueGrey.shade200),
+                ),
+                child: Stack(
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('HDFC BANK LTD', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            Text('DATE: DD/MM/YYYY', style: TextStyle(fontSize: 10, color: Colors.grey.shade600)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text('PAY: _____________________________________', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        const SizedBox(height: 8),
+                        const Text('A/C NO: 50100234891234  (Keep Legible)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
+                        const Text('IFSC CODE: HDFC0000128  (Keep Legible)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blue)),
+                        const SizedBox(height: 8),
+                        const Align(
+                          alignment: Alignment.centerRight,
+                          child: Text('[ Do NOT Sign Here ]', style: TextStyle(fontSize: 10, color: Colors.red, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                    // Two Diagonal Red Lines with CANCELLED
+                    Positioned.fill(
+                      child: Center(
+                        child: Transform.rotate(
+                          angle: -0.25,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                            decoration: BoxDecoration(
+                              border: Border.symmetric(horizontal: BorderSide(color: Colors.red.shade700, width: 2)),
+                            ),
+                            child: Text(
+                              'C A N C E L L E D',
+                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.red.shade700, letterSpacing: 4),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Mandatory Compliance Rules:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 6),
+              _ruleBullet('1. Account Holder Name must match Student or Parent (No friend/third-party accounts).'),
+              _ruleBullet('2. Both Account Number and 11-digit IFSC code must be completely readable.'),
+              _ruleBullet('3. If you do not have a chequebook, upload the 1st page of your Bank Passbook.'),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('Understood')),
+        ],
+      ),
+    );
+  }
+
+  Widget _ruleBullet(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle_rounded, size: 14, color: Colors.green),
+          const SizedBox(width: 6),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 12))),
+        ],
+      ),
+    );
+  }
+
+  // ── Phase 4: Bank Proof Upload Card with Structured Fields ──────────────────
+  Widget _buildBankProofSection(WithdrawalDocRequirement doc) {
+    final pickedFile = _pickedDocs[doc.id];
+    final isPicking = _pickingDocIds.contains(doc.id);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF5A623), width: 1.5), // Gold financial border
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: const Color(0xFFF5A623).withOpacity(0.15), shape: BoxShape.circle),
+                child: const Icon(Icons.account_balance_rounded, color: Color(0xFFF5A623), size: 24),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Process 3: Bank Proof & Cancelled Cheque', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    Text('Mandatory for NEFT/RTGS tuition refund wire transfer', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                  ],
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => showSampleChequeGuide(context),
+                icon: const Icon(Icons.help_outline_rounded, size: 16),
+                label: const Text('View Sample', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+          ),
+          const Divider(height: 24),
+          // Structured Input Fields
+          TextField(
+            controller: _accountHolderController,
+            decoration: const InputDecoration(
+              labelText: 'Account Holder Full Name',
+              hintText: 'Must match student or registered parent',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _accountNumberController,
+                  keyboardType: TextInputType.number,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Bank Account Number', border: OutlineInputBorder(), isDense: true),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _confirmAccountController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Confirm Account Number', border: OutlineInputBorder(), isDense: true),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _ifscCodeController,
+                  textCapitalization: TextCapitalization.characters,
+                  inputFormatters: [LengthLimitingTextInputFormatter(11)],
+                  decoration: const InputDecoration(
+                    labelText: 'Bank IFSC Code (11 Characters)',
+                    hintText: 'e.g. HDFC0000128 or SBIN0001234',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              DropdownButton<String>(
+                value: _accountRelationship,
+                items: const [
+                  DropdownMenuItem(value: 'Student', child: Text('Student Account')),
+                  DropdownMenuItem(value: 'Father/Mother', child: Text('Parent Account')),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _accountRelationship = val);
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // File Upload Trigger
+          if (pickedFile == null)
+            OutlinedButton.icon(
+              onPressed: (isPicking || _isSubmitting) ? null : () => _pickProcessDocument(doc),
+              icon: isPicking
+                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.upload_file_rounded),
+              label: Text(isPicking ? 'Selecting file...' : 'Upload Cancelled Cheque / Passbook Copy (PDF, JPG)'),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Bank document attached (${pickedFile.name}) and queued for Accounts audit.',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _pickProcessDocument(doc),
+                    child: const Text('Change', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProcessDocCard(WithdrawalDocRequirement doc) {
+    if (doc.id == 'bank_proof') {
+      return _buildBankProofSection(doc);
+    }
+
     final pickedFile = _pickedDocs[doc.id];
     final isPicking = _pickingDocIds.contains(doc.id);
 

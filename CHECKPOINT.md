@@ -41,10 +41,27 @@ This document provides the authoritative, phase-by-phase execution status of **U
 * `[x]` Rule-based routing for Academics, Scholarships, Grievances, Withdrawals, and Notices.
 * `[x]` Basic refund calculation logic embedded in conversation flow.
 
+### [x] Phase 3 (Enterprise): Bidirectional Event Sync Bridge (Amizone ⟷ UniAssist)
+* `[x]` Backend Engine: `backend/services/sync_bridge_service.py` with persistent `sync_outbox` and `sync_inbound_log` tables.
+* `[x]` HMAC-SHA256 Security: Cryptographic signature generation and verification (`X-Amizone-Signature`) preventing webhook spoofing.
+* `[x]` Inbound Webhook: `POST /api/sync/amizone/inbound` handling `STUDENT_ENROLLED`, `NOTICE_PUBLISHED`, `STUDENT_STATUS_CHANGED`, and `FEE_PAID`.
+* `[x]` Outbox Queue & Offline Resiliency: Exponential backoff flush (`flush_outbox`) pushing to Amizone API without blocking student workflows.
+* `[x]` Outbox Health Cockpit: `GET /api/sync/outbox/status`, `POST /api/sync/outbox/flush`, and `POST /api/sync/outbox/queue-test`.
+* `[x]` Workflow Hooks: `FINANCIAL_OFFSET_APPLIED` and `WITHDRAWAL_COMPLETED` automatically dispatched to outbox from `withdrawal_workflow.py`.
+* `[x]` Verification: 8 automated unit tests passing (`backend/tests/test_amizone_sync_bridge.py`).
+
 ### [x] Phase 4: Design System & Kiosk UI Scaffolding
 * `[x]` High-contrast, modern design tokens in `frontend_flutter/lib/src/core/theme/kiosk_theme.dart`.
 * `[x]` Accessible touch targets (minimum 48x48 dp) optimized for public touchscreen kiosks.
 * `[x]` Responsive layouts supporting Kiosk Wide View, Desktop View, and Mobile Split View.
+
+### [x] Phase 4 (Enterprise): Confidential Bank Proof & Cancelled Cheque Refund Workflow
+* `[x]` Visual Sample Cheque Guide: Interactive modal (`showSampleChequeGuide`) with realistic specimen card (HDFC sample, diagonal "CANCELLED" watermark, RBI compliance rules).
+* `[x]` Structured Bank Fields: Input fields for Account Holder Name, Bank Account Number, Confirmation Account Number, IFSC Code (statutory regex format `^[A-Z]{4}0[A-Z0-9]{6}$`), and Relationship.
+* `[x]` Confidential Bank Vault & DPDP Act Data Minimization: `GET /api/withdrawal/{ref}/bank-details` masks account numbers (`•••• 4821`) and IFSC (`HDFC•••••••`) for all non-finance staff (Librarians, Wardens, Deans), revealing unmasked numbers exclusively to the Accounts Officer.
+* `[x]` Finance Disbursement & UTR Notification: `POST /api/withdrawal/{ref}/disburse-refund` records Bank UTR reference (`UTR-HDFC-2026-984210`), marks Accounts gate as `FUNDS_TRANSFERRED`, and dispatches high-priority in-app alert to student.
+* `[x]` Frontend Integration: Bank proof card embedded in `withdrawal_flow_screen.dart` with upload trigger, structured fields, sample guide, and auto-submit to vault.
+* `[x]` Verification: 5 automated unit tests passing (`backend/tests/test_phase4_bank_proof.py`).
 
 ### [x] Phase 5: Student Lifecycle Presentation Views
 * `[x]` Flutter Academic screen with circular attendance progress rings.
@@ -199,3 +216,47 @@ These phases address the concrete real-world operational problems discovered on 
 * `[x]` Backend: Endpoint `POST /api/policy/guide` providing personalized hybrid RAG advice (attendance condonation, withdrawal refund slabs, caution deposit offset).
 * `[x]` Backend: Endpoint `POST /api/voice/query` delivering speech synthesis parameters and natural speech responses.
 * `[x]` Frontend: Digital Counselor modal adds Policy & Voice AI (FTS5) tab with search, quick query chips, push-to-talk mic, TTS playback, and 1-tap action shortcuts.
+
+
+---
+
+## Part 3: Enterprise Architecture Specification (Lead Architect: Abhishek Shrivastava)
+
+### [x] Phase 1: Multi-Tier Hierarchical RBAC & Digital Notesheets Module
+*Goal: Enforce strict 6-tier university hierarchy and role-isolated clearance desks.*
+* `[x]` Backend: Defined `ROLE_PERMISSIONS` and hierarchical stage validator `validate_notesheet_signing_authority` in `backend/security/rbac.py`.
+* `[x]` Backend: Protected notesheet sign & forward (`POST /api/notesheets/{ref}/action`) and in-flight editing (`POST /api/notesheets/{ref}/edit-field`) with role & audit justification checks in `backend/routes/notesheet.py`.
+* `[x]` Frontend: Dynamic role-based action panel and in-flight typo editing dialog in `staff_notesheet_screen.dart`.
+
+### [x] Phase 2: Multi-University GUI Configurator & AI Handbook Dynamic Ingestion
+*Goal: Eliminate hardcoded university brandings, clearance chains, refund rules, and policy indices.*
+* `[x]` Backend: Institutional configuration & dynamic clearance chain endpoints in `backend/routes/institution.py`.
+* `[x]` Backend: Real-time dynamic handbook PDF/text upload and FTS5 BM25 re-indexing in `backend/routes/policy.py`.
+* `[x]` Frontend: Institutional branding manager, clearance chain builder, and handbook ingestion hub in `staff_institution_screen.dart`.
+
+### [x] Phase 3: Amizone Bidirectional Sync Bridge & Reliable Outbox Queue
+*Goal: Reconcile UniAssist operations with legacy ERP systems without distributed two-phase commits.*
+* `[x]` Backend: Created `backend/services/sync_bridge_service.py` with transactional `sync_outbox` queue and `sync_inbound_log`.
+* `[x]` Backend: Implemented HMAC-SHA256 signature generation and validation via `X-Amizone-Signature` header.
+* `[x]` Backend: Inbound event listener (`POST /api/sync/amizone/inbound`) handling `STUDENT_ENROLLED`, `NOTICE_PUBLISHED`, `STUDENT_STATUS_CHANGED`, and `FEE_PAID`.
+* `[x]` Backend: Manual trigger & status endpoints (`GET /api/sync/outbox/status`, `POST /api/sync/outbox/flush`, `POST /api/sync/amizone/inject`).
+* `[x]` Backend: Transactional hooks in `backend/services/withdrawal_workflow.py` dispatching `FINANCIAL_OFFSET_APPLIED` and `WITHDRAWAL_COMPLETED`.
+* `[x]` Automated Verification: 8 unit tests in `backend/tests/test_amizone_sync_bridge.py` passing 100%.
+
+### [x] Phase 4: Confidential Bank Proof & Cancelled Cheque Refund Workflow
+*Goal: Protect sensitive banking data and eliminate manual account typos during fee refund processing.*
+* `[x]` Backend: Implemented `BankProofSubmission` schema in `backend/routes/withdrawal.py` enforcing statutory RBI IFSC regex (`^[A-Z]{4}0[A-Z0-9]{6}$`) and dual account confirmation matching.
+* `[x]` Backend: Secured `withdrawal_bank_details` vault with masked display (`•••• 4821`) for students/general staff and unmasked access restricted to Accounts/Finance/Admin roles.
+* `[x]` Backend: Added refund disbursement endpoint (`POST /api/withdrawal/{ref}/disburse-refund`) logging Bank UTR, transitioning clearance state to `FUNDS_TRANSFERRED`, and dispatching high-priority student notifications.
+* `[x]` Frontend: Interactive bank proof capture section in `withdrawal_flow_screen.dart` featuring a visual sample cancelled cheque specimen modal with warning overlays and validation.
+* `[x]` Automated Verification: 5 unit tests in `backend/tests/test_phase4_bank_proof.py` passing 100%.
+
+### [x] Phase 5: Multi-Platform Deployment & Auto-Updates (PWA, Desktop, Watchdog, Idle Reset)
+*Goal: Bulletproof deployment across Web, Android, physical lobby Touch Kiosks, and Windows Desktop with zero-maintenance auto-updates.*
+* `[x]` Web/PWA: Configured `frontend_flutter/web/manifest.json` for standalone PWA installation with dark navy theme (`#0A192F`).
+* `[x]` Web/PWA: Embedded silent auto-updating service worker script in `frontend_flutter/web/index.html` with instant `skipWaiting()` and `controllerchange` reload on new builds.
+* `[x]` Desktop/Backend: Built `GET /api/system/version` in `backend/routes/system.py` publishing current build (`2.4.0`), minimum client version (`2.0.0`), binary links, and changelog.
+* `[x]` Desktop Launcher: Implemented `launcher/run_uniassist.bat` providing pre-launch update checks and automated desktop binary patching.
+* `[x]` Kiosk Watchdog: Engineered `launcher/kiosk_watchdog.ps1` for unattended 3:00 AM maintenance, session/cache cleaning, binary updates, and automatic relaunch in `--kiosk --fullscreen --disable-pinch` mode.
+* `[x]` Kiosk Security: Created `frontend_flutter/lib/src/features/kiosk/presentation/kiosk_inactivity_wrapper.dart` implementing a 45-second idle listener, 10-second warning countdown dialog, and instant session/JWT purge on timeout.
+* `[x]` Automated Verification: 6 unit tests in `backend/tests/test_phase5_deployment_updates.py` passing 100%.

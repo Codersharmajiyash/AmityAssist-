@@ -72,6 +72,36 @@
       color: #94a3b8;
     }
   </style>
+  <script>
+    // Abhishek Shrivastava — Zero-Touch PWA Background Auto-Updater
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('flutter_service_worker.js?v=' + Date.now()).then(function (reg) {
+          // Check for server-side build updates every time app is focused
+          reg.onupdatefound = function () {
+            var installingWorker = reg.installing;
+            installingWorker.onstatechange = function () {
+              if (installingWorker.state === 'installed') {
+                if (navigator.serviceWorker.controller) {
+                  console.log('[UniAssist] New production version detected. Auto-activating...');
+                  // Automatically activates new service worker without user prompt
+                  installingWorker.postMessage({ action: 'skipWaiting' });
+                }
+              }
+            };
+          };
+        });
+      });
+      // Reload seamlessly when new worker takes control
+      var refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+    }
+  </script>
 </head>
 <body>
   <div id="loading" class="loading-container">
