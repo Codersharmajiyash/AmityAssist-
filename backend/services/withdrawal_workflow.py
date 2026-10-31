@@ -7,13 +7,30 @@ and exposed through structured APIs for the UI, kiosk, or future Flutter app.
 
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from ..database.connection import get_connection
 from .audit_service import record_audit_event
+
+logger = logging.getLogger('uniassist.withdrawal')
+
+
+def _queue_sync_event(event_type: str, aggregate_id: str, payload: dict) -> None:
+    """Fire-and-forget helper to queue an outbound Amizone sync event.
+    Wrapped in try/except so a sync failure never breaks the core workflow."""
+    try:
+        from .sync_bridge_service import SyncBridgeService
+        SyncBridgeService.queue_outbound_event(
+            event_type=event_type,
+            aggregate_id=aggregate_id,
+            payload_data=payload,
+        )
+    except Exception as exc:
+        logger.warning('Sync bridge queue failed for %s (%s): %s', event_type, aggregate_id, exc)
 
 
 PROCEDURE_CODE = "withdrawal"
@@ -316,6 +333,23 @@ def process_department_clearance(
                 officer_id,
             ),
         )
+        # Phase 3: Emit WITHDRAWAL_COMPLETED to Amizone when all gates clear
+        if is_all_cleared:
+            wr_row = conn.execute(
+                "SELECT student_id, refund_amount FROM withdrawal_requests WHERE reference_no = ?",
+                (reference_no,),
+            ).fetchone()
+            _queue_sync_event(
+                event_type="WITHDRAWAL_COMPLETED",
+                aggregate_id=reference_no,
+                payload={
+                    "student_id": wr_row["student_id"] if wr_row else "",
+                    "reference_no": reference_no,
+                    "status": "WITHDRAWN_ARCHIVED",
+                    "net_refund_payable": float(wr_row["refund_amount"]) if wr_row else 0.0,
+                    "completion_timestamp": datetime.now(timezone.utc).isoformat(),
+                },
+            )
 
     conn.commit()
 
@@ -491,6 +525,21 @@ def offset_dues_from_caution_deposit(
         )
 
     conn.commit()
+
+    # Phase 3: Queue outbound financial offset event to Amizone ERP
+    _queue_sync_event(
+        event_type="FINANCIAL_OFFSET_APPLIED",
+        aggregate_id=reference_no,
+        payload={
+            "student_id": student_id,
+            "reference_no": reference_no,
+            "offset_amount": amount,
+            "department": dept,
+            "new_caution_deposit_balance": new_balance,
+            "authorized_by": authorized_by,
+            "timestamp": now_iso,
+        },
+    )
 
     return {
         "reference_no": reference_no,

@@ -18,7 +18,7 @@ from backend.middleware.observability import ObservabilityMiddleware, telemetry
 from backend.database.connection import get_connection
 from backend.services.cache_service import cache_service
 from backend.security.rbac import require_any_role
-from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications, forms, reports, campuses, compliance, system, services, policy, voice, notesheet, registry, accreditation, institution, procedures
+from backend.routes import auth, chat, documents, status, admin, student, withdrawal, workflows, notifications, forms, reports, campuses, compliance, system, services, policy, voice, notesheet, registry, accreditation, institution, procedures, sync
 
 limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit_default])
 
@@ -96,6 +96,7 @@ app.include_router(registry.router)
 app.include_router(accreditation.router)
 app.include_router(institution.router)
 app.include_router(procedures.router)
+app.include_router(sync.router)
 
 
 
@@ -144,3 +145,16 @@ if web_dir.exists() and (web_dir / "index.html").exists():
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
     app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="frontend_web")
+
+from fastapi.responses import RedirectResponse
+
+@app.get("/", include_in_schema=False)
+async def root():
+    web_index = web_dir / "index.html"
+    if web_index.exists():
+        return FileResponse(str(web_index))
+    return RedirectResponse(url="/api/docs")
+
+@app.get("/docs", include_in_schema=False)
+async def docs_redirect():
+    return RedirectResponse(url="/api/docs")

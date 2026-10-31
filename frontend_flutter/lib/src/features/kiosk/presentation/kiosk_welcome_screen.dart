@@ -9,6 +9,7 @@ import '../../../core/widgets/uniassist_logo.dart';
 import '../../../core/services/page_context_service.dart';
 import '../../auth/application/auth_provider.dart';
 import 'assistant_fab.dart';
+export 'kiosk_inactivity_wrapper.dart';
 
 class KioskWelcomeScreen extends ConsumerStatefulWidget {
   const KioskWelcomeScreen({super.key});
