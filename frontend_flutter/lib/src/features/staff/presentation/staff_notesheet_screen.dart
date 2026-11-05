@@ -356,12 +356,13 @@ class _StaffNotesheetScreenState extends ConsumerState<StaffNotesheetScreen> {
     }
 
     // Check if current logged-in user matches the stage authority
-    final isMyTurn = (currentStage == 'SUPERVISOR' && userRole == 'Supervisor') ||
-                     (currentStage == 'HOD' && userRole == 'HOD') ||
-                     (currentStage == 'HOI' && (userRole == 'Dean' || userRole == 'HOI')) ||
-                     (currentStage == 'PRO_VC' && userRole == 'Pro-VC') ||
-                     (currentStage == 'VC' && userRole == 'Vice Chancellor') ||
-                     userRole == 'Administrator';
+    final uRole = userRole.trim().toLowerCase();
+    final isMyTurn = (currentStage == 'SUPERVISOR' && (uRole == 'supervisor')) ||
+                     (currentStage == 'HOD' && (uRole == 'hod')) ||
+                     (currentStage == 'HOI' && (uRole == 'dean' || uRole == 'hoi')) ||
+                     (currentStage == 'PRO_VC' && (uRole == 'pro-vc' || uRole == 'pro_vc' || uRole == 'provc')) ||
+                     (currentStage == 'VC' && (uRole == 'vice chancellor' || uRole == 'vc')) ||
+                     uRole == 'administrator' || uRole == 'admin';
 
     if (!isMyTurn) {
       return Container(

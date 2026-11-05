@@ -20,13 +20,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isStaffMode = false;
   String _selectedRole = 'Registrar';
 
+  static const Map<String, String> _roleToDefaultUsername = {
+    'Supervisor': 'supervisor_staff',
+    'HOD': 'hod_staff',
+    'Dean': 'dean_staff',
+    'Pro-VC': 'provc_staff',
+    'Vice Chancellor': 'vc_staff',
+    'Registrar': 'registrar_staff',
+    'Finance Department': 'finance_staff',
+    'Accounts Officer': 'accounts_staff',
+    'Librarian': 'librarian_staff',
+    'Hostel Warden': 'warden_staff',
+    'Admission Team': 'admission_staff',
+    'Department Coordinator': 'coordinator_staff',
+    'Administrator': 'admin_user',
+  };
+
   final _staffRoles = const [
+    'Supervisor',
+    'HOD',
+    'Dean',
+    'Pro-VC',
+    'Vice Chancellor',
     'Registrar',
     'Finance Department',
+    'Accounts Officer',
+    'Librarian',
+    'Hostel Warden',
     'Admission Team',
     'Department Coordinator',
-    'Student Services',
+    'Administrator',
   ];
+
+  void _onRoleChanged(String newRole) {
+    setState(() {
+      _selectedRole = newRole;
+      final defaultUser = _roleToDefaultUsername[newRole];
+      if (defaultUser != null) {
+        _staffUsernameController.text = defaultUser;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -101,7 +135,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             selectedRole: _selectedRole,
                             staffRoles: _staffRoles,
                             onModeChanged: (value) => setState(() => _isStaffMode = value),
-                            onRoleChanged: (value) => setState(() => _selectedRole = value),
+                            onRoleChanged: _onRoleChanged,
                             onStudentLogin: _handleStudentLogin,
                             onStaffLogin: _handleStaffLogin,
                           ).animate().fadeIn(delay: 80.ms, duration: 350.ms).slideX(begin: 0.03),
@@ -115,7 +149,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           selectedRole: _selectedRole,
                           staffRoles: _staffRoles,
                           onModeChanged: (value) => setState(() => _isStaffMode = value),
-                          onRoleChanged: (value) => setState(() => _selectedRole = value),
+                          onRoleChanged: _onRoleChanged,
                           onStudentLogin: _handleStudentLogin,
                           onStaffLogin: _handleStaffLogin,
                         ).animate().fadeIn(delay: 80.ms, duration: 350.ms).slideX(begin: 0.03),

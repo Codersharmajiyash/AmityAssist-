@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS students (
 CREATE TABLE IF NOT EXISTS users (     
     username      TEXT PRIMARY KEY,
     name          TEXT NOT NULL,
-    role          TEXT NOT NULL CHECK(role IN ('Faculty', 'Department Coordinator', 'Finance Department', 'Scholarship Department', 'Examination Cell', 'Registrar', 'Admission Team', 'Administrator'))
+    role          TEXT NOT NULL CHECK(role IN ('Faculty', 'Department Coordinator', 'Finance Department', 'Scholarship Department', 'Examination Cell', 'Registrar', 'Admission Team', 'Administrator', 'Supervisor', 'HOD', 'Dean', 'Pro-VC', 'Vice Chancellor', 'Librarian', 'Hostel Warden', 'Accounts Officer'))
 );
 
 CREATE TABLE IF NOT EXISTS campuses (
@@ -676,6 +676,15 @@ _SAMPLE_USERS = [
     ("scholarship_staff", "Scholarship Desk Coordinator", "Scholarship Department"),
     ("exam_staff", "Examination Cell Controller", "Examination Cell"),
     ("coordinator_staff", "Academic Department Coordinator", "Department Coordinator"),
+    ("supervisor_staff", "Dr. Alok Verma (Faculty Supervisor)", "Supervisor"),
+    ("hod_staff", "Prof. R. K. Sharma (Head of Department)", "HOD"),
+    ("dean_staff", "Prof. Sunita Mehta (Dean / Head of Institution)", "Dean"),
+    ("provc_staff", "Prof. Amitabh Chandra (Pro-Vice Chancellor)", "Pro-VC"),
+    ("vc_staff", "Prof. (Dr.) Balvinder Shukla (Vice Chancellor)", "Vice Chancellor"),
+    ("admin_user", "Chief Systems Administrator", "Administrator"),
+    ("librarian_staff", "Central University Librarian", "Librarian"),
+    ("warden_staff", "Chief Hostel Warden", "Hostel Warden"),
+    ("accounts_staff", "Senior Finance & Accounts Officer", "Accounts Officer"),
 ]
 
 _SAMPLE_CAMPUSES = [

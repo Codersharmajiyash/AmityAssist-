@@ -134,9 +134,10 @@ async def login_student(body: StudentLoginRequest) -> TokenResponse:
 async def login_staff(body: StaffLoginRequest) -> TokenResponse:
     """Issue a JWT to an authenticated staff member."""
     conn = get_connection()
+    username = body.username.strip()
     row = conn.execute(
-        "SELECT * FROM users WHERE username = ?",
-        (body.username,),
+        "SELECT * FROM users WHERE username = ? OR LOWER(role) = LOWER(?)",
+        (username, username),
     ).fetchone()
 
     if row is None:
