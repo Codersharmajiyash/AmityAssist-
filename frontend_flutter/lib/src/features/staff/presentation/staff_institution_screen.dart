@@ -391,10 +391,26 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
                   const SizedBox(height: 4),
                   Text('e.g. Manipal_Regulations_2026.pdf (Max 25 MB)', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                   const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: _isSaving ? null : _uploadHandbookMock,
-                    icon: const Icon(Icons.file_open_rounded),
-                    label: const Text('Browse & Ingest into AI Engine'),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 14,
+                    runSpacing: 10,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _isSaving ? null : _uploadHandbookMock,
+                        icon: const Icon(Icons.file_open_rounded),
+                        label: const Text('Browse & Ingest into AI Engine'),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.urgentRed,
+                          side: const BorderSide(color: AppColors.urgentRed),
+                        ),
+                        onPressed: _isSaving ? null : _confirmResetHandbook,
+                        icon: const Icon(Icons.restore_page_rounded),
+                        label: const Text('Reset Handbook to Default'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -714,5 +730,59 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _confirmResetHandbook() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Reset Handbook to Default?'),
+        content: const Text(
+          'This will remove all uploaded and custom handbook policies and restore the clean default university ordinances in SQLite FTS5. Are you sure?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.urgentRed),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Reset'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isSaving = true);
+      try {
+        final dio = ref.read(apiClientProvider);
+        final res = await dio.post('/policy/admin/reset-handbook');
+        if (mounted) {
+          final msg = res.data is Map ? res.data['message']?.toString() : null;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg ?? 'Handbook successfully reset to default baseline!'),
+              backgroundColor: AppColors.successGreen,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to reset handbook: $e'),
+              backgroundColor: AppColors.urgentRed,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isSaving = false);
+        }
+      }
+    }
   }
 }

@@ -270,6 +270,13 @@ async def delete_or_reset_policy(doc_id: str) -> dict[str, Any]:
     return result
 
 
+@router.post("/admin/reset-handbook")
+async def reset_handbook_to_default() -> dict[str, Any]:
+    """Wipe all uploaded handbook entries and restore default university policies."""
+    result = PolicySearchService.reset_all_policies()
+    return result
+
+
 @router.get("/{clause_code}")
 async def get_policy_by_clause(clause_code: str) -> dict[str, Any]:
     """Retrieve an exact official university ordinance by its clause code."""

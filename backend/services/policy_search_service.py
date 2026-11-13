@@ -821,6 +821,47 @@ class PolicySearchService:
             return {"status": "deleted", "message": f"Custom policy '{clean_doc}' deleted successfully."}
 
     @classmethod
+    def reset_all_policies(cls) -> dict[str, Any]:
+        """Purge all custom/ingested handbook policies and restore default seed ordinances."""
+        conn = get_connection()
+        conn.execute("DELETE FROM university_policies")
+        conn.execute("DELETE FROM policy_fts")
+        conn.commit()
+
+        now = datetime.utcnow().isoformat()
+        for p in DEFAULT_POLICIES:
+            conn.execute(
+                """
+                INSERT INTO university_policies (
+                    doc_id, category, title, clause_code, content,
+                    action_url, action_label, is_custom, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    p["doc_id"], p["category"], p["title"], p["clause_code"],
+                    p["content"], p.get("action_url", "/forms"),
+                    p.get("action_label", "View Policy"), now
+                )
+            )
+            conn.execute(
+                """
+                INSERT INTO policy_fts (doc_id, category, title, clause_code, content, action_url, action_label)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    p["doc_id"], p["category"], p["title"], p["clause_code"],
+                    p["content"], p.get("action_url", "/forms"),
+                    p.get("action_label", "View Policy")
+                )
+            )
+        conn.commit()
+        return {
+            "status": "success",
+            "message": f"Successfully reset handbook! Restored {len(DEFAULT_POLICIES)} baseline university policies.",
+            "total_restored": len(DEFAULT_POLICIES)
+        }
+
+    @classmethod
     def search_policies(
         cls,
         query: str,
