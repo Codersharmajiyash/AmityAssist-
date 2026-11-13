@@ -1199,8 +1199,85 @@ class PolicySearchService:
         word_count = len(words)
 
         # =========================================================================
-        # 00-SECURITY & PRIVACY GUARD: Student PII, Passwords, Mass Dumps
+        # 00-DATABASE CUSTOM PROCEDURES CHECK: Match active procedures in SQLite first
         # =========================================================================
+        matched_custom_proc = None
+        try:
+            from .procedure_service import ProcedureService
+            active_procs = ProcedureService.list_procedures(active_only=False)
+            q_tokens = [w for w in q_lower.split() if len(w) >= 3 and w not in ("want", "have", "need", "give", "please", "with", "from", "where", "what", "which", "how", "tell", "show", "chahiye")]
+            # Multilingual keyword bridge: map Hindi words to procedure concepts
+            if "कार्ड" in q_lower or "card" in q_lower:
+                q_tokens.append("card")
+            if "पुस्तकालय" in q_lower or "लाइब्रेरी" in q_lower or "library" in q_lower:
+                q_tokens.append("library")
+            if "हॉस्टल" in q_lower or "hostel" in q_lower:
+                q_tokens.append("hostel")
+
+            for cp in active_procs:
+                cp_title = (cp.get("title") or "").lower()
+                cp_dept = (cp.get("department") or "").lower()
+                if cp_title in q_lower or any(t in cp_title for t in q_tokens) or any(t in cp_dept for t in q_tokens):
+                    matched_custom_proc = cp
+                    break
+        except Exception:
+            matched_custom_proc = None
+
+        if matched_custom_proc:
+            cp_title = matched_custom_proc.get("title", "Configured Procedure")
+            cp_dept = matched_custom_proc.get("department", "University Desk")
+            cp_sla = matched_custom_proc.get("sla_days", 3)
+            cp_docs = ", ".join(matched_custom_proc.get("required_docs") or ["No physical documents required (100% Digital)"])
+            cp_steps = matched_custom_proc.get("steps") or []
+            total_steps = len(cp_steps) or 1
+
+            if cp_steps:
+                steps_str = "\n".join([f"   • Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')}) - SLA: {s.get('sla_days', 1)} day(s)" for idx, s in enumerate(cp_steps)])
+                voice_steps_en = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} at {s.get('responsible_desk', 'Desk')}" for idx, s in enumerate(cp_steps)])
+                voice_steps_latn = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} me {s.get('title')}" for idx, s in enumerate(cp_steps)])
+                voice_steps_hi = "। ".join([f"चरण {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} में {s.get('title')}" for idx, s in enumerate(cp_steps)])
+            else:
+                steps_str = "   • Step 1: Initial Desk Review & Approval"
+                voice_steps_en = "Step 1: Initial Desk Review and Approval"
+                voice_steps_latn = "Pehla step hai Initial Desk Review aur Approval"
+                voice_steps_hi = "पहला चरण: प्रारंभिक डेस्क समीक्षा एवं अनुमोदन"
+
+            if language == "hi-IN":
+                answer = (
+                    f"{student_name}, {cp_title} ({cp_dept}) के लिए आधिकारिक प्रक्रिया के {total_steps} चरण:\n\n"
+                    f"1. आवश्यक दस्तावेज: {cp_docs}\n"
+                    f"2. प्रक्रिया के चरण:\n{steps_str}\n"
+                    f"3. समाधान समयसीमा (SLA): {cp_sla} कार्य दिवस।"
+                )
+                voice_text = f"{student_name}, {cp_title} की पूरी प्रक्रिया में कुल {total_steps} चरण हैं। {voice_steps_hi}। यह {cp_sla} कार्य दिवसों में पूरी होती है।"
+            elif language == "hi-Latn":
+                answer = (
+                    f"{student_name}, {cp_title} ({cp_dept}) ke liye official procedure ke {total_steps} steps:\n\n"
+                    f"1. Required Documents: {cp_docs}\n"
+                    f"2. Process Steps:\n{steps_str}\n"
+                    f"3. SLA Timeline: {cp_sla} working days."
+                )
+                voice_text = f"{student_name}, {cp_title} ke total {total_steps} steps hain. {voice_steps_latn}. Iska processing SLA {cp_sla} working days hai."
+            else:
+                answer = (
+                    f"{student_name}, here is the official procedure for {cp_title} ({cp_dept}):\n\n"
+                    f"1. Required Documents: {cp_docs}\n"
+                    f"2. Approval Workflow ({total_steps} step(s)):\n{steps_str}\n"
+                    f"3. Processing SLA: {cp_sla} working day(s)."
+                )
+                voice_text = f"{student_name}, the complete procedure for {cp_title} consists of {total_steps} steps. {voice_steps_en}. The total SLA is {cp_sla} working days."
+
+            return {
+                "answer": answer,
+                "domain": cp_dept,
+                "citations": [],
+                "recommended_action": f"View {cp_title}",
+                "action_url": "/services",
+                "voice_speech_text": voice_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
         is_pii_query = (
             any(w in q_lower for w in [
                 "stu001", "stu002", "stu003", "stu004", "stu005", "aisha", "aisha sharma", "rahul sharma", "other student", "another student",

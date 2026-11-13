@@ -61,10 +61,15 @@ def sanitize_and_verify_response(text: str) -> str:
 
     # 0. Intercept LLM meta-roleplay preambles & conversational scenario setups
     meta_patterns = [
+        r"^here is the updated conversation:.*?(counselor response:|counselor:)\s*",
+        r"^here is an updated conversation:.*?(counselor response:|counselor:)\s*",
+        r"^user query:.*?(counselor response:|counselor:)\s*",
+        r"^here is the updated conversation:[^\n:]*:\s*",
         r"^it seems like you're trying to create a scenario[^\n.!?]*[.!?]?\s*",
         r"^i'll provide a possible response[^\n.!?]*[.!?]?\s*",
         r"^here is a possible response[^\n.!?]*[.!?]?\s*",
         r"^response:\s*(counselor:)?\s*",
+        r"^counselor response:\s*",
         r"^counselor:\s*",
         r"^as an ai[^\n.!?]*[.!?]?\s*",
     ]
@@ -306,21 +311,28 @@ def generate_local_policy_answer(
                     steps_summary = "; ".join([f"Step {s['step_number']}: {s['title']} ({s['department']})" for s in live_wth_steps])
                     facts_text += f"\n- Live Clearance Workflow Steps ({len(live_wth_steps)} stages): {steps_summary}"
 
-            active_procs = ProcedureService.list_procedures(active_only=True)
+            active_procs = ProcedureService.list_procedures(active_only=False)
+            matched_custom = None
+            q_tokens = [w for w in q_lower_check.split() if len(w) >= 3 and w not in ("want", "have", "need", "give", "with", "from", "where", "what", "which", "how")]
             for ap in active_procs:
                 p_title = (ap.get("title") or "").lower()
-                if p_title and (p_title in q_lower_check or any(w in q_lower_check for w in p_title.split() if len(w) >= 4)):
-                    step_list = ap.get("steps") or []
-                    s_desc = "; ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')})" for idx, s in enumerate(step_list)]) if step_list else "Standard administrative review"
-                    docs_desc = ", ".join(ap.get("required_docs") or ["None"])
-                    facts_text += (
-                        f"\nOFFICIAL CONFIGURED PROCEDURE ({ap.get('title')}):\n"
-                        f"- Department: {ap.get('department', 'University Desk')}\n"
-                        f"- Total Steps ({len(step_list)}): {s_desc}\n"
-                        f"- SLA: {ap.get('sla_days', 3)} working days\n"
-                        f"- Required Documents: {docs_desc}\n"
-                    )
+                p_dept = (ap.get("department") or "").lower()
+                if p_title and (p_title in q_lower_check or any(token in p_title for token in q_tokens) or any(token in p_dept for token in q_tokens)):
+                    matched_custom = ap
                     break
+
+            if matched_custom:
+                step_list = matched_custom.get("steps") or []
+                s_desc = "; ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')})" for idx, s in enumerate(step_list)]) if step_list else "Standard administrative review"
+                docs_desc = ", ".join(matched_custom.get("required_docs") or ["None required"])
+                facts_text = (
+                    f"OFFICIAL CONFIGURED PROCEDURE ({matched_custom.get('title')}):\n"
+                    f"- Department: {matched_custom.get('department', 'University Desk')}\n"
+                    f"- Total Steps ({len(step_list)}): {s_desc}\n"
+                    f"- SLA: {matched_custom.get('sla_days', 3)} working days\n"
+                    f"- Required Documents: {docs_desc}\n\n"
+                    f"VERIFIED ORDINANCES:\n{facts_text}"
+                )
         except Exception:
             pass
 
