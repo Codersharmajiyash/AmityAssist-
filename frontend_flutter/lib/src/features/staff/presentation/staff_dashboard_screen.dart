@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../auth/application/auth_provider.dart';
 import '../application/staff_provider.dart';
+import '../../../core/api_client.dart';
 
 class StaffDashboardScreen extends ConsumerWidget {
   const StaffDashboardScreen({super.key});
@@ -184,27 +185,43 @@ class StaffDashboardScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
-                            ),
-                            child: Row(
-                              children: const [
-                                Icon(Icons.sync_rounded, size: 16, color: Color(0xFF2563EB)),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Auto-Sync Active',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF2563EB),
-                                  ),
+                          Row(
+                            children: [
+                              FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFFD97706),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
-                              ],
-                            ),
+                                icon: const Icon(Icons.campaign_rounded, size: 18),
+                                label: const Text('Publish Notice', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                onPressed: () => _showPublishNoticeDialog(context, ref),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                                ),
+                                child: Row(
+                                  children: const [
+                                    Icon(Icons.sync_rounded, size: 16, color: Color(0xFF2563EB)),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Auto-Sync Active',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF2563EB),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ).animate().fadeIn().slideX(begin: -0.02),
@@ -299,6 +316,16 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.verified_rounded,
                               cardColor: const Color(0xFF7C3AED),
                               onTap: () => context.push('/staff/accreditation'),
+                            ),
+                            _buildModernActionCard(
+                              context: context,
+                              title: 'Campus Notices',
+                              value: 'Broadcast',
+                              subtitle: 'Publish & Target Student Circulars',
+                              tag: 'DISPATCH',
+                              icon: Icons.campaign_rounded,
+                              cardColor: const Color(0xFFD97706),
+                              onTap: () => _showPublishNoticeDialog(context, ref),
                             ),
                             if (isAdmin)
                               _buildModernActionCard(
@@ -690,6 +717,258 @@ class StaffDashboardScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _showPublishNoticeDialog(BuildContext context, WidgetRef ref) {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+    String selectedCategory = 'academics';
+    String selectedBranch = 'ALL';
+    int selectedSemester = 0;
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              titlePadding: const EdgeInsets.all(24),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+              actionsPadding: const EdgeInsets.all(20),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD97706).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.campaign_rounded, color: Color(0xFFD97706), size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Publish Campus Notice', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                        SizedBox(height: 2),
+                        Text('Broadcast official announcements to students in real-time', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 560),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 8),
+                      // Notice Title
+                      const Text('Notice Title', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: titleController,
+                        decoration: InputDecoration(
+                          hintText: 'e.g., Mid-Semester Examination Schedule Announced',
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Category & Target Branch in a Row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Category', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  value: selectedCategory,
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8FAFC),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 'exam', child: Text('Examinations & Timetable')),
+                                    DropdownMenuItem(value: 'academics', child: Text('Academic Operations')),
+                                    DropdownMenuItem(value: 'scholarship', child: Text('Scholarships & Financial Aid')),
+                                    DropdownMenuItem(value: 'internship', child: Text('Internship & Placements')),
+                                    DropdownMenuItem(value: 'general', child: Text('General Campus Notice')),
+                                  ],
+                                  onChanged: (val) => setDialogState(() => selectedCategory = val ?? 'academics'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Target Branch', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                const SizedBox(height: 6),
+                                DropdownButtonFormField<String>(
+                                  value: selectedBranch,
+                                  decoration: InputDecoration(
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8FAFC),
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  ),
+                                  items: const [
+                                    DropdownMenuItem(value: 'ALL', child: Text('All Branches')),
+                                    DropdownMenuItem(value: 'CSE', child: Text('Computer Science (CSE)')),
+                                    DropdownMenuItem(value: 'ECE', child: Text('Electronics (ECE)')),
+                                    DropdownMenuItem(value: 'ME', child: Text('Mechanical (ME)')),
+                                    DropdownMenuItem(value: 'CIVIL', child: Text('Civil Engineering')),
+                                    DropdownMenuItem(value: 'IT', child: Text('Information Tech (IT)')),
+                                    DropdownMenuItem(value: 'BBA', child: Text('Management (BBA)')),
+                                    DropdownMenuItem(value: 'MBA', child: Text('Management (MBA)')),
+                                  ],
+                                  onChanged: (val) => setDialogState(() => selectedBranch = val ?? 'ALL'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Target Semester
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Target Semester', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(height: 6),
+                          DropdownButtonFormField<int>(
+                            value: selectedSemester,
+                            decoration: InputDecoration(
+                              filled: true,
+                              fillColor: const Color(0xFFF8FAFC),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: 0, child: Text('All Semesters (Universal Broadcast)')),
+                              DropdownMenuItem(value: 1, child: Text('Semester 1')),
+                              DropdownMenuItem(value: 2, child: Text('Semester 2')),
+                              DropdownMenuItem(value: 3, child: Text('Semester 3')),
+                              DropdownMenuItem(value: 4, child: Text('Semester 4')),
+                              DropdownMenuItem(value: 5, child: Text('Semester 5')),
+                              DropdownMenuItem(value: 6, child: Text('Semester 6')),
+                              DropdownMenuItem(value: 7, child: Text('Semester 7')),
+                              DropdownMenuItem(value: 8, child: Text('Semester 8')),
+                            ],
+                            onChanged: (val) => setDialogState(() => selectedSemester = val ?? 0),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Notice Body / Content
+                      const Text('Notice Announcement Body', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: contentController,
+                        maxLines: 5,
+                        decoration: InputDecoration(
+                          hintText: 'Enter full circular text, instructions, and deadlines...',
+                          filled: true,
+                          fillColor: const Color(0xFFF8FAFC),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                          contentPadding: const EdgeInsets.all(14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSubmitting ? null : () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFD97706),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  icon: isSubmitting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.send_rounded, size: 16),
+                  label: Text(isSubmitting ? 'Publishing...' : 'Publish Notice'),
+                  onPressed: isSubmitting
+                      ? null
+                      : () async {
+                          final title = titleController.text.trim();
+                          final content = contentController.text.trim();
+                          if (title.isEmpty || content.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please fill in both the notice title and announcement content.'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() => isSubmitting = true);
+                          try {
+                            final dio = ref.read(apiClientProvider);
+                            await dio.post(
+                              '/student/notices',
+                              data: {
+                                'title': title,
+                                'content': content,
+                                'target_branch': selectedBranch,
+                                'target_semester': selectedSemester,
+                                'category': selectedCategory,
+                              },
+                            );
+
+                            if (context.mounted) {
+                              Navigator.pop(dialogCtx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Notice "$title" published successfully to student feed!'),
+                                  backgroundColor: const Color(0xFF10B981),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } catch (err) {
+                            setDialogState(() => isSubmitting = false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to publish notice: $err'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

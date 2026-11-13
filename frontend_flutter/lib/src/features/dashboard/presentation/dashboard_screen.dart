@@ -96,11 +96,11 @@ class DashboardScreen extends ConsumerWidget {
     if (modules['withdrawal'] ?? true) {
       list.add(
         _ServiceTile(
-          title: 'Withdrawal',
-          subtitle: 'Guidance, checklist, forms, status',
-          icon: Icons.assignment_return_rounded,
+          title: 'Procedures',
+          subtitle: 'Official withdrawal, clearance workflows & certificates',
+          icon: Icons.account_tree_rounded,
           color: AppColors.danger,
-          route: '/withdrawal',
+          route: '/procedures',
         ),
       );
     }

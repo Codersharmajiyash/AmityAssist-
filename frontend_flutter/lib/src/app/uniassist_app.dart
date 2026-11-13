@@ -9,6 +9,7 @@ import '../features/kiosk/presentation/assistant_fab.dart';
 import '../core/services/page_context_service.dart';
 import '../features/kiosk/presentation/kiosk_welcome_screen.dart';
 import '../features/services/presentation/guest_services_screen.dart';
+import '../features/services/presentation/procedures_catalog_screen.dart';
 import '../features/auth/application/auth_provider.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/chat/presentation/chat_screen.dart';
@@ -57,6 +58,7 @@ class UniAssistApp extends ConsumerWidget {
         GoRoute(path: '/academics', builder: (context, state) => const _KioskSession(route: '/academics', child: AcademicsScreen())),
         GoRoute(path: '/scholarship', builder: (context, state) => const _KioskSession(route: '/scholarship', child: ScholarshipScreen())),
         GoRoute(path: '/grievance', builder: (context, state) => const _KioskSession(route: '/grievance', child: GrievanceScreen())),
+        GoRoute(path: '/procedures', builder: (context, state) => const _KioskSession(route: '/procedures', child: ProceduresCatalogScreen())),
         GoRoute(path: '/withdrawal', builder: (context, state) => const _KioskSession(route: '/withdrawal', child: WithdrawalHomeScreen())),
         GoRoute(path: '/withdrawal/flow', builder: (context, state) => const _KioskSession(route: '/withdrawal/flow', child: WithdrawalFlowScreen())),
         GoRoute(path: '/notifications', builder: (context, state) => const _KioskSession(route: '/notifications', child: NotificationsScreen())),

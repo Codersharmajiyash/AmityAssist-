@@ -30,7 +30,7 @@ class GuestServicesScreen extends ConsumerWidget {
           icon: Icons.account_tree_outlined,
           color: AppColors.primary,
           delay: 200,
-          route: '/withdrawal',
+          route: '/procedures',
         ),
       );
     }

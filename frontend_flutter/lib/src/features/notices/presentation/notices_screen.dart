@@ -12,7 +12,17 @@ final noticesProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((
   final studentId = ref.watch(authProvider).studentId;
   final cache = ref.watch(offlineCacheProvider);
 
-  if (studentId == null) return [];
+  if (studentId == null) {
+    try {
+      final response = await dio.get('/services/notices');
+      final data = (response.data['notices'] as List? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      return data;
+    } catch (_) {
+      return [];
+    }
+  }
 
   try {
     final response = await dio.get('/student/notices', queryParameters: {
@@ -92,7 +102,7 @@ class _NoticeTile extends StatelessWidget {
     final title = notice['title'] ?? 'Notice';
     final body = notice['body'] ?? notice['content'] ?? '';
     final category = notice['category'] ?? '';
-    final date = notice['date'] ?? notice['created_at'] ?? '';
+    final date = notice['date'] ?? notice['created_at'] ?? notice['timestamp'] ?? '';
     final targetBranch = notice['target_branch'] ?? '';
 
     return Card(

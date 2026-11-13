@@ -6,6 +6,7 @@ notices, grievances, internships, and back-paper registration.
 """
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from ..database.connection import get_connection
 from ..models.schemas import BackpaperRequest, GrievanceCreate, ScholarshipApply
 from ..security.rbac import require_student_access
@@ -79,6 +80,63 @@ async def get_notices_by_path(student_id: str, request: Request = None):
     """Compatibility route for existing callers that use path parameters."""
     require_student_access(request, student_id)
     return _fetch_notices(student_id)
+
+
+class NoticeCreate(BaseModel):
+    title: str = Field(..., min_length=3, max_length=200)
+    content: str = Field(..., min_length=5, max_length=5000)
+    target_branch: str = Field("ALL", max_length=50)
+    target_semester: int = Field(0, ge=0, le=12)
+    category: str = Field("general", max_length=50)
+
+
+def _normalize_category(cat: str) -> str:
+    c = (cat or "").strip().lower()
+    if "exam" in c:
+        return "exam"
+    if "scholar" in c:
+        return "scholarship"
+    if "intern" in c:
+        return "internship"
+    if "acad" in c:
+        return "academics"
+    return "general"
+
+
+@router.post("/notices")
+async def create_notice(body: NoticeCreate, request: Request = None):
+    """Create and broadcast a new campus notice to students."""
+    conn = get_connection()
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    norm_cat = _normalize_category(body.category)
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO notices (title, content, target_branch, target_semester, category, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (
+            body.title.strip(),
+            body.content.strip(),
+            body.target_branch.strip().upper(),
+            body.target_semester,
+            norm_cat,
+            now_iso,
+        ),
+    )
+    conn.commit()
+    new_id = cursor.lastrowid
+    return {
+        "status": "success",
+        "message": "Notice published successfully.",
+        "notice": {
+            "id": new_id,
+            "title": body.title.strip(),
+            "content": body.content.strip(),
+            "target_branch": body.target_branch.strip().upper(),
+            "target_semester": body.target_semester,
+            "category": norm_cat,
+            "timestamp": now_iso,
+        },
+    }
 
 
 # ── Examinations & Results ─────────────────────────────────────────────────────
