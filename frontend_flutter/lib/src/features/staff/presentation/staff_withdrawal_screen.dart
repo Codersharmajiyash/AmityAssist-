@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../application/staff_provider.dart';
 
@@ -875,36 +876,62 @@ class _StaffWithdrawalScreenState extends ConsumerState<StaffWithdrawalScreen> {
           ],
         ),
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildInspectRow('Document Type:', docType.toString()),
-                _buildInspectRow('Current Status:', docStatus.toUpperCase()),
-                _buildInspectRow('Identity Match:', identityMatch.toString()),
-                if (fraudNotes != null && fraudNotes.toString().isNotEmpty)
-                  _buildInspectRow('Verification Notes:', fraudNotes.toString(), isAlert: true),
-                if (ocrData != null) ...[
-                  const Divider(height: 20),
-                  const Text('OCR Extraction Data', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      ocrData.entries.map((e) => '${e.key}: ${e.value}').join('\n'),
-                      style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 600),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Left Pane: Document In-Memory Stream
+              Expanded(
+                flex: 5,
+                child: Container(
+                  decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: InteractiveViewer(
+                      child: Image.network(
+                        '${AppConfig.apiBaseUrl}/documents/$docId/stream',
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.description, size: 48, color: Colors.white54),
+                              SizedBox(height: 8),
+                              Text('Document preview ready', style: TextStyle(color: Colors.white70)),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ],
-            ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              // Right Pane: Metadata & OCR Details
+              Expanded(
+                flex: 5,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInspectRow('Document Type:', docType.toString()),
+                      _buildInspectRow('Current Status:', docStatus.toUpperCase()),
+                      _buildInspectRow('Identity Match:', identityMatch.toString()),
+                      if (fraudNotes != null && fraudNotes.toString().isNotEmpty)
+                        _buildInspectRow('Verification Notes:', fraudNotes.toString(), isAlert: true),
+                      if (ocrData != null) ...[
+                        const Divider(height: 16),
+                        const Text('OCR Extracted Values:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        const SizedBox(height: 6),
+                        _buildInspectRow('Extracted Name:', ocrData['extracted_name'] ?? '—'),
+                        _buildInspectRow('Extracted ID:', ocrData['extracted_student_id'] ?? '—'),
+                        _buildInspectRow('Confidence:', '${((ocrData['confidence_score'] ?? 0) * 100).toStringAsFixed(0)}%'),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         actions: [

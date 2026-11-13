@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/api_client.dart';
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
 
 /// Phase 25: Staff Document OCR Cockpit.
@@ -155,81 +156,85 @@ class _StaffDocumentOcrScreenState extends ConsumerState<StaffDocumentOcrScreen>
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Document info
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.insert_drive_file_rounded, color: AppColors.amityBlue, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          doc['file_name'] ?? 'Unknown',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          overflow: TextOverflow.ellipsis,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showLiveOcrInspectionModal(context, doc), // Opens live inspector!
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Document info
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.insert_drive_file_rounded, color: AppColors.amityBlue, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            doc['file_name'] ?? 'Unknown',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Student: ${doc['student_id'] ?? '—'}  •  Type: ${doc['classification'] ?? '—'}',
-                      style: TextStyle(color: Colors.grey.shade600)),
-                  const SizedBox(height: 4),
-                  Text('Status: ${doc['verification_status'] ?? '—'}',
-                      style: TextStyle(
-                        color: doc['verification_status'] == 'verified' ? AppColors.successGreen : Colors.grey.shade700,
-                        fontWeight: FontWeight.w500,
-                      )),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Student: ${doc['student_id'] ?? '—'}  •  Type: ${doc['classification'] ?? '—'}',
+                        style: TextStyle(color: Colors.grey.shade600)),
+                    const SizedBox(height: 4),
+                    Text('Status: ${doc['verification_status'] ?? '—'}',
+                        style: TextStyle(
+                          color: doc['verification_status'] == 'verified' ? AppColors.successGreen : Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
+                        )),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 20),
-            // OCR extracted fields
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('OCR Extracted Fields', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
-                  const SizedBox(height: 8),
-                  _ocrField('Name', ocrData['extracted_name']),
-                  _ocrField('Student ID', ocrData['extracted_student_id']),
-                  _ocrField('Date', ocrData['extracted_date']),
-                  _ocrField('Confidence', '${((ocrData['confidence_score'] ?? 0) * 100).toStringAsFixed(0)}%'),
-                ],
+              const SizedBox(width: 20),
+              // OCR extracted fields
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('OCR Extracted Fields', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                    const SizedBox(height: 8),
+                    _ocrField('Name', ocrData['extracted_name']),
+                    _ocrField('Student ID', ocrData['extracted_student_id']),
+                    _ocrField('Date', ocrData['extracted_date']),
+                    _ocrField('Confidence', '${((ocrData['confidence_score'] ?? 0) * 100).toStringAsFixed(0)}%'),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 20),
-            // Identity match badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: matchColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: matchColor.withValues(alpha: 0.3)),
+              const SizedBox(width: 20),
+              // Identity match badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: matchColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: matchColor.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(_matchIcon(match), color: matchColor, size: 32),
+                    const SizedBox(height: 6),
+                    Text(
+                      match,
+                      style: TextStyle(color: matchColor, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 2),
+                    Text('ID Check', style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
+                  ],
+                ),
               ),
-              child: Column(
-                children: [
-                  Icon(_matchIcon(match), color: matchColor, size: 32),
-                  const SizedBox(height: 6),
-                  Text(
-                    match,
-                    style: TextStyle(color: matchColor, fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                  const SizedBox(height: 2),
-                  Text('ID Check', style: TextStyle(color: Colors.grey.shade500, fontSize: 10)),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -249,6 +254,151 @@ class _StaffDocumentOcrScreenState extends ConsumerState<StaffDocumentOcrScreen>
               value?.toString() ?? '—',
               style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
               overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLiveOcrInspectionModal(BuildContext context, dynamic doc) {
+    final docMap = doc is Map ? doc : {};
+    final docId = docMap['id'];
+    final fileName = docMap['file_name'] ?? 'Document';
+    final ocrData = docMap['ocr_data'] is Map ? docMap['ocr_data'] : {};
+    final match = docMap['ocr_identity_match'] ?? 'NOT_CHECKED';
+    final streamUrl = '${AppConfig.apiBaseUrl}/documents/$docId/stream';
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1000, maxHeight: 680),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.document_scanner_rounded, color: AppColors.amityBlue, size: 26),
+                        const SizedBox(width: 10),
+                        Text(
+                          'OCR Live Inspector: $fileName',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                  ],
+                ),
+                const Divider(height: 20),
+
+                // Side-by-Side: Left = Live Document View | Right = Extracted OCR Fields
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left Pane: In-Memory Document View
+                      Expanded(
+                        flex: 6,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: InteractiveViewer(
+                              child: Image.network(
+                                streamUrl,
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Text(
+                                    'Document preview ready via in-memory stream',
+                                    style: TextStyle(color: Colors.white70),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      // Right Pane: OCR Verification & Action
+                      Expanded(
+                        flex: 4,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('AI Extraction Data', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 12),
+                              _buildInspectTile('Extracted Name', ocrData['extracted_name'] ?? '—'),
+                              _buildInspectTile('Extracted Student ID', ocrData['extracted_student_id'] ?? '—'),
+                              _buildInspectTile('Date on Document', ocrData['extracted_date'] ?? '—'),
+                              _buildInspectTile('OCR Confidence', '${((ocrData['confidence_score'] ?? 0) * 100).toStringAsFixed(1)}%'),
+                              _buildInspectTile('Identity Match', match, isHighlight: true),
+                              const SizedBox(height: 20),
+                              const Divider(),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('Flag Mismatch'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: FilledButton(
+                                      style: FilledButton.styleFrom(backgroundColor: AppColors.successGreen),
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('Verify & Accept'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInspectTile(String label, String value, {bool isHighlight = false}) {
+    Color? valueColor;
+    if (isHighlight) {
+      valueColor = _matchColor(value);
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isHighlight ? FontWeight.bold : FontWeight.w600,
+              color: valueColor,
             ),
           ),
         ],

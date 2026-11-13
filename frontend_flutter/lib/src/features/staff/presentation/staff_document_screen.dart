@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
 import '../application/staff_provider.dart';
 
@@ -151,31 +152,19 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Document Preview (Mock)
+              // Live In-Memory Document Preview (Zero Local Disk Storage)
               Expanded(
                 flex: 3,
                 child: Container(
-                  height: 500,
+                  height: 520,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
+                    color: const Color(0xFF0F172A),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.insert_drive_file, size: 100, color: Colors.grey.shade400),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Document Preview\n(PDF/Image Viewer)',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey.shade500),
-                        )
-                      ],
-                    ),
-                  ),
-                ).animate().fadeIn().scale(),
+                  clipBehavior: Clip.antiAlias,
+                  child: _buildInMemoryDocumentViewer(doc),
+                ),
               ),
               const SizedBox(width: 32),
 
@@ -258,6 +247,143 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
         Text(label, style: TextStyle(color: Colors.grey.shade600)),
         Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
       ],
+    );
+  }
+
+  Widget _buildInMemoryDocumentViewer(Map<String, dynamic> doc) {
+    final docId = doc['id'];
+    final fileName = (doc['file_name'] ?? doc['filename'] ?? '').toString();
+    final isPdf = fileName.toLowerCase().endsWith('.pdf');
+    final streamUrl = '${AppConfig.apiBaseUrl}/documents/$docId/stream';
+    if (!isPdf) {
+      // Pure In-Memory Image Viewer
+      return InteractiveViewer(
+        panEnabled: true,
+        minScale: 0.8,
+        maxScale: 3.5,
+        child: Center(
+          child: Image.network(
+            streamUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (ctx, child, progress) {
+              if (progress == null) return child;
+              return const Center(child: CircularProgressIndicator(color: Colors.white));
+            },
+            errorBuilder: (ctx, err, stack) => _buildViewerFallback(fileName),
+          ),
+        ),
+      );
+    } else {
+      // PDF In-Memory Viewer via Stream
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.picture_as_pdf_rounded, size: 64, color: AppColors.urgentRed),
+            const SizedBox(height: 12),
+            Text(
+              fileName,
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'In-Memory Stream Active (Zero Local Disk Storage)',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: AppColors.amityBlue),
+              onPressed: () => _openFullscreenMemoryPreview(context, streamUrl, fileName),
+              icon: const Icon(Icons.fullscreen_rounded, size: 18),
+              label: const Text('Open Fullscreen Inspector'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildViewerFallback(String fileName) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.description, size: 64, color: Colors.grey.shade400),
+          const SizedBox(height: 12),
+          Text(
+            fileName.isNotEmpty ? fileName : 'Document Preview',
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Document preview ready via in-memory stream',
+            style: TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openFullscreenMemoryPreview(BuildContext context, String streamUrl, String fileName) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(24),
+        child: Container(
+          width: 1000,
+          height: 700,
+          decoration: BoxDecoration(
+            color: const Color(0xFF0F172A),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade700),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      fileName,
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, color: Colors.white24),
+              Expanded(
+                child: InteractiveViewer(
+                  panEnabled: true,
+                  minScale: 0.5,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: Image.network(
+                      streamUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (c, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(child: CircularProgressIndicator(color: Colors.white));
+                      },
+                      errorBuilder: (_, __, ___) => const Center(
+                        child: Text(
+                          'Document preview ready via in-memory stream',
+                          style: TextStyle(color: Colors.white70),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

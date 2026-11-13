@@ -24,3 +24,8 @@ class ApiConfig {
     return '$serverUrl$cleanPath';
   }
 }
+
+class AppConfig {
+  static String get apiBaseUrl => ApiConfig.apiUrl;
+}
+

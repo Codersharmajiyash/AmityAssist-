@@ -10,6 +10,7 @@ Phase 25 upgrade:
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
+from fastapi.responses import FileResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from pydantic import BaseModel
@@ -173,6 +174,42 @@ async def get_all_documents_audit():
         result.append(d)
     
     return result
+
+
+# ── Document Stream (Phase 3: In-Memory Zero-Disk Inspection) ───────────────
+@router.get("/{doc_id}/stream")
+async def stream_document(doc_id: int):
+    """
+    Stream document bytes directly to client memory without forcing a file download.
+    Enables in-memory zero-disk inspection for staff.
+    """
+    conn = get_connection()
+    doc = conn.execute(
+        "SELECT id, file_path, file_name FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    path_str = doc["file_path"]
+    file_path = Path(path_str) if path_str else None
+
+    # Check if physical file exists on server
+    if not file_path or not file_path.exists():
+        # Fallback to check UPLOAD_DIR with file_name
+        fallback_path = UPLOAD_DIR / doc["file_name"]
+        if fallback_path.exists():
+            file_path = fallback_path
+        else:
+            raise HTTPException(status_code=404, detail="Underlying document file not found on disk.")
+    ext = file_path.suffix.lower()
+    media_type = "application/pdf" if ext == ".pdf" else (
+        "image/png" if ext == ".png" else "image/jpeg"
+    )
+    return FileResponse(
+        path=str(file_path),
+        media_type=media_type,
+        filename=doc["file_name"],
+        headers={"Content-Disposition": "inline"},  # Renders in-memory in browser/viewer
+    )
 
 
 # ── Document Verification ───────────────────────────────────────────────────────
