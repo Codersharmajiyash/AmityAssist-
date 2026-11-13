@@ -12,6 +12,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Query, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel, Field
 
+from ..security.rbac import require_any_role
 from ..services.policy_search_service import PolicySearchService, DEFAULT_POLICIES
 
 
@@ -271,8 +272,11 @@ async def delete_or_reset_policy(doc_id: str) -> dict[str, Any]:
 
 
 @router.post("/admin/reset-handbook")
-async def reset_handbook_to_default() -> dict[str, Any]:
-    """Wipe all uploaded handbook entries and restore default university policies."""
+async def reset_handbook_to_default(request: Request) -> dict[str, Any]:
+    """Wipe all uploaded handbook entries and restore default university policies.
+    Strictly restricted to Super Administrator.
+    """
+    require_any_role(request, {"Administrator"})
     result = PolicySearchService.reset_all_policies()
     return result
 

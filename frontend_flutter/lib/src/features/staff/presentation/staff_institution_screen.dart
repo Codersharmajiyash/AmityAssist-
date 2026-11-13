@@ -9,6 +9,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import '../../auth/application/auth_provider.dart';
 
 class StaffInstitutionScreen extends ConsumerStatefulWidget {
   const StaffInstitutionScreen({super.key});
@@ -363,6 +364,10 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
 
   // ── Tab 4: AI Handbook Ingestion ───────────────────────────────────────────
   Widget _buildHandbookIngestionTab() {
+    final authState = ref.watch(authProvider);
+    final userRole = (authState.staffRole ?? '').trim().toLowerCase();
+    final isAdmin = userRole == 'administrator' || userRole == 'admin';
+
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -401,15 +406,16 @@ class _StaffInstitutionScreenState extends ConsumerState<StaffInstitutionScreen>
                         icon: const Icon(Icons.file_open_rounded),
                         label: const Text('Browse & Ingest into AI Engine'),
                       ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.urgentRed,
-                          side: const BorderSide(color: AppColors.urgentRed),
+                      if (isAdmin)
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.urgentRed,
+                            side: const BorderSide(color: AppColors.urgentRed),
+                          ),
+                          onPressed: _isSaving ? null : _confirmResetHandbook,
+                          icon: const Icon(Icons.restore_page_rounded),
+                          label: const Text('Reset Handbook to Default'),
                         ),
-                        onPressed: _isSaving ? null : _confirmResetHandbook,
-                        icon: const Icon(Icons.restore_page_rounded),
-                        label: const Text('Reset Handbook to Default'),
-                      ),
                     ],
                   ),
                 ],

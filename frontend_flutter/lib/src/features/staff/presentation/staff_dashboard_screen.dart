@@ -210,11 +210,16 @@ class StaffDashboardScreen extends ConsumerWidget {
                       ).animate().fadeIn().slideX(begin: -0.02),
                       const SizedBox(height: 28),
 
-                      // Row 1: Priority Workflow Desks
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildModernActionCard(
+                      // Role-based Dynamic Action Cards Grid
+                      Builder(
+                        builder: (context) {
+                          final authState = ref.watch(authProvider);
+                          final role = (authState.staffRole ?? '').trim().toLowerCase();
+                          final isAdmin = role == 'administrator' || role == 'admin';
+                          final isRegistrar = role == 'registrar';
+
+                          final cards = <Widget>[
+                            _buildModernActionCard(
                               context: context,
                               title: 'Withdrawals Queue',
                               value: pendingWithdrawals.toString(),
@@ -223,11 +228,8 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.exit_to_app_rounded,
                               cardColor: const Color(0xFFEF4444),
                               onTap: () => context.push('/staff/withdrawals'),
-                            ).animate().fadeIn(delay: 100.ms).scale(),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: _buildModernActionCard(
+                            ),
+                            _buildModernActionCard(
                               context: context,
                               title: 'Grievance Desk',
                               value: activeGrievances.toString(),
@@ -236,11 +238,8 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.gavel_rounded,
                               cardColor: const Color(0xFF8B5CF6),
                               onTap: () => context.push('/staff/grievances'),
-                            ).animate(delay: 200.ms).fadeIn().scale(),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: _buildModernActionCard(
+                            ),
+                            _buildModernActionCard(
                               context: context,
                               title: 'Document Review',
                               value: pendingDocuments.toString(),
@@ -249,17 +248,8 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.verified_user_rounded,
                               cardColor: const Color(0xFF10B981),
                               onTap: () => context.push('/staff/documents'),
-                            ).animate(delay: 300.ms).fadeIn().scale(),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Row 2: Institutional Registers
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildModernActionCard(
+                            ),
+                            _buildModernActionCard(
                               context: context,
                               title: 'Digital Notesheets',
                               value: 'Active',
@@ -268,11 +258,8 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.description,
                               cardColor: const Color(0xFF1E40AF),
                               onTap: () => context.push('/staff/notesheets'),
-                            ).animate(delay: 350.ms).fadeIn().scale(),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: _buildModernActionCard(
+                            ),
+                            _buildModernActionCard(
                               context: context,
                               title: 'Status Registry',
                               value: 'Live',
@@ -281,30 +268,19 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.verified_user_rounded,
                               cardColor: const Color(0xFFF97316),
                               onTap: () => context.push('/staff/registry'),
-                            ).animate(delay: 400.ms).fadeIn().scale(),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: _buildModernActionCard(
-                              context: context,
-                              title: 'Procedure Setup Wizard',
-                              value: 'Builder',
-                              subtitle: 'Custom Workflows & SLA Rules',
-                              tag: 'ENGINE',
-                              icon: Icons.auto_fix_high_rounded,
-                              cardColor: const Color(0xFF0D9488),
-                              onTap: () => context.push('/staff/procedures'),
-                            ).animate(delay: 450.ms).fadeIn().scale(),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Row 3: Compliance & Extraction Hubs
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildModernActionCard(
+                            ),
+                            if (isAdmin || isRegistrar)
+                              _buildModernActionCard(
+                                context: context,
+                                title: 'Procedure Setup Wizard',
+                                value: 'Builder',
+                                subtitle: 'Custom Workflows & SLA Rules',
+                                tag: 'ENGINE',
+                                icon: Icons.auto_fix_high_rounded,
+                                cardColor: const Color(0xFF0D9488),
+                                onTap: () => context.push('/staff/procedures'),
+                              ),
+                            _buildModernActionCard(
                               context: context,
                               title: 'OCR Document Cockpit',
                               value: 'Live',
@@ -313,11 +289,8 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.document_scanner_rounded,
                               cardColor: const Color(0xFF2563EB),
                               onTap: () => context.push('/staff/ocr'),
-                            ).animate(delay: 500.ms).fadeIn().scale(),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: _buildModernActionCard(
+                            ),
+                            _buildModernActionCard(
                               context: context,
                               title: 'Accreditation Hub',
                               value: 'NAAC',
@@ -326,22 +299,40 @@ class StaffDashboardScreen extends ConsumerWidget {
                               icon: Icons.verified_rounded,
                               cardColor: const Color(0xFF7C3AED),
                               onTap: () => context.push('/staff/accreditation'),
-                            ).animate(delay: 550.ms).fadeIn().scale(),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: _buildModernActionCard(
-                              context: context,
-                              title: 'Institution Settings',
-                              value: 'Config',
-                              subtitle: 'White-Label & Clearance Chain',
-                              tag: 'SYSTEM',
-                              icon: Icons.apartment_rounded,
-                              cardColor: const Color(0xFF0F766E),
-                              onTap: () => context.push('/staff/institution'),
-                            ).animate(delay: 600.ms).fadeIn().scale(),
-                          ),
-                        ],
+                            ),
+                            if (isAdmin)
+                              _buildModernActionCard(
+                                context: context,
+                                title: 'Institution Settings',
+                                value: 'Config',
+                                subtitle: 'White-Label & Clearance Chain',
+                                tag: 'SYSTEM',
+                                icon: Icons.apartment_rounded,
+                                cardColor: const Color(0xFF0F766E),
+                                onTap: () => context.push('/staff/institution'),
+                              ),
+                          ];
+
+                          return LayoutBuilder(
+                            builder: (context, constraints) {
+                              final crossAxisCount = constraints.maxWidth > 1100 ? 3 : (constraints.maxWidth > 700 ? 2 : 1);
+                              return GridView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  crossAxisSpacing: 20,
+                                  mainAxisSpacing: 20,
+                                  mainAxisExtent: 170,
+                                ),
+                                itemCount: cards.length,
+                                itemBuilder: (context, index) {
+                                  return cards[index].animate(delay: (index * 40).ms).fadeIn().scale();
+                                },
+                              );
+                            },
+                          );
+                        },
                       ),
                       const SizedBox(height: 44),
 
