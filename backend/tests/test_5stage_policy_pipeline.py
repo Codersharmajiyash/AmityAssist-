@@ -123,3 +123,54 @@ def test_multilingual_pipeline():
     s5_hi = PolicySearchService.hybrid_guidance("चरण 5 क्या है?", language="hi-IN", history=hist_hi)
     assert "केवल 2 चरण हैं" in s5_hi["answer"]
 
+
+
+def test_screenshot_scenario_withdrawal_step_after_clarification():
+    """Tests the exact scenario from user screenshot:
+    Turn 1: 'What is the first step?' -> bot asks to clarify procedure (mentions Library Card in examples)
+    Turn 2: 'What is the first step for withdrawal?' -> MUST NOT return Library Card! Must return Program Withdrawal Step 1.
+    Turn 3: 'What is the next step?' -> Step 2 of Program Withdrawal.
+    Turn 4: 'What is the final step?' -> Step 3 of Program Withdrawal (Final).
+    Turn 5: 'What is step 5?' -> There are only 3 steps in this procedure. Step 3 was final.
+    """
+    history = []
+
+    # Turn 1
+    q1 = "What is the first step?"
+    r1 = PolicySearchService.hybrid_guidance(q1, history=history)
+    assert "please specify which university procedure" in r1["answer"].lower()
+    assert r1["domain"] == "General Ordinance Guidance"
+    history.append({"role": "user", "content": q1})
+    history.append({"role": "assistant", "content": r1["answer"]})
+
+    # Turn 2: Exact user query from screenshot
+    q2 = "What is the first step for withdrawal?"
+    r2 = PolicySearchService.hybrid_guidance(q2, history=history)
+    assert "Program Withdrawal" in r2["answer"]
+    assert "Form WTH-01" in r2["answer"]
+    assert "Library Card" not in r2["answer"]
+    assert "librarin" not in r2["answer"].lower()
+    assert r2["domain"] == "Digital Clearance & Withdrawal"
+    assert r2["recommended_action"] == "Start Withdrawal Procedure"
+    assert r2["action_url"] == "/withdrawal"
+    history.append({"role": "user", "content": q2})
+    history.append({"role": "assistant", "content": r2["answer"]})
+
+    # Turn 3: Follow-up next step bound to Program Withdrawal
+    q3 = "What is the next step?"
+    r3 = PolicySearchService.hybrid_guidance(q3, history=history)
+    assert "Step 2 for Program Withdrawal" in r3["answer"]
+    assert "4-department clearance" in r3["answer"]
+    history.append({"role": "user", "content": q3})
+    history.append({"role": "assistant", "content": r3["answer"]})
+
+    # Turn 4: Final step
+    q4 = "What is the final step?"
+    r4 = PolicySearchService.hybrid_guidance(q4, history=history)
+    assert "Step 3 for Program Withdrawal" in r4["answer"]
+    assert "Caution deposit" in r4["answer"] or "refund" in r4["answer"]
+
+    # Turn 5: Out of range clamp
+    q5 = "What is step 5?"
+    r5 = PolicySearchService.hybrid_guidance(q5, history=history)
+    assert "There are only 3 steps in this procedure. Step 3 was final." in r5["answer"]

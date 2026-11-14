@@ -1211,8 +1211,8 @@ class PolicySearchService:
         except Exception:
             procs = []
 
-        has_lib_card = any("library card" in (p.get("title") or "").lower() for p in procs)
-        if not has_lib_card:
+        # 1. Core Library Card Procedure
+        if not any("library card" in (p.get("title") or "").lower() for p in procs):
             procs.append({
                 "id": "proc-library-card",
                 "title": "Library Card",
@@ -1222,6 +1222,8 @@ class PolicySearchService:
                 "sla_days": 2,
                 "required_docs": ["Student ID Card Copy", "Latest Fee Receipt"],
                 "is_active": True,
+                "action_label": "View Library Card",
+                "action_url": "/services",
                 "steps": [
                     {
                         "step_number": 1,
@@ -1238,6 +1240,167 @@ class PolicySearchService:
                 ],
                 "total_steps": 2,
             })
+
+        # 2. Core Program Withdrawal & Tuition Refund Procedure
+        if not any("withdrawal" in (p.get("title") or "").lower() or "withdrawal" in (p.get("id") or "").lower() for p in procs):
+            procs.append({
+                "id": "proc-withdrawal",
+                "title": "Program Withdrawal",
+                "department": "Digital Clearance & Withdrawal",
+                "category": "Withdrawal & Refunds",
+                "description": "Official UGC-compliant procedure for program departure, clearance, and tuition/caution fee refund.",
+                "sla_days": 14,
+                "required_docs": [
+                    "Parent / Guardian Consent Letter",
+                    "Original Student ID Card",
+                    "Cancelled Cheque or Bank Passbook Copy (with IFSC for NEFT refund transfer)"
+                ],
+                "is_active": True,
+                "action_label": "Start Withdrawal Procedure",
+                "action_url": "/withdrawal",
+                "steps": [
+                    {
+                        "step_number": 1,
+                        "title": "Submit Form WTH-01 (Program Withdrawal Application) with parent consent letter, student identity proof, and cancelled bank cheque or passbook copy showing IFSC code for NEFT refund transfer at Registrar Office (Window 2) or start digital clearance on the student portal",
+                        "responsible_desk": "Registrar Office",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 2,
+                        "title": "Complete digital 4-department clearance across Central Library, Hostel Mess, Department Laboratory, and Accounts Office on student portal",
+                        "responsible_desk": "Student Portal & Departments",
+                        "sla_days": 5,
+                    },
+                    {
+                        "step_number": 3,
+                        "title": "Final Registrar notesheet sign-off and Caution deposit (₹10,000) + eligible tuition fee refund via NEFT within 7–14 working days",
+                        "responsible_desk": "Accounts & Finance",
+                        "sla_days": 7,
+                    },
+                ],
+                "total_steps": 3,
+            })
+
+        # 3. Core Duplicate Student ID Card Procedure
+        if not any("id card" in (p.get("title") or "").lower() and "duplicate" in (p.get("title") or "").lower() for p in procs):
+            procs.append({
+                "id": "proc-duplicate-id",
+                "title": "Duplicate ID Card",
+                "department": "Security & Proctor Office",
+                "category": "Student Services",
+                "description": "Official procedure for re-issuing a lost or damaged student identity card.",
+                "sla_days": 3,
+                "required_docs": [
+                    "Application Proforma (Form 19)",
+                    "Fee Receipt (₹500 replacement fee)",
+                    "Copy of Police Missing Report / Undertaking"
+                ],
+                "is_active": True,
+                "action_label": "Download Form 19",
+                "action_url": "/forms",
+                "steps": [
+                    {
+                        "step_number": 1,
+                        "title": "File an online lost report or obtain an undertaking proforma at Security Desk",
+                        "responsible_desk": "Security Desk",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 2,
+                        "title": "Pay the ₹500 replacement fee at Accounts or online student portal",
+                        "responsible_desk": "Accounts Office",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 3,
+                        "title": "Submit application with fee receipt at Proctor Office for biometric smart card reissue",
+                        "responsible_desk": "Proctor Office",
+                        "sla_days": 1,
+                    },
+                ],
+                "total_steps": 3,
+            })
+
+        # 4. Core Attendance Condonation Procedure
+        if not any("condonation" in (p.get("title") or "").lower() for p in procs):
+            procs.append({
+                "id": "proc-condonation",
+                "title": "Attendance Condonation",
+                "department": "Academic Affairs",
+                "category": "Academics",
+                "description": "Official procedure for condoning attendance between 60.0% and 74.9% on medical or OD grounds under Ordinance ORD-ACAD-7.2.",
+                "sla_days": 3,
+                "required_docs": [
+                    "Medical Fitness Certificate / Hospital Discharge Summary",
+                    "Official On-Duty (OD) Sanction Letters",
+                    "Student ID Card Copy"
+                ],
+                "is_active": True,
+                "action_label": "Download Form AC-04",
+                "action_url": "/forms",
+                "steps": [
+                    {
+                        "step_number": 1,
+                        "title": "Verify attendance is between 60.0% and 74.9% (attendance below 60% cannot be condoned under Ordinance ORD-ACAD-7.2)",
+                        "responsible_desk": "Dean Academic",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 2,
+                        "title": "Download Form AC-04 and attach medical certificates or OD proof",
+                        "responsible_desk": "Student Desk",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 3,
+                        "title": "Submit to Head of Department (HOD) for Dean approval at least 7 days before semester examinations",
+                        "responsible_desk": "Department Office",
+                        "sla_days": 1,
+                    },
+                ],
+                "total_steps": 3,
+            })
+
+        # 5. Core Hostel Room Change Procedure
+        if not any("hostel" in (p.get("title") or "").lower() and "room" in (p.get("title") or "").lower() for p in procs):
+            procs.append({
+                "id": "proc-hostel-room",
+                "title": "Hostel Room Change",
+                "department": "Hostel Administration",
+                "category": "Hostel & Residence",
+                "description": "Official procedure for requesting a room change or mutual room swap.",
+                "sla_days": 3,
+                "required_docs": [
+                    "Hostel Room Change Application Form",
+                    "No-Dues Receipt from Hostel Warden",
+                    "Mutual Consent Letter (if swapping rooms with another student)"
+                ],
+                "is_active": True,
+                "action_label": "View Hostel Services",
+                "action_url": "/services",
+                "steps": [
+                    {
+                        "step_number": 1,
+                        "title": "Fill out the Hostel Room Change Application Form",
+                        "responsible_desk": "Hostel Office",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 2,
+                        "title": "Obtain endorsement from both room residents and current floor warden",
+                        "responsible_desk": "Warden Office",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 3,
+                        "title": "Complete physical inventory handover and receive new room key from Chief Warden",
+                        "responsible_desk": "Chief Warden",
+                        "sla_days": 1,
+                    },
+                ],
+                "total_steps": 3,
+            })
+
         return procs
 
     @classmethod
@@ -1313,6 +1476,33 @@ class PolicySearchService:
         return None
 
     @classmethod
+    def _match_procedure_in_query(cls, q_lower: str, all_procs: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Finds if a query explicitly refers to a specific procedure."""
+        for p in all_procs:
+            p_title = (p.get("title") or "").lower()
+            p_id = (p.get("id") or "").lower()
+            if p_title in q_lower or p_id in q_lower:
+                return p
+
+        # Domain aliases
+        if any(w in q_lower for w in ["withdrawal", "program withdrawal", "course withdrawal", "cancel admission", "admission cancel", "विड्रॉल"]):
+            return next((p for p in all_procs if "withdrawal" in (p.get("title") or "").lower()), None)
+
+        if any(w in q_lower for w in ["library card", "library pass", "लाइब्रेरी कार्ड"]):
+            return next((p for p in all_procs if "library card" in (p.get("title") or "").lower()), None)
+
+        if any(w in q_lower for w in ["duplicate id", "id card reissue", "lost id card", "id card duplicate", "id card replacement"]):
+            return next((p for p in all_procs if "id card" in (p.get("title") or "").lower()), None)
+
+        if any(w in q_lower for w in ["condonation", "attendance condonation", "medical condonation", "उपस्थिति छूट"]):
+            return next((p for p in all_procs if "condonation" in (p.get("title") or "").lower()), None)
+
+        if any(w in q_lower for w in ["hostel room change", "room change", "hostel swap", "कमरा बदलना"]):
+            return next((p for p in all_procs if "hostel" in (p.get("title") or "").lower()), None)
+
+        return None
+
+    @classmethod
     def _resolve_active_procedure_from_history(
         cls, history: list[dict[str, Any]] | None, all_procs: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
@@ -1324,17 +1514,21 @@ class PolicySearchService:
             content = str(h.get("content") or h.get("text") or "").lower()
             if not content:
                 continue
-            for p in all_procs:
-                p_title = (p.get("title") or "").lower()
-                p_id = (p.get("id") or "").lower()
-                if p_title in content or p_id in content:
-                    return p
-                if ("library card" in content or "लाइब्रेरी कार्ड" in content) and "library card" in p_title:
-                    return p
-                if ("hostel room" in content or "room change" in content or "हॉस्टल" in content) and "hostel" in p_title:
-                    return p
-                if ("bonafide" in content or "बोनाफाइड" in content) and "bonafide" in p_title:
-                    return p
+
+            # CRITICAL GUARD: Ignore clarification prompts or disambiguation prompts from the assistant!
+            # If the assistant was asking the user to specify or listed examples ("such as Library Card..."),
+            # that is NEVER an active procedure!
+            if any(p in content for p in [
+                "please specify", "such as", "which university procedure",
+                "which procedure", "clarify", "are you asking about",
+                "कृपया स्पष्ट करें", "aap kis procedure"
+            ]):
+                continue
+
+            matched = cls._match_procedure_in_query(content, all_procs)
+            if matched:
+                return matched
+
         return None
 
     @classmethod
@@ -1420,8 +1614,8 @@ class PolicySearchService:
                     "answer": ans,
                     "domain": proc_dept,
                     "citations": [],
-                    "recommended_action": f"View {proc_title}",
-                    "action_url": "/services",
+                    "recommended_action": active_proc.get("action_label") or f"View {proc_title}",
+                    "action_url": active_proc.get("action_url") or "/services",
                     "voice_speech_text": ans,
                     "screen_instruction": None,
                     "highlight_target": None,
@@ -1449,8 +1643,8 @@ class PolicySearchService:
                     "answer": ans,
                     "domain": proc_dept,
                     "citations": [],
-                    "recommended_action": f"View {proc_title}",
-                    "action_url": "/services",
+                    "recommended_action": active_proc.get("action_label") or f"View {proc_title}",
+                    "action_url": active_proc.get("action_url") or "/services",
                     "voice_speech_text": voice,
                     "screen_instruction": None,
                     "highlight_target": None,
@@ -1963,8 +2157,8 @@ class PolicySearchService:
             "answer": answer,
             "domain": proc_dept,
             "citations": [],
-            "recommended_action": f"View {proc_title}",
-            "action_url": "/services",
+            "recommended_action": proc.get("action_label") or f"View {proc_title}",
+            "action_url": proc.get("action_url") or "/services",
             "voice_speech_text": voice_text,
             "screen_instruction": None,
             "highlight_target": None,
@@ -2666,64 +2860,58 @@ class PolicySearchService:
         # =========================================================================
         all_procs = cls._get_all_procedures()
 
-        # STAGE 2: Multi-Turn & Step Intent Resolver
+        # Step and Aspect extraction
         step_target, step_aspect = cls._extract_step_target(q_lower)
-        active_proc = cls._resolve_active_procedure_from_history(history, all_procs)
-        if active_proc and (step_target is not None or step_aspect in ("documents", "steps", "sla")):
-            return cls._handle_multi_turn_step_resolution(active_proc, step_target, step_aspect, student_name, language)
+
+        # =========================================================================
+        # 5-STAGE DETERMINISTIC PIPELINE: STAGE 2 - Multi-Turn & Step Intent Resolver
+        # =========================================================================
+        # Rule 1: Does the current user query explicitly specify a procedure?
+        # Current query topic ALWAYS takes absolute precedence over prior history!
+        query_proc = cls._match_procedure_in_query(q_lower, all_procs)
+
+        if query_proc:
+            if step_target is not None or step_aspect is not None:
+                return cls._handle_multi_turn_step_resolution(query_proc, step_target, step_aspect, student_name, language)
+            return cls._synthesize_procedure_aspect(query_proc, q_lower, student_name, language)
+
+        # STAGE 3: Zero-Match Guard for Non-Existent Procedures (e.g. Scuba Diving, Buy Car)
+        # Catches explicit requests for invalid procedures BEFORE topic-less clarification
+        non_exist_res = cls._check_non_existent_procedure(query, q_lower, all_procs, student_name, language)
+        if non_exist_res:
+            return non_exist_res
+
+        # Rule 2: If NO procedure was named in the current query, is this a multi-turn step / aspect follow-up?
+        # (e.g. "What is the first step?", "What is next step?", "What are the documents?")
+        if step_target is not None or step_aspect in ("documents", "steps", "sla"):
+            active_proc = cls._resolve_active_procedure_from_history(history, all_procs)
+            if active_proc:
+                return cls._handle_multi_turn_step_resolution(active_proc, step_target, step_aspect, student_name, language)
+            else:
+                # No active procedure in current query AND no active procedure in history:
+                # Prompt user politely to specify the procedure without guessing or hallucinating!
+                if language == "hi-IN":
+                    no_proc_msg = f"{student_name}, कृपया स्पष्ट करें कि आप किस विश्वविद्यालय प्रक्रिया (जैसे प्रोग्राम विड्रॉल, लाइब्रेरी कार्ड, या हॉस्टल रूम चेंज) के चरण के बारे में पूछ रहे हैं?"
+                elif language == "hi-Latn":
+                    no_proc_msg = f"{student_name}, please clarify karein aap kis procedure (jaise Program Withdrawal, Library Card, ya Hostel Room Change) ke step ke baare me pooch rahe hain?"
+                else:
+                    no_proc_msg = f"{student_name}, please specify which university procedure (such as Program Withdrawal, Library Card, or Hostel Room Change) you are referring to."
+                return {
+                    "answer": no_proc_msg,
+                    "domain": "General Ordinance Guidance",
+                    "citations": [],
+                    "recommended_action": "Browse Procedures",
+                    "action_url": "/services",
+                    "voice_speech_text": no_proc_msg,
+                    "screen_instruction": None,
+                    "highlight_target": None,
+                    "engine": "UniAssist Policy Engine",
+                }
 
         # STAGE 4: Conflicting Keyword & Disambiguation Engine
         disambig_res = cls._check_disambiguation_keywords(q_clean, q_lower, student_name, language, history=history)
         if disambig_res:
             return disambig_res
-
-        # STAGE 3: Zero-Match Guard for Non-Existent Procedures (e.g. Scuba Diving, Buy Car)
-        non_exist_res = cls._check_non_existent_procedure(query, q_lower, all_procs, student_name, language)
-        if non_exist_res:
-            return non_exist_res
-
-        # STAGE 3 DB Matcher + STAGE 5 Aspect Filter
-        matched_custom_proc = None
-        for cp in all_procs:
-            cp_title = (cp.get("title") or "").lower()
-            if cp_title in q_lower or (len(cp_title) > 3 and cp_title in q_clean):
-                matched_custom_proc = cp
-                break
-            if "library card" in q_lower and "library card" in cp_title:
-                matched_custom_proc = cp
-                break
-            if ("hostel room" in q_lower or "room change" in q_lower or "hostel swap" in q_lower) and "hostel" in cp_title:
-                matched_custom_proc = cp
-                break
-            if ("bonafide" in q_lower or "character cert" in q_lower) and "bonafide" in cp_title:
-                matched_custom_proc = cp
-                break
-
-        if matched_custom_proc:
-            if step_target is not None or step_aspect is not None:
-                return cls._handle_multi_turn_step_resolution(matched_custom_proc, step_target, step_aspect, student_name, language)
-            return cls._synthesize_procedure_aspect(matched_custom_proc, q_lower, student_name, language)
-
-        # Never let isolated step queries fall through to generic search
-        if step_target is not None and not any(w in q_clean for w in ["admission", "withdrawal", "fee", "exam", "condonation", "hostel", "library", "form", "attendance", "degree", "backpaper"]):
-            if language == "hi-IN":
-                no_proc_msg = f"{student_name}, कृपया स्पष्ट करें कि आप किस विश्वविद्यालय प्रक्रिया (जैसे लाइब्रेरी कार्ड, हॉस्टल रूम चेंज, या एडमिशन) के चरण के बारे में पूछ रहे हैं?"
-            elif language == "hi-Latn":
-                no_proc_msg = f"{student_name}, please clarify karein aap kis procedure (jaise Library Card, Hostel Room Change, ya Admission) ke step ke baare me pooch rahe hain?"
-            else:
-                no_proc_msg = f"{student_name}, please specify which university procedure (such as Library Card, Hostel Room Change, or Admission) you are referring to."
-            return {
-                "answer": no_proc_msg,
-                "domain": "General",
-                "citations": [],
-                "recommended_action": "Browse Procedures",
-                "action_url": "/services",
-                "voice_speech_text": no_proc_msg,
-                "screen_instruction": None,
-                "highlight_target": None,
-                "engine": "UniAssist Policy Engine",
-            }
-
 
         # =========================================================================
         # 00. Conversational, Greetings, Small Talk, Negations & Cancellations Guard
