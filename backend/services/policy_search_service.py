@@ -172,6 +172,23 @@ DEFAULT_POLICIES = [
         "action_url": "/forms",
         "action_label": "Download Faculty Exit Format",
     },
+    {
+        "doc_id": "ORD-LIB-01",
+        "category": "Library & Learning Resources",
+        "title": "Central University Library Regulations & Student Borrowing Privileges",
+        "clause_code": "ORD-LIB-01",
+        "content": (
+            "Central University Library Regulations & Borrowing Privileges: "
+            "1. Access & Library Card: A separate library card is NOT required. The RFID-enabled Biometric Student ID Card "
+            "acts as the primary Library Access Pass and Book Borrowing Card. Undergraduate students can borrow up to 3 books for 14 days; "
+            "postgraduate students up to 5 books for 21 days. "
+            "2. Timings: Open 8:00 AM to 10:00 PM on weekdays; 24x7 Reading Hall access during mid-term and end-term examinations. "
+            "3. Overdue & Fines: Overdue fine of INR 5 per day per book applies after the return date, settable via Caution Deposit Offsetting. "
+            "4. Lost Card / New Card: If your Student ID card is lost or unissued, apply for Form 19 (Biometric ID Issue) or Form 28 (Duplicate ID Card)."
+        ),
+        "action_url": "/forms",
+        "action_label": "Download ID & Library Card Form",
+    },
 
     # --- Comprehensive Post-Download Form Procedures (All 30+ Catalog Forms) ---
     {
@@ -1268,10 +1285,10 @@ class PolicySearchService:
         query_clean = query.strip()
         FOLLOW_UP_PATTERNS = [
             r"\b(one\s+by\s+one|step\s+by\s+step|ek\s+ek|each\s+step|one\s+step\s+at\s+a\s+time)\b",
-            r"(?:step\s*(?:no\.?|number)?\s*\d+|(?:first|pehla|next|agla|aage|last|final|previous|pichla|aakhri)\s*step|\bnext\b|\bagla\b|\baage\b)",
-            r"\bwhat\s+(?:was|is)\s+(?:the\s+)?(?:last|previous|final|first)\s+step\b|step\s+before",
-            r"\b(what\s+was\s+step|repeat|tell\s+again|fir\s+se\s+batao|bhool\s+gaya|forgot|pichla\s+step|aakhri\s+step)\b",
-            r"\b(which\s+button|what\s+to\s+click|kaha\s+click\s+kare)\b",
+            r"(?:step\s*(?:no\.?|number)?\s*\d+|(?:first|pehla|next|agla|aage|last|final|previous|pichla|aakhri|पहला|अगला|पिछला|आखरी|अंतिम)\s*(?:step|स्टेप|चरण)?|\bnext\b|\bagla\b|\baage\b)",
+            r"(?:what\s+(?:was|is)\s+(?:the\s+)?(?:last|previous|final|first)\s+step|step\s+before|पहला\s*(?:स्टेप|चरण)|आखरी\s*(?:स्टेप|चरण)|पिछला\s*(?:स्टेप|चरण)|अगला\s*(?:स्टेप|चरण))",
+            r"(?:what\s+was\s+step|repeat|tell\s+again|fir\s+se\s+batao|bhool\s+gaya|forgot|pichla\s+step|aakhri\s+step|phir\s+se)",
+            r"(?:which\s+button|what\s+to\s+click|kaha\s+click\s+kare)",
         ]
         is_follow_up = any(re.search(pat, query_clean.lower()) for pat in FOLLOW_UP_PATTERNS)
         # If it's a step follow-up in a fresh session with no prior topic, ask which procedure to guide
@@ -1302,67 +1319,101 @@ class PolicySearchService:
                  if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor")), 
                 ""
             )
-            # Find original multi-step procedure turn in history that contains numbered steps
-            proc_turn = next(
-                (str(h.get("content", "") or h.get("text", "") or h.get("speech_text", ""))
-                 for h in history
-                 if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor")
-                 and re.search(r"(?:step\s*1|\b1\.)", str(h.get("content", "") or h.get("text", "")), re.I)
-                 and (re.search(r"(?:step\s*2|\b2\.)", str(h.get("content", "") or h.get("text", "")), re.I) and len(str(h.get("content", "") or h.get("text", ""))) > 150)),
-                ""
-            )
 
-            # If not in history text, look up active topic procedure in DEFAULT_POLICIES
-            if not proc_turn:
-                hist_combined = " ".join([str(h.get("content", "") or h.get("text", "")) for h in history]).lower()
+            # Detect active topic and bind verified citations and actions from conversation history
+            hist_combined = " ".join([str(h.get("content", "") or h.get("text", "") or h.get("speech_text", "")) for h in history]).lower()
+            active_topic = "General Guidance"
+            active_citations = []
+            active_action = None
+            active_url = None
+
+            if any(w in hist_combined for w in ["withdrawal", "withdraw", "विड्रॉल"]):
+                active_topic = "Program Withdrawal & Refund"
+                active_citations = [p for p in DEFAULT_POLICIES if p.get("doc_id") in ("POL-WTH-01", "POL-CLR-01", "PROC-FORM-WITHDRAWAL-APP")]
+                active_action = "Start Withdrawal Procedure" if is_authenticated else "Sign In to Apply"
+                active_url = "/withdrawal" if is_authenticated else "/login"
+            elif any(w in hist_combined for w in ["library card", "id card", "smart card", "biometric card", "lost card", "identity card"]):
+                active_topic = "Library & ID Card Privileges"
+                active_citations = [p for p in DEFAULT_POLICIES if p.get("clause_code") in ("ORD-LIB-01", "PROC-FORM-19", "PROC-FORM-28")]
+                active_action = "Download ID & Library Card Form"
+                active_url = "/forms"
+            elif any(w in hist_combined for w in ["rechecking", "revaluation", "supplementary", "backpaper"]):
+                active_topic = "Examination & Rechecking"
+                active_citations = [p for p in DEFAULT_POLICIES if p.get("doc_id") == "POL-EXAM-01"]
+                active_action = "Download Form EX-02 (Backpaper)"
+                active_url = "/forms"
+            elif any(w in hist_combined for w in ["hostel", "room vacation", "mess"]):
+                active_topic = "Hostel Clearance"
+                active_citations = [p for p in DEFAULT_POLICIES if p.get("doc_id") == "POL-HSTL-01"]
+                active_action = "Hostel Vacation Guidelines"
+                active_url = "/forms"
+
+            # Find the master multi-step procedure turn in history (the one with the most numbered steps)
+            proc_turn = ""
+            best_steps_count = 0
+            for h in history:
+                if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor"):
+                    c = str(h.get("content", "") or h.get("text", "") or h.get("speech_text", ""))
+                    s_matches = re.findall(r'(?:^|\n)\s*(?:Step\s*)?(\d+)[\.\:\)]', c, re.I)
+                    valid_s = [int(x) for x in s_matches if 1 <= int(x) <= 15]
+                    if len(valid_s) > best_steps_count:
+                        best_steps_count = len(valid_s)
+                        proc_turn = c
+
+            # If not found in history, retrieve the active procedure steps from DEFAULT_POLICIES
+            if not proc_turn or best_steps_count < 2:
                 for p in DEFAULT_POLICIES:
                     p_content = p.get("content", "")
-                    if ("1." in p_content or "Step 1" in p_content):
-                        p_title = p.get("title", "").lower()
-                        p_cat = p.get("category", "").lower()
-                        if any(w in hist_combined for w in ["withdrawal", "withdraw", "विड्रॉल"]):
-                            if p.get("doc_id") == "PROC-FORM-WITHDRAWAL-APP" or ("withdrawal" in p_title and "application" in p_title):
-                                proc_turn = p_content
-                                break
-                        elif any(w in hist_combined for w in ["id card", "lost card", "identity card"]) and "id card" in p_title:
+                    p_title = p.get("title", "").lower()
+                    if active_topic == "Program Withdrawal & Refund":
+                        if p.get("doc_id") == "PROC-FORM-WITHDRAWAL-APP" or ("withdrawal" in p_title and "application" in p_title):
                             proc_turn = p_content
                             break
-                        elif any(w in hist_combined for w in ["rechecking", "revaluation"]) and "rechecking" in p_title:
+                    elif active_topic == "Library & ID Card Privileges":
+                        if p.get("clause_code") == "ORD-LIB-01" or p.get("doc_id") == "PROC-FORM-BIOMETRIC":
                             proc_turn = p_content
                             break
-                        elif any(w in hist_combined for w in ["migration"]) and "migration" in p_title:
+                    elif active_topic == "Examination & Rechecking":
+                        if p.get("doc_id") == "POL-EXAM-01":
                             proc_turn = p_content
                             break
+
             if not proc_turn:
                 proc_turn = last_assistant_turn
 
-            # Linguistic distinction: "What WAS the last step?" (previous step) vs "What IS the last step?" (final/terminal step)
+            # Clean step numbers extraction (strictly bounded 1 to 15 to avoid matching SLAs or ord codes)
+            clean_step_matches = re.findall(r'(?:^|\n)\s*(?:Step\s*)?(\d+)[\.\:\)]', proc_turn, re.I)
+            clean_step_nums = sorted(list(set(int(m) for m in clean_step_matches if 1 <= int(m) <= 15)))
+            max_step = max(clean_step_nums) if clean_step_nums else 4
+
+            # Linguistic distinction: Final vs Previous vs Explicit vs Next step
             q_lower = query_clean.lower()
             is_terminal_final = (
-                bool(re.search(r'\b(?:what\s+is\s+(?:the\s+)?(?:last|final|ultimate)\s+step|final\s+step|aakhri\s+step|sabse\s+last)\b', q_lower))
+                bool(re.search(r'(?:what\s+is\s+(?:the\s+)?(?:last|final|ultimate)\s+step|final\s+step|aakhri\s+step|sabse\s+last|आखरी\s*स्टेप|अंतिम\s*(?:चरण|स्टेप))', q_lower))
                 or ('last step' in q_lower and any(w in q_lower for w in ['process', 'procedure', 'overall', 'end', 'is the']))
             )
             is_previous_recent = (
-                bool(re.search(r'\b(?:what\s+was\s+(?:the\s+)?(?:last|previous)\s+step|previous\s+step|pichla\s+step|before\s+(?:this|that)|step\s+before)\b', q_lower))
+                bool(re.search(r'(?:what\s+was\s+(?:the\s+)?(?:last|previous)\s+step|previous\s+step|pichla\s+step|before\s+(?:this|that)|step\s+before|पिछला\s*(?:स्टेप|चरण)|पहले\s*वाला)', q_lower))
                 or ('last step' in q_lower and any(w in q_lower for w in ['was', 'pehle', 'pichla', 'before', 'you said', 'you mentioned']))
             )
-
-            all_step_nums = [int(n) for n in re.findall(r'(?:step\s*|\b)(\d+)[:\.\-]', proc_turn, re.I)]
-            max_step = max(all_step_nums) if all_step_nums else 3
 
             target_num = None
             if is_terminal_final and not is_previous_recent:
                 target_num = max_step
             elif is_previous_recent:
                 single_step_m = re.search(r"^\s*(?:Step\s*)?(\d+)[:\.\-]", last_assistant_turn, re.IGNORECASE)
-                target_num = int(single_step_m.group(1)) if single_step_m else 1
-            else:
-                step_m = re.search(r'(?:step\s*(?:no\.?|number)?\s*(\d+)|(?:first|pehla)\s*step)', q_lower)
-                if step_m and not any(p in q_lower for p in ["next", "what next", "agla"]):
-                    target_num = int(step_m.group(1)) if (step_m.group(1) and step_m.group(1).isdigit()) else 1
-                elif any(p in q_lower for p in ["one by one", "step by step", "ek ek", "each step", "first step", "pehla"]):
+                if single_step_m:
+                    curr_num = int(single_step_m.group(1))
+                    target_num = max(1, curr_num - 1)
+                else:
                     target_num = 1
-                elif any(p in q_lower for p in ["next", "agla", "what next", "aage", "continue", "ok next"]):
+            else:
+                step_m = re.search(r'(?:step\s*(?:no\.?|number)?\s*(\d+)|(?:first|pehla|पहला)\s*(?:step|स्टेप|चरण)?)', q_lower)
+                if step_m and not any(p in q_lower for p in ["next", "what next", "agla", "अगला"]):
+                    target_num = int(step_m.group(1)) if (step_m.group(1) and step_m.group(1).isdigit()) else 1
+                elif any(p in q_lower for p in ["one by one", "step by step", "ek ek", "each step", "first step", "pehla", "पहला"]):
+                    target_num = 1
+                elif any(p in q_lower for p in ["next", "agla", "what next", "aage", "continue", "ok next", "अगला"]):
                     single_step_m = re.search(r"^\s*(?:Step\s*)?(\d+)[:\.\-]", last_assistant_turn, re.IGNORECASE)
                     if single_step_m:
                         target_num = int(single_step_m.group(1)) + 1
@@ -1370,48 +1421,68 @@ class PolicySearchService:
                         target_num = 2
 
             synthesized_follow_up = None
-            if target_num is not None and proc_turn:
-                pat = rf"(?:step\s*{target_num}[:\.\-]?\s*|\b{target_num}\.\s*)(.*?)(?=(?:step\s*{target_num+1}[:\.\-]?\s*|\b{target_num+1}\.\s*)|$)"
-                m = re.search(pat, proc_turn, re.IGNORECASE | re.DOTALL)
-                if m:
-                    step_body = m.group(1).strip()
-                    if is_terminal_final and not is_previous_recent:
-                        synthesized_follow_up = f"The final step (Step {target_num}) is: {step_body} This is the final step! You can now proceed to submit your clearance."
-                    elif is_previous_recent:
-                        synthesized_follow_up = f"The previous step was Step {target_num}: {step_body} Let me know when you are ready to continue."
+            if target_num is not None:
+                if target_num > max_step:
+                    if language == "hi-IN":
+                        synthesized_follow_up = f"{student_name}, आप इस प्रक्रिया के सभी {max_step} चरण पूरे कर चुके हैं! चरण {max_step} ही अंतिम चरण था। अब आप अपना आवेदन सीधे जमा कर सकते हैं।"
+                    elif language == "hi-Latn":
+                        synthesized_follow_up = f"{student_name}, aap is procedure ke sabhi {max_step} steps complete kar chuke hain! Step {max_step} hi final step tha. Ab aap apna application submit kar sakte hain."
                     else:
-                        next_pat = rf"(?:step\s*{target_num+1}[:\.\-]?\s*|\b{target_num+1}\.\s*)"
-                        if re.search(next_pat, proc_turn, re.IGNORECASE):
-                            synthesized_follow_up = f"Step {target_num}: {step_body} Let me know when you are ready for Step {target_num+1}."
+                        synthesized_follow_up = f"{student_name}, you have completed all {max_step} steps of this procedure! Step {max_step} was the final step. You can now proceed to submit your application."
+                elif proc_turn:
+                    pat = rf'(?:^|\n)\s*(?:step\s*{target_num}[:\.\-\)]\s*|\b{target_num}[\.\:\)]\s*)(.*?)(?=(?:\n\s*(?:step\s*{target_num+1}[:\.\-\)]\s*|\b{target_num+1}[\.\:\)]\s*))|$)'
+                    m = re.search(pat, proc_turn, re.IGNORECASE | re.DOTALL)
+                    if m:
+                        step_body = m.group(1).strip()
+                        # Clean trailing student session notes or extra formatting
+                        step_body = re.split(r"(?:👤|\n\n\s*Active Student Session)", step_body)[0].strip()
+                        if is_terminal_final and not is_previous_recent:
+                            synthesized_follow_up = f"The final step (Step {target_num}) is: {step_body}\n\nThis is the final step! You can now proceed to submit your clearance."
+                        elif is_previous_recent:
+                            synthesized_follow_up = f"The previous step was Step {target_num}: {step_body}\n\nLet me know when you are ready to continue."
                         else:
-                            synthesized_follow_up = f"Step {target_num}: {step_body} This is the final step! You can now proceed to submit your clearance."
+                            if target_num < max_step:
+                                synthesized_follow_up = f"Step {target_num}: {step_body}\n\nLet me know when you are ready for Step {target_num+1}."
+                            else:
+                                synthesized_follow_up = f"Step {target_num}: {step_body}\n\nThis is the final step! You can now proceed to submit your clearance."
 
-            if not synthesized_follow_up and last_assistant_turn:
+            # Conversational follow-up: Answer referencing verified procedure context directly
+            if not synthesized_follow_up and proc_turn:
                 synthesized_follow_up = call_ollama_llama3(
-                    prompt=f"The student is asking: '{query_clean}'. Based on the previous step guidance given above, answer their question concisely in 1 to 2 spoken sentences.",
+                    prompt=f"The student is asking: '{query_clean}'. Based strictly on the verified steps for {active_topic}:\n{proc_turn}\nAnswer their question accurately and concisely in 1 to 2 spoken sentences.",
                     system_instruction=(
-                        "You are UniAssist Counselor. Answer the student's follow-up question directly "
-                        "referencing the steps already discussed in the conversation history. "
-                        "Keep your response strictly under 2 sentences for voice playback."
+                        f"You are UniAssist Campus Counselor. Answer the student's question directly referencing ONLY the verified steps provided for {active_topic}. "
+                        "Do not invent facts, forms, or fees. Keep your response strictly under 2 sentences."
                     ),
                     history=history
                 )
-                if not synthesized_follow_up and any(w in query_clean.lower() for w in ["repeat", "again", "fir se", "tell again", "forgot", "bhool"]):
-                    first_sentence = re.split(r"[.\n]", last_assistant_turn)[0].strip()
-                    synthesized_follow_up = f"As mentioned earlier: {first_sentence}. Would you like to proceed with this?"
+                if not synthesized_follow_up:
+                    if any(w in query_clean.lower() for w in ["repeat", "again", "fir se", "tell again", "forgot", "bhool"]):
+                        first_step = re.split(r"\n\s*(?:Step\s*2|2\.)", proc_turn)[0].strip()
+                        synthesized_follow_up = f"As discussed earlier: {first_step}."
+                    else:
+                        q_words = [w for w in re.findall(r'\b\w{4,}\b', query_clean.lower()) if w not in ("what", "this", "that", "step", "tell", "kya", "kaise")]
+                        matched_snippet = None
+                        for line in proc_turn.splitlines():
+                            if any(qw in line.lower() for qw in q_words):
+                                matched_snippet = line.strip()
+                                break
+                        if matched_snippet:
+                            synthesized_follow_up = f"Regarding your question: {matched_snippet}"
+                        else:
+                            synthesized_follow_up = f"Regarding {active_topic}, please let me know which step (Step 1 to {max_step}) you would like me to explain further."
 
-            if synthesized_follow_up:
-                return {
-                    "answer": synthesized_follow_up,
-                    "speech_text": synthesized_follow_up,
-                    "voice_speech_text": synthesized_follow_up,
-                    "engine": "UniAssist Step Counselor",
-                    "domain": "Step Guidance",
-                    "citations": [],
-                    "status": "success",
-                    "recommended_action": None,
-                    "action_url": None,
-                }
+            return {
+                "answer": synthesized_follow_up,
+                "speech_text": synthesized_follow_up,
+                "voice_speech_text": synthesized_follow_up,
+                "engine": "UniAssist Step Counselor",
+                "domain": active_topic,
+                "citations": active_citations,
+                "status": "success",
+                "recommended_action": active_action,
+                "action_url": active_url,
+            }
 
         # =========================================================================
         # 00-ROLE-BASED PERSONAL RECORD ACCESS GUARD: Staff vs Authenticated Student vs Guest
@@ -4453,11 +4524,28 @@ class PolicySearchService:
             "recruiter", "recruiters", "job campus", "प्लेसमेंट", "इंटर्नशिप"
         ]) and not any(w in q_lower for w in ["withdrawal", "refund", "caution deposit"])
 
-        # 4Q. Library Services, Timings & Catalog
-        is_library_info_query = any(w in q_lower for w in [
-            "library timing", "library time", "library hours", "issue book", "return book",
-            "library books", "library access", "e-resources", "लाइब्रेरी", "पुस्तकालय"
-        ]) and not any(w in q_lower for w in ["fine", "offset", "deposit", "withdrawal", "caution deposit"])
+        # 4Q-1. Library Card Application, Issue & Replacement
+        is_library_card_query = (
+            any(w in q_lower for w in [
+                "library card", "library pass", "कार्ड बनाना है", "कार्ड बनाना", "कार्ड कैसे",
+                "library membership card", "apply library card", "new library card", "make library card",
+                "get library card", "issue library card", "लाइब्रेरी कार्ड", "पुस्तकालय कार्ड"
+            ])
+            or (
+                any(w in q_lower for w in ["लाइब्रेरी", "library", "पुस्तकालय"])
+                and any(w in q_lower for w in ["card", "कार्ड", "बनाना", "banwana", "banaye", "apply", "issue", "get", "make"])
+            )
+        )
+
+        # 4Q-2. Library Services, Timings & Catalog
+        is_library_info_query = (
+            any(w in q_lower for w in [
+                "library timing", "library time", "library hours", "issue book", "return book",
+                "library books", "library access", "e-resources", "लाइब्रेरी", "पुस्तकालय"
+            ])
+            and not is_library_card_query
+            and not any(w in q_lower for w in ["fine", "offset", "deposit", "withdrawal", "caution deposit"])
+        )
 
         # 4R. Campus Facilities, Health Center & Medical Emergency
         is_campus_facility_query = any(w in q_lower for w in [
@@ -4637,8 +4725,49 @@ class PolicySearchService:
                 "engine": "UniAssist Policy Engine",
             }
 
+        elif is_library_card_query:
+            lib_policy = next((p for p in DEFAULT_POLICIES if p.get("clause_code") == "ORD-LIB-01"), None)
+            bio_form = next((p for p in DEFAULT_POLICIES if p.get("doc_id") == "PROC-FORM-BIOMETRIC"), None)
+            citations = [p for p in [lib_policy, bio_form] if p is not None]
+
+            if language == "hi-IN":
+                answer = (
+                    f"{student_name}, केंद्रीय विश्वविद्यालय में अलग से कोई लाइब्रेरी कार्ड जारी नहीं किया जाता है:\n\n"
+                    "• **स्मार्ट आईडी ही लाइब्रेरी कार्ड है**: आपका बायोमेट्रिक आरएफआईडी छात्र पहचान पत्र (Smart Student ID Card) ही सेंट्रल लाइब्रेरी एक्सेस टर्नस्टाइल और पुस्तक जारी कराने के लिए डिजिटल लाइब्रेरी कार्ड के रूप में स्वतः कार्य करता है।\n"
+                    "• **नया / खोया हुआ कार्ड आवेदन**: यदि आपके पास स्मार्ट आईडी कार्ड नहीं है या वह खो गया है, तो आप 'फॉर्म 19 (बायोमेट्रिक / आईडी कार्ड आवेदन)' या 'फॉर्म 28 (डुप्लीकेट आईडी कार्ड फॉर्म)' भरकर आईटी सेंटर (कक्ष 105) या रजिस्ट्रार काउंटर पर जमा करें।\n"
+                    "• **सक्रियता (Activation)**: प्रवेश और आईडी कार्ड बनने के साथ ही आपकी लाइब्रेरी सदस्यता स्वतः सक्रिय हो जाती है। B.Tech छात्र एक समय में अधिकतम 3 पुस्तकें 14 दिनों के लिए जारी करा सकते हैं।"
+                )
+                voice_text = f"{student_name}, विश्वविद्यालय में अलग से लाइब्रेरी कार्ड नहीं बनता है। आपका स्मार्ट आईडी कार्ड ही लाइब्रेरी कार्ड का काम करता है। नए कार्ड के लिए फॉर्म 19 डाउनलोड करें।"
+            elif language == "hi-Latn":
+                answer = (
+                    f"{student_name}, Central University me alag se library card issue nahi hota hai:\n\n"
+                    "• **Smart ID Card hi Library Card hai**: Aapka RFID biometric Student ID Card hi Central Library gate turnstiles aur book borrowing ke liye official library card ka kaam karta hai.\n"
+                    "• **Card Application / Re-issue**: Agar aapka smart ID card abhi nahi bana hai ya kho gaya hai, toh Form 19 (Biometric ID Application) ya Form 28 (Duplicate Student ID Form) bhar kar Room 105 IT Center me submit karein.\n"
+                    "• **Automatic Privileges**: Enrollment ke sath hi library access activate ho jata hai. B.Tech students ek samay me 3 books 14 din ke liye borrow kar sakte hain."
+                )
+                voice_text = f"{student_name}, university me alag se library card nahi banta. Aapka smart student ID card hi library card ka kaam karta hai. Naye card ke liye Form 19 download karein."
+            else:
+                answer = (
+                    f"{student_name}, the university does not issue a separate library card:\n\n"
+                    "• **Smart ID Card Dual Function**: Your RFID Biometric Student ID Card automatically functions as your official Central Library Turnstile Pass and Book Borrowing Card.\n"
+                    "• **Card Application & Re-issue**: If your ID card has not been issued or is lost, submit Form 19 (Biometric / ID Card Application) or Form 28 (Student ID Duplicate Form) at IT Center (Room 105) or the Registrar Counter.\n"
+                    "• **Automatic Borrowing Rights**: Library privileges are linked to your student enrollment record. Undergraduate students can borrow up to 3 books simultaneously for 14 days."
+                )
+                voice_text = f"{student_name}, no separate library card is needed. Your biometric student ID card automatically serves as your library card. To apply for a student ID, download Form 19."
+
+            res = {
+                "answer": answer,
+                "domain": "Library & ID Card Privileges",
+                "citations": citations,
+                "recommended_action": "Download ID / Library Card Form (Form 19)",
+                "action_url": "/forms",
+                "voice_speech_text": voice_text,
+                "engine": "UniAssist Policy Engine",
+            }
+
         elif is_library_info_query:
-            lib_policy = next((p for p in policies if p.get("clause_code") == "ORD-LIB-01"), DEFAULT_POLICIES[0])
+            lib_policy = next((p for p in DEFAULT_POLICIES if p.get("clause_code") == "ORD-LIB-01"), None)
+            citations = [lib_policy] if lib_policy else []
             if language == "hi-IN":
                 answer = (
                     f"{student_name}, केंद्रीय विश्वविद्यालय पुस्तकालय (Central Library) की समय सारिणी एवं नियम:\n\n"
@@ -4670,9 +4799,9 @@ class PolicySearchService:
             res = {
                 "answer": answer,
                 "domain": "Library & Learning Resources",
-                "citations": [lib_policy],
-                "recommended_action": "Check Library Dues & Clearance",
-                "action_url": "/withdrawal",
+                "citations": citations,
+                "recommended_action": "View Library Services",
+                "action_url": "/services",
                 "voice_speech_text": voice_text,
                 "engine": "UniAssist Policy Engine",
             }
@@ -6034,7 +6163,8 @@ class PolicySearchService:
 
         citations_for_gemini = res.get("citations") or policies or []
         if settings.llm_enabled or settings.is_ollama_enabled or settings.llm_provider.lower() in ("ollama", "gemini", "local"):
-            is_deterministic_domain = res.get("domain") in (
+            is_curated_guidance = res.get("engine") in ("UniAssist Policy Engine", "UniAssist Step Counselor")
+            is_deterministic_domain = is_curated_guidance or res.get("domain") in (
                 "General",
                 "General Policies",
                 "Domain Boundary Guard",
@@ -6045,16 +6175,21 @@ class PolicySearchService:
                 "Grading & Examination",
                 "Training & Placements",
                 "Library & Learning Resources",
+                "Library & ID Card Privileges",
                 "Campus Facilities & Welfare",
                 "Withdrawal & Refunds",
                 "Withdrawal & Caution Deposit Offset",
                 "Withdrawal & Caution Deposit Refund",
+                "Program Withdrawal & Refund",
+                "Step Guidance",
                 "Finance & Accounts",
                 "Hostel & Accommodation",
+                "Hostel Clearance",
                 "Student ID Services",
                 "Certificates & Identity",
                 "Academic Records",
                 "Examinations",
+                "Examination & Rechecking",
                 "Student Grievance & Welfare",
                 "Scholarships",
                 "Post-Download Procedure",
@@ -6076,7 +6211,7 @@ class PolicySearchService:
                 "Screen Navigation",
             )
             # ---------------------------------------------------------------
-            # OLLAMA SYNTHESIS: Route ALL campus queries through Ollama when
+            # OLLAMA SYNTHESIS: Route unguided campus queries through Ollama when
             # available. Ollama receives retrieved university policy facts as
             # RAG context and synthesizes a warm, grounded, clean response.
             # ---------------------------------------------------------------

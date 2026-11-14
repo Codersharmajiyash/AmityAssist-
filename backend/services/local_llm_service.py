@@ -393,7 +393,7 @@ def generate_local_policy_answer(
         if ollama_result:
             return ollama_result[:1200]
 
-    # Step 2: Deterministic Citation Template Fallback (Guaranteed Safe)
+    # Step 2: Deterministic Citation Fallback (Guaranteed Safe, Direct & Professional)
     first = citations[0]
     clause = _safe_clause(first)
     title = _safe_title(first)
@@ -401,21 +401,21 @@ def generate_local_policy_answer(
 
     if language == "hi-IN":
         answer = (
-            f"विश्वविद्यालय के सत्यापित नियमों के अनुसार, सबसे प्रासंगिक अध्यादेश संदर्भ {clause} ({title}) है। "
-            f"नियम विवरण: {summary}। "
-            f"किसी भी अंतिम प्रक्रिया या आवेदन के लिए कृपया संबंधित कार्यालय से संपर्क करें। क्या आप इस विषय पर कुछ और पूछना चाहते हैं?"
+            f"{student_name}, {title} (अध्यादेश {clause}) के संबंध में आधिकारिक विश्वविद्यालय नियम निम्नलिखित हैं:\n\n"
+            f"{summary}\n\n"
+            "आप सीधे इस कियोस्क पर संबंधित फॉर्म डाउनलोड कर सकते हैं या सेवा विंडो से आगे बढ़ सकते हैं।"
         )
     elif language == "hi-Latn":
         answer = (
-            f"University ke verified rules ke mutabiq, sabse relevant policy reference {clause} ({title}) hai. "
-            f"Niyam detail: {summary}. "
-            f"Kisi bhi official procedure ke liye please relevant desk se confirm karein. Kya aapko is baare mein aur help chahiye?"
+            f"{student_name}, {title} (Ordinance {clause}) ke verified university rules yeh hain:\n\n"
+            f"{summary}\n\n"
+            "Aap is screen par action button se direct form download ya process initiate kar sakte hain."
         )
     else:
         answer = (
-            f"{student_name}, UniAssist can only answer questions using verified university ordinances and forms. "
-            f"The closest university ordinance reference is {clause} ({title}): {summary}. "
-            f"For official clearance or submission, please visit the relevant desk on {page_name}. Would you like help with this?"
+            f"{student_name}, official university guidance regarding {title} (Ordinance {clause}):\n\n"
+            f"{summary}\n\n"
+            "You can download the official format or proceed with clearance using the action button below."
         )
 
     return answer[:1200]
