@@ -13,6 +13,7 @@ import '../../../core/services/stt_service.dart';
 import '../../../core/services/page_context_service.dart';
 import '../../auth/application/auth_provider.dart';
 import '../../../core/widgets/formatted_markdown_text.dart';
+import '../state/standby_counselor_state.dart';
 import 'chat_screen.dart';
 
 /// Shows the AI Digital Counselor in a touch-first modal/dialog on kiosk or mobile.
@@ -539,6 +540,17 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     _sttSub = SttService().onTranscriptChanged.listen((transcript) {
       if (mounted) setState(() => _queryController.text = transcript);
     });
+
+    final standby = ref.read(standbyCounselorProvider);
+    if (standby.isStandbyActive && standby.history.isNotEmpty) {
+      _hasChosenLanguage = true;
+      for (final item in standby.history) {
+        if (item is _VoiceChatTurn) {
+          _conversationHistory.add(item);
+        }
+      }
+      _scrollToBottom();
+    }
   }
 
   void _scrollToBottom() {
@@ -1291,6 +1303,15 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                               child: ElevatedButton.icon(
                                 onPressed: () {
                                   final url = turn.actionUrl ?? (isStaff ? '/staff' : '/forms');
+
+                                  // 1. Save active conversation & steps into standby state before closing
+                                  ref.read(standbyCounselorProvider.notifier).enterStandby(
+                                    topic: turn.recommendedAction ?? 'Guided Procedure',
+                                    lastGuidance: turn.speechText ?? turn.text,
+                                    currentHistory: _conversationHistory,
+                                  );
+
+                                  // 2. Close modal view and navigate to form
                                   Navigator.of(context).pop();
                                   if (widget.currentRoute != url) {
                                     context.push(url);

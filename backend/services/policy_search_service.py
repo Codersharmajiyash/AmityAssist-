@@ -16,7 +16,7 @@ from ..config import settings
 from ..database.connection import get_connection
 from ..services.nlp_service import score_sentiment
 from ..services.advanced_ai_service import synthesize_guidance_with_gemini
-from ..services.local_llm_service import strip_markdown_stars
+from ..services.local_llm_service import call_ollama_llama3, strip_markdown_stars
 from ..data.kiosk_master_procedures import MASTER_PROCEDURES, get_procedure_by_keyword
 
 
@@ -1264,6 +1264,44 @@ class PolicySearchService:
                 "highlight_target": None,
                 "engine": "UniAssist Policy Engine",
             }
+
+        query_clean = query.strip()
+        FOLLOW_UP_PATTERNS = [
+            r"\b(step\s*\d+|pehla\s*step|first\s*step|next\s*step|what\s+next)\b",
+            r"\b(what\s+was\s+step|repeat|tell\s+again|fir\s+se\s+batao|bhool\s+gaya|forgot)\b",
+            r"\b(which\s+button|what\s+to\s+click|kaha\s+click\s+kare)\b",
+        ]
+        is_follow_up = any(re.search(pat, query_clean.lower()) for pat in FOLLOW_UP_PATTERNS)
+        # If it's a follow-up and we have conversation history:
+        if is_follow_up and history:
+            # 1. Extract the active topic/procedure from previous turns
+            last_assistant_turn = next(
+                (h.get("content", "") or h.get("text", "") or h.get("message", "") or h.get("speech_text", "")
+                 for h in reversed(history) 
+                 if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor")), 
+                ""
+            )
+            # 2. Feed the active context + history to Ollama for instant contextual recall
+            if last_assistant_turn:
+                synthesized_follow_up = call_ollama_llama3(
+                    prompt=f"The student is asking: '{query_clean}'. Based on the previous step guidance given above, answer their question concisely in 1 to 2 spoken sentences.",
+                    system_instruction=(
+                        "You are UniAssist Counselor. Answer the student's follow-up question directly "
+                        "referencing the steps already discussed in the conversation history. "
+                        "Keep your response strictly under 2 sentences for voice playback."
+                    ),
+                    history=history
+                )
+                if synthesized_follow_up:
+                    return {
+                        "answer": synthesized_follow_up,
+                        "speech_text": synthesized_follow_up,
+                        "voice_speech_text": synthesized_follow_up,
+                        "engine": "Ollama Local AI (Conversational)",
+                        "domain": "Step Guidance",
+                        "citations": [],
+                        "status": "success",
+                    }
 
         # =========================================================================
         # 00-ROLE-BASED PERSONAL RECORD ACCESS GUARD: Staff vs Authenticated Student vs Guest
@@ -3991,7 +4029,6 @@ class PolicySearchService:
             ai_engine_name = "SQLite FTS5 (Local Offline)"
             if settings.is_ollama_enabled:
                 try:
-                    from .local_llm_service import call_ollama_llama3
                     lang_rule = "Respond strictly in pure, natural Devanagari Hindi (हिन्दी)." if language == "hi-IN" else "Respond in warm, spoken English."
                     sys_inst = (
                         "You are UniAssist, an empathetic digital campus counselor at a university kiosk.\n"
