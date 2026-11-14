@@ -221,11 +221,12 @@ def call_ollama_llama3(
         "model": target_model,
         "messages": messages,
         "stream": False,
+        "keep_alive": "60m",  # Keeps model hot in RAM/VRAM; zero delay between queries
         "options": {
-            "temperature": 0.1,
+            "temperature": 0.1,        # Deterministic, prevents creative hallucinations
             "top_p": 0.9,
             "repeat_penalty": 1.1,
-            "num_predict": 100,
+            "num_predict": 85,         # Caps answer to 1-2 snappy sentences (~600ms generation)
             "num_ctx": 1024,
         },
     }
