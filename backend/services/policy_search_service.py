@@ -14,7 +14,7 @@ from typing import Any
 
 from ..config import settings
 from ..database.connection import get_connection
-from ..services.nlp_service import score_sentiment
+from ..services.nlp_service import score_sentiment, normalize_query_typos
 from ..services.advanced_ai_service import synthesize_guidance_with_gemini
 from ..services.local_llm_service import call_ollama_llama3, strip_markdown_stars
 from ..data.kiosk_master_procedures import MASTER_PROCEDURES, get_procedure_by_keyword
@@ -1203,6 +1203,775 @@ class PolicySearchService:
         return False
 
     @classmethod
+    def _get_all_procedures(cls) -> list[dict[str, Any]]:
+        procs = []
+        try:
+            from .procedure_service import ProcedureService
+            procs = ProcedureService.list_procedures(active_only=False) or []
+        except Exception:
+            procs = []
+
+        has_lib_card = any("library card" in (p.get("title") or "").lower() for p in procs)
+        if not has_lib_card:
+            procs.append({
+                "id": "proc-library-card",
+                "title": "Library Card",
+                "department": "Central Library",
+                "category": "LIBRARY_SERVICES",
+                "description": "Official procedure for issuing a student library membership card.",
+                "sla_days": 2,
+                "required_docs": ["Student ID Card Copy", "Latest Fee Receipt"],
+                "is_active": True,
+                "steps": [
+                    {
+                        "step_number": 1,
+                        "title": "go to desk",
+                        "responsible_desk": "librarin",
+                        "sla_days": 1,
+                    },
+                    {
+                        "step_number": 2,
+                        "title": "Fill the form",
+                        "responsible_desk": "Librarian",
+                        "sla_days": 1,
+                    },
+                ],
+                "total_steps": 2,
+            })
+        return procs
+
+    @classmethod
+    def _check_domain_boundary_guard(
+        cls, q_clean: str, q_lower: str, student_name: str, language: str
+    ) -> dict[str, Any] | None:
+        """Stage 1: Out-of-Domain Guard for irrelevant queries (food, cricket, crypto, weather, math, coding)."""
+        is_math = (
+            not any(w in q_lower for w in ["grv-", "ord-", "pol-", "proc-", "form", "ticket", "2024-", "2025-", "2026-", "2027-"])
+            and bool(re.search(r'\b\d+\s*[\+\*\/]\s*\d+\b|\b\d+\s+\-\s+\d+\b', q_lower))
+        ) or any(w in q_lower for w in [
+            "whats 2+2", "what is 2+2", "2+2", "2 + 2", "math question", "solve this equation",
+            "calculate ", "multiplication table", "square root"
+        ])
+
+        is_coding = any(w in q_lower for w in [
+            "python code", "code in python", "code for addition", "arithmatic operators", "arithmetic operators",
+            "write a function", "write a code", "write code", "javascript code", "java code", "c++ code",
+            "html code", "css code", "sql query to", "for loop in", "while loop in"
+        ])
+
+        is_campus_mess = any(w in q_lower for w in ["hostel mess", "mess fee", "mess rebate", "mess timing", "canteen timings"])
+        is_food = not is_campus_mess and any(w in q_lower for w in [
+            "eat food", "i want to eat food", "want to eat", "want food", "order food",
+            "buy food", "cook food", "cooking", "hungry", "recipe", "pizza", "burger",
+            "khana khana", "khana chahiye", "khana khau", "khana hai", "bhookh", "bhook lagi",
+            "खाना खाना", "खाना चाहिए", "खाना है", "भूख लगी", "भूख", "भोजन"
+        ])
+
+        is_sports = any(w in q_lower for w in [
+            "cricket score", "cricket match", "football match", "ipl score", "ipl match", "ipl",
+            "world cup", "sports news", "pubg", "minecraft", "free fire", "play a game", "game score",
+            "क्रिकेट स्कोर", "क्रिकेट मैच", "स्कोर क्या है"
+        ])
+
+        is_weather = any(w in q_lower for w in [
+            "weather", "weather today", "what is the weather", "temperature", "mausam", "मौसम", "तापमान"
+        ])
+
+        is_crypto = any(w in q_lower for w in [
+            "crypto", "bitcoin", "ethereum", "dogecoin", "stock market", "shares price", "trading"
+        ])
+
+        is_trivia = any(w in q_lower for w in [
+            "who won the", "who is the prime minister", "who is the president", "who is elon musk",
+            "who is narendra modi", "capital of france", "capital of", "who invented",
+            "tell me a joke", "tell a joke", "sing a song", "tell me a story", "tell a story"
+        ])
+
+        is_casual_chat = any(w in q_lower for w in [
+            "love you", "marry me", "dance for me", "are you human", "chat with me", "date me"
+        ])
+
+        if is_math or is_coding or is_food or is_sports or is_weather or is_crypto or is_trivia or is_casual_chat:
+            if language == "hi-IN":
+                refusal_msg = "UniAssist केवल विश्वविद्यालय अकादमिक, क्लीयरेंस और प्रशासनिक प्रक्रियाओं में सहायता करता है। मैं व्यक्तिगत अनुरोधों में सहायता नहीं कर सकता।"
+            elif language == "hi-Latn":
+                refusal_msg = "UniAssist keval campus academic, clearance, fee aur administrative procedures me assist karta hai. Main personal requests me help nahi kar sakta."
+            else:
+                refusal_msg = "UniAssist only handles university academic, clearance, and administrative procedures. I cannot assist with personal requests."
+
+            return {
+                "answer": refusal_msg,
+                "domain": "Domain Boundary Guard",
+                "citations": [],
+                "recommended_action": None,
+                "action_url": None,
+                "voice_speech_text": refusal_msg,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+        return None
+
+    @classmethod
+    def _resolve_active_procedure_from_history(
+        cls, history: list[dict[str, Any]] | None, all_procs: list[dict[str, Any]]
+    ) -> dict[str, Any] | None:
+        """Stage 2: Resolves active procedure from previous conversational turns."""
+        if not history:
+            return None
+
+        for h in reversed(history):
+            content = str(h.get("content") or h.get("text") or "").lower()
+            if not content:
+                continue
+            for p in all_procs:
+                p_title = (p.get("title") or "").lower()
+                p_id = (p.get("id") or "").lower()
+                if p_title in content or p_id in content:
+                    return p
+                if ("library card" in content or "लाइब्रेरी कार्ड" in content) and "library card" in p_title:
+                    return p
+                if ("hostel room" in content or "room change" in content or "हॉस्टल" in content) and "hostel" in p_title:
+                    return p
+                if ("bonafide" in content or "बोनाफाइड" in content) and "bonafide" in p_title:
+                    return p
+        return None
+
+    @classmethod
+    def _extract_step_target(cls, q_lower: str) -> tuple[int | str | None, str | None]:
+        """Stage 2: Extracts step target or aspect requested."""
+        if any(w in q_lower for w in ["document", "documents", "required docs", "what docs", "what documents", "dastavez", "kaagaz", "what papers", "papers required", "दस्तावेज", "दस्तावेज़", "कागजात"]):
+            return (None, "documents")
+
+        if any(w in q_lower for w in ["how long", "kitna time", "processing time", "timeline", "duration", "how many days", "kitne din", "कितना समय", "कितने दिन"]):
+            return (None, "sla")
+
+        if any(w in q_lower for w in ["first step", "1st step", "step 1", "step one", "pehla step", "pehla charan", "initial step", "starting step", "पहला स्टेप", "पहला चरण", "प्रथम चरण"]):
+            return (1, "steps")
+        if any(w in q_lower for w in ["second step", "2nd step", "step 2", "step two", "dusra step", "doosra step", "dusra charan", "दूसरा स्टेप", "दूसरा चरण", "द्वितीय चरण"]):
+            return (2, "steps")
+        if any(w in q_lower for w in ["third step", "3rd step", "step 3", "step three", "teesra step", "tisra step", "तीसरा स्टेप", "तीसरा चरण"]):
+            return (3, "steps")
+        if any(w in q_lower for w in ["fourth step", "4th step", "step 4", "chautha step", "चौथा स्टेप", "चौथा चरण"]):
+            return (4, "steps")
+        if any(w in q_lower for w in ["fifth step", "5th step", "step 5", "panchwa step", "पांचवा स्टेप", "पांचवां स्टेप", "पाँचवाँ चरण"]):
+            return (5, "steps")
+
+        m = re.search(r'\bstep\s*(\d+)\b', q_lower)
+        if m:
+            return (int(m.group(1)), "steps")
+
+        m_hi = re.search(r'\bचरण\s*(\d+)\b', q_lower)
+        if m_hi:
+            return (int(m_hi.group(1)), "steps")
+
+        m_hi_step = re.search(r'\bस्टेप\s*(\d+)\b', q_lower)
+        if m_hi_step:
+            return (int(m_hi_step.group(1)), "steps")
+
+        if any(w in q_lower for w in ["last step", "final step", "aakhri step", "antim charan", "what was the final step", "what is the final step", "what was the last step", "आखिरी स्टेप", "अंतिम चरण"]):
+            return ("final", "steps")
+
+        if any(w in q_lower for w in ["next step", "agla step", "agla charan", "what is the next step"]):
+            return ("next", "steps")
+
+        if any(w in q_lower for w in ["how to apply", "workflow", "steps", "charan", "tarika", "kaise apply", "kaise karein"]):
+            return (None, "steps")
+
+        return (None, None)
+
+    @classmethod
+    def _handle_multi_turn_step_resolution(
+        cls,
+        active_proc: dict[str, Any],
+        step_target: int | str | None,
+        aspect: str | None,
+        student_name: str,
+        language: str,
+    ) -> dict[str, Any]:
+        """Stage 2: Strictly binds step inquiries to active procedure without falling through to generic search."""
+        proc_title = active_proc.get("title", "Procedure")
+        proc_dept = active_proc.get("department", "University Desk")
+        steps = active_proc.get("steps") or []
+        total_steps = len(steps)
+
+        if aspect == "documents":
+            return cls._synthesize_procedure_aspect(active_proc, "documents", student_name, language)
+        if aspect == "sla":
+            return cls._synthesize_procedure_aspect(active_proc, "sla", student_name, language)
+
+        req_step: int | None = None
+        if step_target == "final":
+            req_step = total_steps
+        elif step_target == "next":
+            req_step = 2 if total_steps >= 2 else 1
+        elif isinstance(step_target, int):
+            req_step = step_target
+
+        if req_step is not None:
+            if total_steps > 0 and req_step > total_steps:
+                if language == "hi-IN":
+                    ans = f"इस प्रक्रिया में केवल {total_steps} चरण हैं। चरण {total_steps} अंतिम चरण था।"
+                elif language == "hi-Latn":
+                    ans = f"Is procedure me keval {total_steps} steps hain. Step {total_steps} final tha."
+                else:
+                    ans = f"There are only {total_steps} steps in this procedure. Step {total_steps} was final."
+                return {
+                    "answer": ans,
+                    "domain": proc_dept,
+                    "citations": [],
+                    "recommended_action": f"View {proc_title}",
+                    "action_url": "/services",
+                    "voice_speech_text": ans,
+                    "screen_instruction": None,
+                    "highlight_target": None,
+                    "engine": "UniAssist Policy Engine",
+                }
+            elif total_steps > 0 and 1 <= req_step <= total_steps:
+                s = steps[req_step - 1]
+                s_title = s.get("title", f"Step {req_step}")
+                s_desk = s.get("responsible_desk", "Desk")
+                s_sla = s.get("sla_days", 1)
+                is_final = req_step == total_steps
+                final_note = " (Final step)" if is_final else ""
+
+                if language == "hi-IN":
+                    ans = f"{proc_title} के लिए चरण {req_step}: {s_title} ({s_desk}) - समयसीमा: {s_sla} कार्य दिवस{final_note}।"
+                    voice = f"{proc_title} का चरण {req_step}: {s_desk} पर {s_title}।"
+                elif language == "hi-Latn":
+                    ans = f"{proc_title} ke liye Step {req_step}: {s_title} ({s_desk}) - SLA: {s_sla} working day(s){final_note}."
+                    voice = f"{proc_title} ke liye Step {req_step}: {s_desk} par {s_title}."
+                else:
+                    ans = f"Step {req_step} for {proc_title}: {s_title} ({s_desk}) - SLA: {s_sla} working day(s){final_note}."
+                    voice = f"Step {req_step} for {proc_title}: {s_title} at {s_desk}."
+
+                return {
+                    "answer": ans,
+                    "domain": proc_dept,
+                    "citations": [],
+                    "recommended_action": f"View {proc_title}",
+                    "action_url": "/services",
+                    "voice_speech_text": voice,
+                    "screen_instruction": None,
+                    "highlight_target": None,
+                    "engine": "UniAssist Policy Engine",
+                }
+
+        return cls._synthesize_procedure_aspect(active_proc, "steps", student_name, language)
+
+    @classmethod
+    def _check_disambiguation_keywords(
+        cls, q_clean: str, q_lower: str, student_name: str, language: str, history: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any] | None:
+        """Stage 4: Conflicting Keyword & Disambiguation Engine for ambiguous single keywords (library, hostel, fees)."""
+        if history:
+            last_turn = ""
+            for h in reversed(history):
+                role = str(h.get("role", "")).lower()
+                if role in ("assistant", "model", "bot", "counselor"):
+                    last_turn = str(h.get("content") or h.get("text") or "").lower()
+                    break
+            if "are you asking about" in last_turn or "kiske baare me pooch rahe hain" in last_turn or "इनमें से किसी के बारे में" in last_turn:
+                if "library" in last_turn:
+                    if any(w in q_clean for w in ["1", "card", "first", "pehle", "pehla", "id"]):
+                        all_procs = cls._get_all_procedures()
+                        lib_card = next((p for p in all_procs if "library card" in (p.get("title") or "").lower()), None)
+                        if lib_card:
+                            return cls._synthesize_procedure_aspect(lib_card, "overview", student_name, language)
+                    elif any(w in q_clean for w in ["2", "timing", "timings", "reading", "second", "dusra"]):
+                        return cls._get_central_library_timings_response(student_name, language)
+                    elif any(w in q_clean for w in ["3", "clearance", "due", "dues", "third", "teesra"]):
+                        return cls._get_library_clearance_response(student_name, language)
+
+                if "hostel" in last_turn:
+                    if any(w in q_clean for w in ["1", "change", "swap", "first", "pehle", "pehla"]):
+                        all_procs = cls._get_all_procedures()
+                        h_proc = next((p for p in all_procs if "hostel" in (p.get("title") or "").lower()), None)
+                        if h_proc:
+                            return cls._synthesize_procedure_aspect(h_proc, "overview", student_name, language)
+                    elif any(w in q_clean for w in ["2", "allotment", "mess", "rules", "second"]):
+                        return cls._get_hostel_rules_response(student_name, language)
+                    elif any(w in q_clean for w in ["3", "clearance", "vacate", "handover", "third"]):
+                        return cls._get_hostel_clearance_response(student_name, language)
+
+                if "fee" in last_turn or "fees" in last_turn:
+                    if any(w in q_clean for w in ["1", "structure", "deadline", "tuition", "first"]):
+                        return cls._get_fee_structure_response(student_name, language)
+
+        # Library disambiguation
+        is_bare_library = (
+            q_clean in ("library", "central library", "librarian", "library info", "library help", "about library", "library rules", "लाइब्रेरी", "पुस्तकालय")
+            or (
+                "library" in q_lower
+                and len(q_clean.split()) <= 2
+                and not any(spec in q_lower for spec in ["card", "timing", "timings", "clearance", "due", "dues", "book", "borrow", "return", "fine", "hour", "hours"])
+            )
+        )
+        if is_bare_library:
+            if language == "hi-IN":
+                ans = (
+                    "क्या आप इनमें से किसी के बारे में पूछ रहे हैं:\n"
+                    "[1] लाइब्रेरी कार्ड एवं आईडी जारी करना\n"
+                    "[2] सेंट्रल लाइब्रेरी समय और रीडिंग हॉल नियम\n"
+                    "[3] लाइब्रेरी क्लीयरेंस और बकाया शुल्क\n\n"
+                    "कृपया आगे बढ़ने के लिए [1], [2], या [3] चुनें।"
+                )
+                v_ans = "क्या आप लाइब्रेरी कार्ड, लाइब्रेरी समय, या लाइब्रेरी क्लीयरेंस के बारे में पूछ रहे हैं? कृपया विकल्प 1, 2, या 3 चुनें।"
+            elif language == "hi-Latn":
+                ans = (
+                    "Kya aap inme se kiske baare me pooch rahe hain:\n"
+                    "[1] Library Card & ID Issuance\n"
+                    "[2] Central Library Timings & Reading Hall\n"
+                    "[3] Library Clearance & Overdue Dues\n\n"
+                    "Kripya aage badhne ke liye [1], [2], ya [3] select karein."
+                )
+                v_ans = "Kya aap Library Card, Library Timings, ya Library Clearance ke baare me pooch rahe hain? Please option 1, 2, ya 3 chunein."
+            else:
+                ans = (
+                    "Are you asking about:\n"
+                    "[1] Library Card Application & Issuance\n"
+                    "[2] Central Library Timings & Circulation Rules\n"
+                    "[3] Library Clearance & Overdue Dues\n\n"
+                    "Please select [1], [2], or [3] to proceed."
+                )
+                v_ans = "Are you asking about Library Card Application, Library Timings, or Library Clearance? Please select option 1, 2, or 3."
+
+            return {
+                "status": "trigger_cross_question",
+                "is_ambiguous": True,
+                "answer": ans,
+                "domain": "Central Library",
+                "citations": [],
+                "recommended_action": "Select Option [1-3]",
+                "action_url": "/services",
+                "voice_speech_text": v_ans,
+                "clarification_options": [
+                    {"label": "📚 [1] Library Card Application & Issuance", "value": "library_card", "action_url": "/services"},
+                    {"label": "⏰ [2] Central Library Timings & Rules", "value": "library_timings", "action_url": "/forms"},
+                    {"label": "📋 [3] Library Clearance & Overdue Dues", "value": "library_clearance", "action_url": "/tracking"},
+                ],
+                "engine": "UniAssist Intent Disambiguator",
+            }
+
+        # Hostel disambiguation
+        is_bare_hostel = (
+            q_clean in ("hostel", "hostels", "hostel rules", "hostel info", "हॉस्टल")
+            or (
+                "hostel" in q_lower
+                and len(q_clean.split()) <= 2
+                and not any(spec in q_lower for spec in ["change", "swap", "allotment", "mess", "vacate", "room", "fee", "fees", "warden", "leave"])
+            )
+        )
+        if is_bare_hostel:
+            if language == "hi-IN":
+                ans = (
+                    "क्या आप इनमें से किसी के बारे में पूछ रहे हैं:\n"
+                    "[1] हॉस्टल रूम चेंज आवेदन (Hostel Room Swap)\n"
+                    "[2] हॉस्टल आवंटन एवं मेस नियम\n"
+                    "[3] हॉस्टल क्लीयरेंस एवं कमरा सुपुर्दगी (Room Handover)\n\n"
+                    "कृपया आगे बढ़ने के लिए [1], [2], या [3] चुनें।"
+                )
+                v_ans = "क्या आप हॉस्टल रूम चेंज, आवंटन, या हॉस्टल क्लीयरेंस के बारे में पूछ रहे हैं? कृपया विकल्प 1, 2, या 3 चुनें।"
+            elif language == "hi-Latn":
+                ans = (
+                    "Kya aap inme se kiske baare me pooch rahe hain:\n"
+                    "[1] Hostel Room Change Application\n"
+                    "[2] Hostel Allotment & Mess Rules\n"
+                    "[3] Hostel Clearance & Room Handover\n\n"
+                    "Kripya aage badhne ke liye [1], [2], ya [3] select karein."
+                )
+                v_ans = "Kya aap Hostel Room Change, Allotment, ya Clearance ke baare me pooch rahe hain? Please option 1, 2, ya 3 select karein."
+            else:
+                ans = (
+                    "Are you asking about:\n"
+                    "[1] Hostel Room Change Application\n"
+                    "[2] Hostel Allotment & Mess Rules\n"
+                    "[3] Hostel Clearance & Room Handover\n\n"
+                    "Please select [1], [2], or [3] to proceed."
+                )
+                v_ans = "Are you asking about Hostel Room Change, Allotment Rules, or Clearance? Please select option 1, 2, or 3."
+
+            return {
+                "status": "trigger_cross_question",
+                "is_ambiguous": True,
+                "answer": ans,
+                "domain": "Hostel Administration",
+                "citations": [],
+                "recommended_action": "Select Option [1-3]",
+                "action_url": "/services",
+                "voice_speech_text": v_ans,
+                "clarification_options": [
+                    {"label": "🛏️ [1] Hostel Room Change Application", "value": "hostel_change", "action_url": "/services"},
+                    {"label": "📜 [2] Hostel Allotment & Mess Rules", "value": "hostel_rules", "action_url": "/forms"},
+                    {"label": "🔑 [3] Hostel Clearance & Handover", "value": "hostel_clearance", "action_url": "/tracking"},
+                ],
+                "engine": "UniAssist Intent Disambiguator",
+            }
+
+        return None
+
+    @classmethod
+    def _get_central_library_timings_response(cls, student_name: str, language: str) -> dict[str, Any]:
+        if language == "hi-IN":
+            ans = (
+                f"{student_name}, सेंट्रल लाइब्रेरी (Central Library) के संचालन समय और नियम:\n\n"
+                "• सामान्य कार्य दिवस: प्रातः 08:00 से रात्रि 10:00 बजे तक\n"
+                "• परीक्षा अवधि: 24 घंटे खुली (रीडिंग हॉल 2 एवं 3)\n"
+                "• पुस्तक निर्गमन काउंटर (Circulation): प्रातः 09:00 से सायं 05:30 बजे तक\n"
+                "• रविवार एवं अवकाश: प्रातः 09:00 से सायं 05:00 बजे तक (केवल रीडिंग हॉल)"
+            )
+            v_ans = "सेंट्रल लाइब्रेरी सामान्य दिनों में सुबह 8 से रात 10 बजे तक और परीक्षा के दौरान 24 घंटे खुली रहती है।"
+        elif language == "hi-Latn":
+            ans = (
+                f"{student_name}, Central Library operational timings aur rules:\n\n"
+                "• Regular Working Days: 08:00 AM to 10:00 PM\n"
+                "• Examination Period: 24 Hours Open (Reading Halls 2 & 3)\n"
+                "• Book Issue / Circulation Counter: 09:00 AM to 05:30 PM\n"
+                "• Sundays & Gazetted Holidays: 09:00 AM to 05:00 PM (Reading Hall only)"
+            )
+            v_ans = "Central Library regular days me subah 8 se raat 10 baje tak aur exams ke time 24 hours open rehti hai."
+        else:
+            ans = (
+                f"{student_name}, here are the Central Library operational timings and circulation rules:\n\n"
+                "• Regular Working Days: 08:00 AM to 10:00 PM\n"
+                "• Examination Period: Open 24 Hours (Reading Halls 2 & 3)\n"
+                "• Circulation Counter (Issue/Return): 09:00 AM to 05:30 PM\n"
+                "• Sundays & Holidays: 09:00 AM to 05:00 PM (Reading Hall only)"
+            )
+            v_ans = "The Central Library operates from 8 AM to 10 PM on regular days, and remains open 24 hours during examinations."
+
+        return {
+            "answer": ans,
+            "domain": "Central Library",
+            "citations": [DEFAULT_POLICIES[4] if len(DEFAULT_POLICIES) > 4 else DEFAULT_POLICIES[0]],
+            "recommended_action": "View Library Rules",
+            "action_url": "/forms",
+            "voice_speech_text": v_ans,
+            "screen_instruction": None,
+            "highlight_target": None,
+            "engine": "UniAssist Policy Engine",
+        }
+
+    @classmethod
+    def _get_library_clearance_response(cls, student_name: str, language: str) -> dict[str, Any]:
+        if language == "hi-IN":
+            ans = (
+                f"{student_name}, सेंट्रल लाइब्रेरी नो-ड्यूज (No-Dues) एवं क्लीयरेंस प्रक्रिया:\n\n"
+                "1. सभी जारी पुस्तकें एवं पत्रिकाएं सर्कुलेशन काउंटर पर वापस करें।\n"
+                "2. किसी भी विलंब शुल्क (Overdue Fine) का भुगतान लाइब्रेरी अकाउंट्स में करें।\n"
+                "3. लाइब्रेरियन डिजिटल क्लीयरेंस सिस्टम (Clearance Token) में आपकी एनओसी अनुमोदित करेंगे।"
+            )
+            v_ans = "लाइब्रेरी क्लीयरेंस के लिए सभी पुस्तकें जमा करें और बकाया शुल्क क्लीयर करें।"
+        else:
+            ans = (
+                f"{student_name}, Central Library No-Dues & Clearance procedure:\n\n"
+                "1. Return all borrowed books, journals, and materials to the Circulation Desk.\n"
+                "2. Settle any outstanding overdue book fines at the library accounts desk.\n"
+                "3. The Chief Librarian will record digital NOC approval in your clearance tracking dossier."
+            )
+            v_ans = "For library clearance, return all borrowed books and settle any pending overdue fines."
+
+        return {
+            "answer": ans,
+            "domain": "Central Library",
+            "citations": [],
+            "recommended_action": "Check Clearance Status",
+            "action_url": "/tracking",
+            "voice_speech_text": v_ans,
+            "screen_instruction": None,
+            "highlight_target": None,
+            "engine": "UniAssist Policy Engine",
+        }
+
+    @classmethod
+    def _get_hostel_rules_response(cls, student_name: str, language: str) -> dict[str, Any]:
+        ans = (
+            f"{student_name}, Hostel Allotment & Mess Rules:\n\n"
+            "• Hostel In-Time: 10:00 PM for all resident students.\n"
+            "• Mess Timings: Breakfast (7:30-9:30 AM), Lunch (12:30-2:30 PM), Dinner (7:30-9:30 PM).\n"
+            "• Room Allotment is merit and distance based, managed by the Chief Warden Office."
+        )
+        return {
+            "answer": ans,
+            "domain": "Hostel Administration",
+            "citations": [],
+            "recommended_action": "Hostel Handbook",
+            "action_url": "/forms",
+            "voice_speech_text": "Hostel in-time is 10 PM. Mess serves three meals daily, and room allotment is managed by Chief Warden.",
+            "engine": "UniAssist Policy Engine",
+        }
+
+    @classmethod
+    def _get_hostel_clearance_response(cls, student_name: str, language: str) -> dict[str, Any]:
+        ans = (
+            f"{student_name}, Hostel Clearance & Room Handover:\n\n"
+            "1. Vacate room and hand over physical keys to the Hostel Caretaker / Warden.\n"
+            "2. Estate Office inspects room inventory, furniture, and electricity meter reading.\n"
+            "3. Warden signs off digital no-dues in the clearance portal."
+        )
+        return {
+            "answer": ans,
+            "domain": "Hostel Administration",
+            "citations": [],
+            "recommended_action": "Track Clearance",
+            "action_url": "/tracking",
+            "voice_speech_text": "To clear hostel dues, hand over room keys to caretaker and obtain Estate Office inventory verification.",
+            "engine": "UniAssist Policy Engine",
+        }
+
+    @classmethod
+    def _get_fee_structure_response(cls, student_name: str, language: str) -> dict[str, Any]:
+        ans = (
+            f"{student_name}, Academic Fee Structure & Payment Guidelines:\n\n"
+            "• Semester tuition fees must be remitted before the semester registration deadline.\n"
+            "• Late fee of INR 100 per day applies after the due date up to 15 calendar days.\n"
+            "• Payment portals: Net Banking, UPI, or Challan at Campus Finance Office (Room 104)."
+        )
+        return {
+            "answer": ans,
+            "domain": "Fee Clearance & Accounts",
+            "citations": [DEFAULT_POLICIES[2] if len(DEFAULT_POLICIES) > 2 else DEFAULT_POLICIES[0]],
+            "recommended_action": "Pay Academic Fees",
+            "action_url": "/dashboard",
+            "voice_speech_text": "Semester fees must be paid before registration deadline to avoid late fee penalties.",
+            "engine": "UniAssist Policy Engine",
+        }
+
+    @classmethod
+    def _check_non_existent_procedure(
+        cls, query: str, q_lower: str, all_procs: list[dict[str, Any]], student_name: str, language: str
+    ) -> dict[str, Any] | None:
+        """Stage 3: Zero-Match Guard for non-existent procedures (e.g. scuba diving, buy car). Never hallucinates Admission Form."""
+        if any(w in q_lower for w in ["faculty", "resign", "resignation", "job", "leave", "chhod", "hod", "dean", "professor", "teacher"]):
+            return None
+
+        topic: str | None = None
+        m1 = re.search(r'\b(?:procedure|process|steps|how to apply|apply for|application for|kya process hai|kaise apply karein|karyapranali)\s+(?:for|to|of|ka|ke liye)\s+([a-zA-Z\s]{3,30})\b', q_lower)
+        if m1:
+            topic = m1.group(1).strip()
+        else:
+            m2 = re.search(r'\b([a-zA-Z\s]{3,25})\s+(?:procedure|process|workflow)\b', q_lower)
+            if m2:
+                topic = m2.group(1).strip()
+
+        if not topic:
+            return None
+
+        topic_clean = re.sub(r'^(?:for|to|the|a|an|in|on|at|of|any)\s+', '', topic).strip()
+        topic_clean = re.sub(r'\s+(?:card|form|document|documents|desk|office)$', '', topic_clean).strip()
+        if not topic_clean or len(topic_clean) < 3:
+            return None
+
+        CONV_STOP = {"ko", "mere", "meri", "mera", "guide", "kar", "karna", "sakte", "batao", "bataiye", "hoga", "apni", "uski", "help", "please", "can", "you", "tell", "mujhe", "kya", "hai", "hain"}
+        topic_words = topic_clean.split()
+        if any(w in CONV_STOP for w in topic_words) or len(topic_words) > 4:
+            return None
+
+        VALID_CAMPUS_TERMS = {
+            "library", "hostel", "admission", "admissions", "withdrawal", "withdraw", "refund",
+            "condonation", "attendance", "medical", "backpaper", "back paper", "supplementary",
+            "re-evaluation", "reevaluation", "rechecking", "grade", "marksheet", "transcript",
+            "degree", "bonafide", "character certificate", "migration", "no dues", "clearance",
+            "caution deposit", "deposit offset", "scholarship", "fellowship", "grievance",
+            "ragging", "id card", "admit card", "examination", "exam", "fees", "fee", "leave",
+            "faculty leave", "form 23", "form 19", "form 04", "form ac-04", "form adm-01",
+            "form ex-03", "room change", "duplicate id", "wifi", "internet"
+        }
+
+        if any(t in topic_clean for t in VALID_CAMPUS_TERMS) or any(topic_clean in t for t in VALID_CAMPUS_TERMS):
+            return None
+
+        for p in all_procs:
+            p_t = (p.get("title") or "").lower()
+            p_d = (p.get("department") or "").lower()
+            if topic_clean in p_t or topic_clean in p_d:
+                return None
+
+        for dp in DEFAULT_POLICIES:
+            if topic_clean in dp.get("title", "").lower() or topic_clean in dp.get("category", "").lower():
+                return None
+
+        topic_display = topic_clean.title()
+        if language == "hi-IN":
+            ans = f"{topic_display} के लिए कोई सत्यापित विश्वविद्यालय प्रक्रिया या अध्यादेश मौजूद नहीं है। कृपया आधिकारिक फॉर्म कैटलॉग देखें या कमरा 101 पर संपर्क करें।"
+            voice = f"{topic_display} के लिए कोई सत्यापित विश्वविद्यालय प्रक्रिया या अध्यादेश मौजूद नहीं है। कृपया आधिकारिक फॉर्म कैटलॉग देखें।"
+        elif language == "hi-Latn":
+            ans = f"No verified university procedure or ordinance exists for {topic_display}. Please check the official forms catalog or visit Room 101."
+            voice = f"No verified university procedure or ordinance exists for {topic_display}. Please check the official forms catalog or visit Room 101."
+        else:
+            ans = f"No verified university procedure or ordinance exists for {topic_display}. Please check the official forms catalog or visit Room 101."
+            voice = f"No verified university procedure or ordinance exists for {topic_display}. Please check the official forms catalog or visit Room 101."
+
+        return {
+            "answer": ans,
+            "domain": "General",
+            "citations": [],
+            "recommended_action": "Browse Forms Catalog",
+            "action_url": "/forms",
+            "voice_speech_text": voice,
+            "screen_instruction": None,
+            "highlight_target": None,
+            "engine": "UniAssist Policy Engine",
+        }
+
+    @classmethod
+    def _synthesize_procedure_aspect(
+        cls, proc: dict[str, Any], aspect_or_query: str, student_name: str, language: str
+    ) -> dict[str, Any]:
+        """Stage 5: Aspect Filter & Multilingual Response Synthesizer for Documents, Steps, SLA, or Overview."""
+        proc_title = proc.get("title", "Procedure")
+        proc_dept = proc.get("department", "University Desk")
+        proc_sla = proc.get("sla_days", 2)
+        proc_docs = proc.get("required_docs") or ["Student ID Card Copy", "Latest Fee Receipt"]
+        if isinstance(proc_docs, str):
+            try:
+                import json
+                proc_docs = json.loads(proc_docs)
+            except Exception:
+                proc_docs = [proc_docs]
+
+        steps = proc.get("steps") or []
+        total_steps = len(steps) or 1
+        lead_desk = steps[0].get("responsible_desk", "Desk") if steps else proc_dept
+
+        q = aspect_or_query.lower()
+        if q in ("documents", "steps", "sla", "overview"):
+            aspect = q
+        elif any(w in q for w in ["document", "documents", "required docs", "dastavez", "kaagaz", "what papers", "papers required", "dastavezo"]):
+            aspect = "documents"
+        elif any(w in q for w in ["step", "steps", "how to apply", "workflow", "charan", "tarika", "kaise kare", "process"]):
+            aspect = "steps"
+        elif any(w in q for w in ["how long", "kitna time", "processing time", "timeline", "duration", "days", "sla"]):
+            aspect = "sla"
+        else:
+            aspect = "overview"
+
+        docs_list_str = "\n".join([f"   • {doc}" for doc in proc_docs])
+        docs_spoken = " and ".join(proc_docs)
+        docs_spoken_hi = " और ".join(proc_docs)
+
+        steps_str = "\n".join([
+            f"   • Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')}) - SLA: {s.get('sla_days', 1)} day(s)"
+            for idx, s in enumerate(steps)
+        ])
+        voice_steps_en = ". ".join([
+            f"Step {s.get('step_number', idx+1)}: {s.get('title')} at {s.get('responsible_desk', 'Desk')}"
+            for idx, s in enumerate(steps)
+        ])
+        voice_steps_hi = "। ".join([
+            f"चरण {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} में {s.get('title')}"
+            for idx, s in enumerate(steps)
+        ])
+
+        if aspect == "documents":
+            if language == "hi-IN":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) के लिए आवश्यक दस्तावेज:\n\n"
+                    f"{docs_list_str}\n\n"
+                    f"• जमा करने का काउंटर: {lead_desk}\n"
+                    f"• प्रसंस्करण समयसीमा (SLA): {proc_sla} कार्य दिवस।"
+                )
+                voice_text = f"The required documents for {proc_title} are: {docs_spoken}. Please submit them at the {lead_desk} desk."
+            elif language == "hi-Latn":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) ke liye required documents:\n\n"
+                    f"{docs_list_str}\n\n"
+                    f"• Submission Desk: {lead_desk}\n"
+                    f"• Processing SLA: {proc_sla} working days."
+                )
+                voice_text = f"The required documents for {proc_title} are: {docs_spoken}. Please submit them at the {lead_desk} desk."
+            else:
+                answer = (
+                    f"{student_name}, here are the required documents for {proc_title} ({proc_dept}):\n\n"
+                    f"Required Documents Checklist:\n"
+                    f"{docs_list_str}\n\n"
+                    f"• Submission Desk: {lead_desk}\n"
+                    f"• Processing SLA: {proc_sla} working day(s)."
+                )
+                voice_text = f"The required documents for {proc_title} are: {docs_spoken}. Please submit them at the {lead_desk} desk."
+
+        elif aspect == "steps":
+            if language == "hi-IN":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) के लिए आधिकारिक प्रक्रिया के {total_steps} चरण:\n\n"
+                    f"{steps_str}\n\n"
+                    f"• कुल समयसीमा (SLA): {proc_sla} कार्य दिवस।"
+                )
+                voice_text = f"The procedure for {proc_title} has {total_steps} steps. {voice_steps_en}. The total SLA is {proc_sla} working days."
+            elif language == "hi-Latn":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) ke liye {total_steps} steps workflow:\n\n"
+                    f"{steps_str}\n\n"
+                    f"• Total SLA: {proc_sla} working days."
+                )
+                voice_text = f"The procedure for {proc_title} has {total_steps} steps. {voice_steps_en}. The total SLA is {proc_sla} working days."
+            else:
+                answer = (
+                    f"{student_name}, here is the step-by-step approval workflow for {proc_title} ({proc_dept}):\n\n"
+                    f"{steps_str}\n\n"
+                    f"• Total Processing SLA: {proc_sla} working day(s)."
+                )
+                voice_text = f"The procedure for {proc_title} has {total_steps} steps. {voice_steps_en}. The total SLA is {proc_sla} working days."
+
+        elif aspect == "sla":
+            if language == "hi-IN":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) के लिए आधिकारिक समयसीमा (SLA) **{proc_sla} कार्य दिवस** है।\n\n"
+                    f"चरणवार विवरण:\n{steps_str}"
+                )
+                voice_text = f"The official processing timeline for {proc_title} is {proc_sla} working days."
+            elif language == "hi-Latn":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) ke liye official processing timeline **{proc_sla} working days** hai.\n\n"
+                    f"Step breakdown:\n{steps_str}"
+                )
+                voice_text = f"The official processing timeline for {proc_title} is {proc_sla} working days."
+            else:
+                answer = (
+                    f"{student_name}, the official processing SLA for {proc_title} ({proc_dept}) is **{proc_sla} working day(s)**.\n\n"
+                    f"Workflow Breakdown:\n{steps_str}"
+                )
+                voice_text = f"The official processing timeline for {proc_title} is {proc_sla} working days."
+
+        else:
+            if language == "hi-IN":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) के लिए आधिकारिक प्रक्रिया के {total_steps} चरण:\n\n"
+                    f"1. आवश्यक दस्तावेज:\n{docs_list_str}\n"
+                    f"2. प्रक्रिया के चरण:\n{steps_str}\n"
+                    f"3. समाधान समयसीमा (SLA): {proc_sla} कार्य दिवस।"
+                )
+                voice_text = f"The official procedure for {proc_title} requires {docs_spoken}. It consists of {total_steps} steps with an SLA of {proc_sla} working days."
+            elif language == "hi-Latn":
+                answer = (
+                    f"{student_name}, {proc_title} ({proc_dept}) ke liye official procedure ke {total_steps} steps:\n\n"
+                    f"1. Required Documents:\n{docs_list_str}\n"
+                    f"2. Process Steps:\n{steps_str}\n"
+                    f"3. SLA Timeline: {proc_sla} working days."
+                )
+                voice_text = f"The official procedure for {proc_title} requires {docs_spoken}. It consists of {total_steps} steps with an SLA of {proc_sla} working days."
+            else:
+                answer = (
+                    f"{student_name}, here is the official procedure for {proc_title} ({proc_dept}):\n\n"
+                    f"1. Required Documents:\n{docs_list_str}\n"
+                    f"2. Approval Workflow ({total_steps} step(s)):\n{steps_str}\n"
+                    f"3. Processing SLA: {proc_sla} working day(s)."
+                )
+                voice_text = f"The official procedure for {proc_title} requires {docs_spoken}. It consists of {total_steps} steps with an SLA of {proc_sla} working days."
+
+        return {
+            "answer": answer,
+            "domain": proc_dept,
+            "citations": [],
+            "recommended_action": f"View {proc_title}",
+            "action_url": "/services",
+            "voice_speech_text": voice_text,
+            "screen_instruction": None,
+            "highlight_target": None,
+            "engine": "UniAssist Policy Engine",
+        }
+
+    @classmethod
     def hybrid_guidance(
         cls,
         query: str,
@@ -1251,7 +2020,19 @@ class PolicySearchService:
         greeting_prefix = f"{student_name}, " if is_authenticated else (f"{staff_designation}, " if is_staff_user else "")
         attendance = float((student or {}).get("attendance", 75.0))
 
+        # =========================================================================
+        # 5-STAGE DETERMINISTIC PIPELINE: STAGE 1 - Typo Normalizer & Domain Guard
+        # =========================================================================
+        query = normalize_query_typos(query)
+
         q_lower = query.lower()
+        q_clean = re.sub(r"[^\w\s\u0900-\u097F]", " ", q_lower).strip()
+        words = q_clean.split()
+        word_count = len(words)
+
+        domain_guard_res = cls._check_domain_boundary_guard(q_clean, q_lower, student_name, language)
+        if domain_guard_res:
+            return domain_guard_res
         q_clean = re.sub(r"[^\w\s\u0900-\u097F]", " ", q_lower).strip()
         words = q_clean.split()
         word_count = len(words)
@@ -1282,211 +2063,6 @@ class PolicySearchService:
                 "engine": "UniAssist Policy Engine",
             }
 
-        query_clean = query.strip()
-        FOLLOW_UP_PATTERNS = [
-            r"\b(one\s+by\s+one|step\s+by\s+step|ek\s+ek|each\s+step|one\s+step\s+at\s+a\s+time)\b",
-            r"(?:step\s*(?:no\.?|number)?\s*\d+|(?:first|pehla|next|agla|aage|last|final|previous|pichla|aakhri|पहला|अगला|पिछला|आखरी|अंतिम)\s*(?:step|स्टेप|चरण)?|\bnext\b|\bagla\b|\baage\b)",
-            r"(?:what\s+(?:was|is)\s+(?:the\s+)?(?:last|previous|final|first)\s+step|step\s+before|पहला\s*(?:स्टेप|चरण)|आखरी\s*(?:स्टेप|चरण)|पिछला\s*(?:स्टेप|चरण)|अगला\s*(?:स्टेप|चरण))",
-            r"(?:what\s+was\s+step|repeat|tell\s+again|fir\s+se\s+batao|bhool\s+gaya|forgot|pichla\s+step|aakhri\s+step|phir\s+se)",
-            r"(?:which\s+button|what\s+to\s+click|kaha\s+click\s+kare)",
-        ]
-        is_follow_up = any(re.search(pat, query_clean.lower()) for pat in FOLLOW_UP_PATTERNS)
-        # If it's a step follow-up in a fresh session with no prior topic, ask which procedure to guide
-        if is_follow_up and not history:
-            if language == "hi-IN":
-                clarify_msg = f"{student_name}, आप किस विश्वविद्यालय प्रक्रिया के बारे में पूछ रहे हैं? कृपया विषय (जैसे विड्रॉल, डुप्लीकेट आईडी कार्ड, या परीक्षा रीचेकिंग) बताएं ताकि मैं आपको सही चरण बता सकूँ।"
-            elif language == "hi-Latn":
-                clarify_msg = f"{student_name}, aap kis university procedure ke baare mein pooch rahe hain? Please topic mention karein (jaise withdrawal, duplicate ID card, ya rechecking) taaki main aapko exact steps bata sakoon."
-            else:
-                clarify_msg = f"{student_name}, which university procedure are you referring to? Please specify the topic (such as Program Withdrawal, Duplicate ID Card, Fee Clearance, or Rechecking) so I can guide you through the exact steps."
-            return {
-                "answer": clarify_msg,
-                "speech_text": clarify_msg,
-                "voice_speech_text": clarify_msg,
-                "engine": "UniAssist Step Counselor",
-                "domain": "Step Guidance",
-                "citations": [],
-                "status": "success",
-                "recommended_action": None,
-                "action_url": None,
-            }
-
-        # If it's a follow-up and we have conversation history:
-        if is_follow_up and history:
-            last_assistant_turn = next(
-                (h.get("content", "") or h.get("text", "") or h.get("message", "") or h.get("speech_text", "")
-                 for h in reversed(history) 
-                 if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor")), 
-                ""
-            )
-
-            # Detect active topic and bind verified citations and actions from conversation history
-            hist_combined = " ".join([str(h.get("content", "") or h.get("text", "") or h.get("speech_text", "")) for h in history]).lower()
-            active_topic = "General Guidance"
-            active_citations = []
-            active_action = None
-            active_url = None
-
-            if any(w in hist_combined for w in ["withdrawal", "withdraw", "विड्रॉल"]):
-                active_topic = "Program Withdrawal & Refund"
-                active_citations = [p for p in DEFAULT_POLICIES if p.get("doc_id") in ("POL-WTH-01", "POL-CLR-01", "PROC-FORM-WITHDRAWAL-APP")]
-                active_action = "Start Withdrawal Procedure" if is_authenticated else "Sign In to Apply"
-                active_url = "/withdrawal" if is_authenticated else "/login"
-            elif any(w in hist_combined for w in ["library card", "id card", "smart card", "biometric card", "lost card", "identity card"]):
-                active_topic = "Library & ID Card Privileges"
-                active_citations = [p for p in DEFAULT_POLICIES if p.get("clause_code") in ("ORD-LIB-01", "PROC-FORM-19", "PROC-FORM-28")]
-                active_action = "Download ID & Library Card Form"
-                active_url = "/forms"
-            elif any(w in hist_combined for w in ["rechecking", "revaluation", "supplementary", "backpaper"]):
-                active_topic = "Examination & Rechecking"
-                active_citations = [p for p in DEFAULT_POLICIES if p.get("doc_id") == "POL-EXAM-01"]
-                active_action = "Download Form EX-02 (Backpaper)"
-                active_url = "/forms"
-            elif any(w in hist_combined for w in ["hostel", "room vacation", "mess"]):
-                active_topic = "Hostel Clearance"
-                active_citations = [p for p in DEFAULT_POLICIES if p.get("doc_id") == "POL-HSTL-01"]
-                active_action = "Hostel Vacation Guidelines"
-                active_url = "/forms"
-
-            # Find the master multi-step procedure turn in history (the one with the most numbered steps)
-            proc_turn = ""
-            best_steps_count = 0
-            for h in history:
-                if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor"):
-                    c = str(h.get("content", "") or h.get("text", "") or h.get("speech_text", ""))
-                    s_matches = re.findall(r'(?:^|\n)\s*(?:Step\s*)?(\d+)[\.\:\)]', c, re.I)
-                    valid_s = [int(x) for x in s_matches if 1 <= int(x) <= 15]
-                    if len(valid_s) > best_steps_count:
-                        best_steps_count = len(valid_s)
-                        proc_turn = c
-
-            # If not found in history, retrieve the active procedure steps from DEFAULT_POLICIES
-            if not proc_turn or best_steps_count < 2:
-                for p in DEFAULT_POLICIES:
-                    p_content = p.get("content", "")
-                    p_title = p.get("title", "").lower()
-                    if active_topic == "Program Withdrawal & Refund":
-                        if p.get("doc_id") == "PROC-FORM-WITHDRAWAL-APP" or ("withdrawal" in p_title and "application" in p_title):
-                            proc_turn = p_content
-                            break
-                    elif active_topic == "Library & ID Card Privileges":
-                        if p.get("clause_code") == "ORD-LIB-01" or p.get("doc_id") == "PROC-FORM-BIOMETRIC":
-                            proc_turn = p_content
-                            break
-                    elif active_topic == "Examination & Rechecking":
-                        if p.get("doc_id") == "POL-EXAM-01":
-                            proc_turn = p_content
-                            break
-
-            if not proc_turn:
-                proc_turn = last_assistant_turn
-
-            # Clean step numbers extraction (strictly bounded 1 to 15 to avoid matching SLAs or ord codes)
-            clean_step_matches = re.findall(r'(?:^|\n)\s*(?:Step\s*)?(\d+)[\.\:\)]', proc_turn, re.I)
-            clean_step_nums = sorted(list(set(int(m) for m in clean_step_matches if 1 <= int(m) <= 15)))
-            max_step = max(clean_step_nums) if clean_step_nums else 4
-
-            # Linguistic distinction: Final vs Previous vs Explicit vs Next step
-            q_lower = query_clean.lower()
-            is_terminal_final = (
-                bool(re.search(r'(?:what\s+is\s+(?:the\s+)?(?:last|final|ultimate)\s+step|final\s+step|aakhri\s+step|sabse\s+last|आखरी\s*स्टेप|अंतिम\s*(?:चरण|स्टेप))', q_lower))
-                or ('last step' in q_lower and any(w in q_lower for w in ['process', 'procedure', 'overall', 'end', 'is the']))
-            )
-            is_previous_recent = (
-                bool(re.search(r'(?:what\s+was\s+(?:the\s+)?(?:last|previous)\s+step|previous\s+step|pichla\s+step|before\s+(?:this|that)|step\s+before|पिछला\s*(?:स्टेप|चरण)|पहले\s*वाला)', q_lower))
-                or ('last step' in q_lower and any(w in q_lower for w in ['was', 'pehle', 'pichla', 'before', 'you said', 'you mentioned']))
-            )
-
-            target_num = None
-            if is_terminal_final and not is_previous_recent:
-                target_num = max_step
-            elif is_previous_recent:
-                single_step_m = re.search(r"^\s*(?:Step\s*)?(\d+)[:\.\-]", last_assistant_turn, re.IGNORECASE)
-                if single_step_m:
-                    curr_num = int(single_step_m.group(1))
-                    target_num = max(1, curr_num - 1)
-                else:
-                    target_num = 1
-            else:
-                step_m = re.search(r'(?:step\s*(?:no\.?|number)?\s*(\d+)|(?:first|pehla|पहला)\s*(?:step|स्टेप|चरण)?)', q_lower)
-                if step_m and not any(p in q_lower for p in ["next", "what next", "agla", "अगला"]):
-                    target_num = int(step_m.group(1)) if (step_m.group(1) and step_m.group(1).isdigit()) else 1
-                elif any(p in q_lower for p in ["one by one", "step by step", "ek ek", "each step", "first step", "pehla", "पहला"]):
-                    target_num = 1
-                elif any(p in q_lower for p in ["next", "agla", "what next", "aage", "continue", "ok next", "अगला"]):
-                    single_step_m = re.search(r"^\s*(?:Step\s*)?(\d+)[:\.\-]", last_assistant_turn, re.IGNORECASE)
-                    if single_step_m:
-                        target_num = int(single_step_m.group(1)) + 1
-                    else:
-                        target_num = 2
-
-            synthesized_follow_up = None
-            if target_num is not None:
-                if target_num > max_step:
-                    if language == "hi-IN":
-                        synthesized_follow_up = f"{student_name}, आप इस प्रक्रिया के सभी {max_step} चरण पूरे कर चुके हैं! चरण {max_step} ही अंतिम चरण था। अब आप अपना आवेदन सीधे जमा कर सकते हैं।"
-                    elif language == "hi-Latn":
-                        synthesized_follow_up = f"{student_name}, aap is procedure ke sabhi {max_step} steps complete kar chuke hain! Step {max_step} hi final step tha. Ab aap apna application submit kar sakte hain."
-                    else:
-                        synthesized_follow_up = f"{student_name}, you have completed all {max_step} steps of this procedure! Step {max_step} was the final step. You can now proceed to submit your application."
-                elif proc_turn:
-                    pat = rf'(?:^|\n)\s*(?:step\s*{target_num}[:\.\-\)]\s*|\b{target_num}[\.\:\)]\s*)(.*?)(?=(?:\n\s*(?:step\s*{target_num+1}[:\.\-\)]\s*|\b{target_num+1}[\.\:\)]\s*))|$)'
-                    m = re.search(pat, proc_turn, re.IGNORECASE | re.DOTALL)
-                    if m:
-                        step_body = m.group(1).strip()
-                        # Clean trailing student session notes or extra formatting
-                        step_body = re.split(r"(?:👤|\n\n\s*Active Student Session)", step_body)[0].strip()
-                        if is_terminal_final and not is_previous_recent:
-                            synthesized_follow_up = f"The final step (Step {target_num}) is: {step_body}\n\nThis is the final step! You can now proceed to submit your clearance."
-                        elif is_previous_recent:
-                            synthesized_follow_up = f"The previous step was Step {target_num}: {step_body}\n\nLet me know when you are ready to continue."
-                        else:
-                            if target_num < max_step:
-                                synthesized_follow_up = f"Step {target_num}: {step_body}\n\nLet me know when you are ready for Step {target_num+1}."
-                            else:
-                                synthesized_follow_up = f"Step {target_num}: {step_body}\n\nThis is the final step! You can now proceed to submit your clearance."
-
-            # Conversational follow-up: Answer referencing verified procedure context directly
-            if not synthesized_follow_up and proc_turn:
-                synthesized_follow_up = call_ollama_llama3(
-                    prompt=f"The student is asking: '{query_clean}'. Based strictly on the verified steps for {active_topic}:\n{proc_turn}\nAnswer their question accurately and concisely in 1 to 2 spoken sentences.",
-                    system_instruction=(
-                        f"You are UniAssist Campus Counselor. Answer the student's question directly referencing ONLY the verified steps provided for {active_topic}. "
-                        "Do not invent facts, forms, or fees. Keep your response strictly under 2 sentences."
-                    ),
-                    history=history
-                )
-                if not synthesized_follow_up:
-                    if any(w in query_clean.lower() for w in ["repeat", "again", "fir se", "tell again", "forgot", "bhool"]):
-                        first_step = re.split(r"\n\s*(?:Step\s*2|2\.)", proc_turn)[0].strip()
-                        synthesized_follow_up = f"As discussed earlier: {first_step}."
-                    else:
-                        q_words = [w for w in re.findall(r'\b\w{4,}\b', query_clean.lower()) if w not in ("what", "this", "that", "step", "tell", "kya", "kaise")]
-                        matched_snippet = None
-                        for line in proc_turn.splitlines():
-                            if any(qw in line.lower() for qw in q_words):
-                                matched_snippet = line.strip()
-                                break
-                        if matched_snippet:
-                            synthesized_follow_up = f"Regarding your question: {matched_snippet}"
-                        else:
-                            synthesized_follow_up = f"Regarding {active_topic}, please let me know which step (Step 1 to {max_step}) you would like me to explain further."
-
-            return {
-                "answer": synthesized_follow_up,
-                "speech_text": synthesized_follow_up,
-                "voice_speech_text": synthesized_follow_up,
-                "engine": "UniAssist Step Counselor",
-                "domain": active_topic,
-                "citations": active_citations,
-                "status": "success",
-                "recommended_action": active_action,
-                "action_url": active_url,
-            }
-
-        # =========================================================================
-        # 00-ROLE-BASED PERSONAL RECORD ACCESS GUARD: Staff vs Authenticated Student vs Guest
-        # =========================================================================
         is_personal_record_query = (
             any(p in q_clean or p in q_lower for p in [
                 "my attendance", "meri attendance", "mera attendance", "mere attendance", "kitni attendance", "attendance kitni",
@@ -2023,97 +2599,6 @@ class PolicySearchService:
                     }
 
         # =========================================================================
-        # 00-DATABASE CUSTOM PROCEDURES CHECK: Match active procedures in SQLite
-        # =========================================================================
-        matched_custom_proc = None
-        try:
-            from .procedure_service import ProcedureService
-            active_procs = ProcedureService.list_procedures(active_only=False)
-            generic_stop = {
-                "want", "have", "need", "give", "please", "with", "from", "where", "what", "which",
-                "how", "tell", "show", "chahiye", "card", "request", "application", "permission",
-                "form", "office", "visit", "change", "desk", "student", "university", "status",
-                "check", "track", "apply", "for", "the", "get", "karna", "hai", "karein", "process", "procedure"
-            }
-
-            for cp in active_procs:
-                cp_title = (cp.get("title") or "").lower().strip()
-                cp_dept = (cp.get("department") or "").lower().strip()
-
-                if cp_title and (cp_title in q_lower or (len(cp_title) > 10 and cp_title[:15] in q_lower)):
-                    matched_custom_proc = cp
-                    break
-
-                title_words = [w for w in re.findall(r'\b\w+\b', cp_title) if len(w) >= 3 and w not in generic_stop]
-                if len(title_words) >= 2:
-                    matched_words = [w for w in title_words if w in q_lower]
-                    if len(matched_words) >= 2:
-                        matched_custom_proc = cp
-                        break
-                elif len(title_words) == 1:
-                    if title_words[0] in q_lower:
-                        matched_custom_proc = cp
-                        break
-        except Exception:
-            matched_custom_proc = None
-
-        if matched_custom_proc:
-            cp_title = matched_custom_proc.get("title", "Configured Procedure")
-            cp_dept = matched_custom_proc.get("department", "University Desk")
-            cp_sla = matched_custom_proc.get("sla_days", 3)
-            cp_docs = ", ".join(matched_custom_proc.get("required_docs") or ["No physical documents required (100% Digital)"])
-            cp_steps = matched_custom_proc.get("steps") or []
-            total_steps = len(cp_steps) or 1
-
-            if cp_steps:
-                steps_str = "\n".join([f"   • Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')}) - SLA: {s.get('sla_days', 1)} day(s)" for idx, s in enumerate(cp_steps)])
-                voice_steps_en = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} at {s.get('responsible_desk', 'Desk')}" for idx, s in enumerate(cp_steps)])
-                voice_steps_latn = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} me {s.get('title')}" for idx, s in enumerate(cp_steps)])
-                voice_steps_hi = "। ".join([f"चरण {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} में {s.get('title')}" for idx, s in enumerate(cp_steps)])
-            else:
-                steps_str = "   • Step 1: Initial Desk Review & Approval"
-                voice_steps_en = "Step 1: Initial Desk Review and Approval"
-                voice_steps_latn = "Pehla step hai Initial Desk Review aur Approval"
-                voice_steps_hi = "पहला चरण: प्रारंभिक डेस्क समीक्षा एवं अनुमोदन"
-
-            if language == "hi-IN":
-                answer = (
-                    f"{student_name}, {cp_title} ({cp_dept}) के लिए आधिकारिक प्रक्रिया के {total_steps} चरण:\n\n"
-                    f"1. आवश्यक दस्तावेज: {cp_docs}\n"
-                    f"2. प्रक्रिया के चरण:\n{steps_str}\n"
-                    f"3. समाधान समयसीमा (SLA): {cp_sla} कार्य दिवस।"
-                )
-                voice_text = f"{student_name}, {cp_title} की पूरी प्रक्रिया में कुल {total_steps} चरण हैं। {voice_steps_hi}। यह {cp_sla} कार्य दिवसों में पूरी होती है।"
-            elif language == "hi-Latn":
-                answer = (
-                    f"{student_name}, {cp_title} ({cp_dept}) ke liye official procedure ke {total_steps} steps:\n\n"
-                    f"1. Required Documents: {cp_docs}\n"
-                    f"2. Process Steps:\n{steps_str}\n"
-                    f"3. SLA Timeline: {cp_sla} working days."
-                )
-                voice_text = f"{student_name}, {cp_title} ke total {total_steps} steps hain. {voice_steps_latn}. Iska processing SLA {cp_sla} working days hai."
-            else:
-                answer = (
-                    f"{student_name}, here is the official procedure for {cp_title} ({cp_dept}):\n\n"
-                    f"1. Required Documents: {cp_docs}\n"
-                    f"2. Approval Workflow ({total_steps} step(s)):\n{steps_str}\n"
-                    f"3. Processing SLA: {cp_sla} working day(s)."
-                )
-                voice_text = f"{student_name}, the complete procedure for {cp_title} consists of {total_steps} steps. {voice_steps_en}. The total SLA is {cp_sla} working days."
-
-            return {
-                "answer": answer,
-                "domain": cp_dept,
-                "citations": [],
-                "recommended_action": f"View {cp_title}",
-                "action_url": "/services",
-                "voice_speech_text": voice_text,
-                "screen_instruction": None,
-                "highlight_target": None,
-                "engine": "UniAssist Policy Engine",
-            }
-
-        # =========================================================================
         # 00-DISCIPLINE: Institutional Misconduct, Bunking, Proxy & Cheating Guard
         # =========================================================================
         if cls._check_misconduct_or_bunk_query(q_clean, q_lower):
@@ -2175,6 +2660,70 @@ class PolicySearchService:
                 "highlight_target": None,
                 "engine": "UniAssist Policy Engine",
             }
+
+# =========================================================================
+        # 5-STAGE DETERMINISTIC PIPELINE: STAGES 2 - 5
+        # =========================================================================
+        all_procs = cls._get_all_procedures()
+
+        # STAGE 2: Multi-Turn & Step Intent Resolver
+        step_target, step_aspect = cls._extract_step_target(q_lower)
+        active_proc = cls._resolve_active_procedure_from_history(history, all_procs)
+        if active_proc and (step_target is not None or step_aspect in ("documents", "steps", "sla")):
+            return cls._handle_multi_turn_step_resolution(active_proc, step_target, step_aspect, student_name, language)
+
+        # STAGE 4: Conflicting Keyword & Disambiguation Engine
+        disambig_res = cls._check_disambiguation_keywords(q_clean, q_lower, student_name, language, history=history)
+        if disambig_res:
+            return disambig_res
+
+        # STAGE 3: Zero-Match Guard for Non-Existent Procedures (e.g. Scuba Diving, Buy Car)
+        non_exist_res = cls._check_non_existent_procedure(query, q_lower, all_procs, student_name, language)
+        if non_exist_res:
+            return non_exist_res
+
+        # STAGE 3 DB Matcher + STAGE 5 Aspect Filter
+        matched_custom_proc = None
+        for cp in all_procs:
+            cp_title = (cp.get("title") or "").lower()
+            if cp_title in q_lower or (len(cp_title) > 3 and cp_title in q_clean):
+                matched_custom_proc = cp
+                break
+            if "library card" in q_lower and "library card" in cp_title:
+                matched_custom_proc = cp
+                break
+            if ("hostel room" in q_lower or "room change" in q_lower or "hostel swap" in q_lower) and "hostel" in cp_title:
+                matched_custom_proc = cp
+                break
+            if ("bonafide" in q_lower or "character cert" in q_lower) and "bonafide" in cp_title:
+                matched_custom_proc = cp
+                break
+
+        if matched_custom_proc:
+            if step_target is not None or step_aspect is not None:
+                return cls._handle_multi_turn_step_resolution(matched_custom_proc, step_target, step_aspect, student_name, language)
+            return cls._synthesize_procedure_aspect(matched_custom_proc, q_lower, student_name, language)
+
+        # Never let isolated step queries fall through to generic search
+        if step_target is not None and not any(w in q_clean for w in ["admission", "withdrawal", "fee", "exam", "condonation", "hostel", "library", "form", "attendance", "degree", "backpaper"]):
+            if language == "hi-IN":
+                no_proc_msg = f"{student_name}, कृपया स्पष्ट करें कि आप किस विश्वविद्यालय प्रक्रिया (जैसे लाइब्रेरी कार्ड, हॉस्टल रूम चेंज, या एडमिशन) के चरण के बारे में पूछ रहे हैं?"
+            elif language == "hi-Latn":
+                no_proc_msg = f"{student_name}, please clarify karein aap kis procedure (jaise Library Card, Hostel Room Change, ya Admission) ke step ke baare me pooch rahe hain?"
+            else:
+                no_proc_msg = f"{student_name}, please specify which university procedure (such as Library Card, Hostel Room Change, or Admission) you are referring to."
+            return {
+                "answer": no_proc_msg,
+                "domain": "General",
+                "citations": [],
+                "recommended_action": "Browse Procedures",
+                "action_url": "/services",
+                "voice_speech_text": no_proc_msg,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+
 
         # =========================================================================
         # 00. Conversational, Greetings, Small Talk, Negations & Cancellations Guard

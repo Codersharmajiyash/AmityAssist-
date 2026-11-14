@@ -914,6 +914,17 @@ _SAMPLE_CUSTOM_PROCEDURES = [
         1,
         "STAFF_ADMIN",
     ),
+    (
+        "proc-library-card",
+        "Library Card",
+        "Central Library",
+        "LIBRARY_SERVICES",
+        "Official procedure for issuing a student library membership card.",
+        2,
+        '["Student ID Card Copy", "Latest Fee Receipt"]',
+        1,
+        "STAFF_ADMIN",
+    ),
 ]
 
 _SAMPLE_CUSTOM_PROCEDURE_STEPS = [
@@ -922,6 +933,8 @@ _SAMPLE_CUSTOM_PROCEDURE_STEPS = [
     ("step-hswap-3", "proc-hostel-swap", 3, "Chief Warden Final Approval & Key Issue", "Chief Warden approves new room allotment and issues keys.", "Chief Warden", 2),
     ("step-bonafide-1", "proc-bonafide-cert", 1, "Academic Verification", "Verification of active student enrollment and lack of disciplinary action.", "Academic Cell", 1),
     ("step-bonafide-2", "proc-bonafide-cert", 2, "Assistant Registrar Sign-off & Seal", "Certificate generated, digitally signed, and stamped.", "Assistant Registrar", 2),
+    ("step-libcard-1", "proc-library-card", 1, "go to desk", "Visit the library circulation counter.", "librarin", 1),
+    ("step-libcard-2", "proc-library-card", 2, "Fill the form", "Fill the library membership form with librarian.", "Librarian", 1),
 ]
 
 def init_db() -> None:

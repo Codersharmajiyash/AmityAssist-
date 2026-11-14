@@ -269,3 +269,47 @@ def score_sentiment(text: str) -> Sentiment:
     if neg > pos:
         return "negative"
     return "neutral"
+
+
+def normalize_query_typos(text: str) -> str:
+    """
+    Stage 1 Typo Normalizer: Canonicalizes common procedural and intent typos.
+    Maps misspelled keywords (e.g. 'douments' -> 'documents', 'rewuired' -> 'required',
+    'procdure' -> 'procedure', 'widraw' -> 'withdraw') to standard campus terminology.
+    """
+    if not text:
+        return ""
+
+    typo_patterns: list[tuple[str, str]] = [
+        # Documents
+        (r"\b(douments?|documnts?|dokuments?|documnets?|dastavez|dastawez|dastavej)\b", "documents"),
+        # Required
+        (r"\b(rewuired|requried|requred|requierd|reqiured|jaroori|zaroori)\b", "required"),
+        # Procedure / Process
+        (r"\b(procdure|prosedure|prosedur|procedur|tarika|kriya)\b", "procedure"),
+        # Withdraw / Withdrawal
+        (r"\b(widraw|widrawal|withdrawl|withdrwal|withdra|withdrw)\b", "withdrawal"),
+        # Attendance / Condonation
+        (r"\b(attendence|atendance|attandance|attandence)\b", "attendance"),
+        (r"\b(condnation|condonasion)\b", "condonation"),
+        # Admission
+        (r"\b(admision|admisson|admisn)\b", "admission"),
+        # Hostel
+        (r"\b(hostle|hostal)\b", "hostel"),
+        # Library / Librarian
+        (r"\b(librari|libary)\b", "library"),
+        (r"\b(librarin|libarian)\b", "librarian"),
+        # Certificate
+        (r"\b(certifcate|certficate|certificat)\b", "certificate"),
+        # Fee / Fees
+        (r"\b(feez|feees)\b", "fees"),
+        # Clearance
+        (r"\b(clearanc|clerance|clearence)\b", "clearance"),
+        # Deposit
+        (r"\b(deposite|depost)\b", "deposit"),
+    ]
+
+    result = text
+    for pattern, replacement in typo_patterns:
+        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+    return result
