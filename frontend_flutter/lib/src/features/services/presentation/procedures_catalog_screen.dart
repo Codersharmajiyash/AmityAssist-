@@ -17,7 +17,6 @@ class _ProceduresCatalogScreenState extends ConsumerState<ProceduresCatalogScree
   String _searchQuery = '';
   bool _isLoading = false;
   List<Map<String, dynamic>> _customProcedures = [];
-  String? _errorMessage;
 
   @override
   void initState() {
@@ -28,7 +27,6 @@ class _ProceduresCatalogScreenState extends ConsumerState<ProceduresCatalogScree
   Future<void> _fetchProcedures() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
@@ -50,7 +48,6 @@ class _ProceduresCatalogScreenState extends ConsumerState<ProceduresCatalogScree
       // In offline/mock mode or backend error, continue with default procedures
       setState(() {
         _isLoading = false;
-        _errorMessage = null;
       });
     }
   }

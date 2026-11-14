@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/api_client.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import '../../../core/utils/platform_file_picker.dart';
 import '../../auth/application/auth_provider.dart';
 
 final studentDocumentsProvider =
@@ -34,8 +35,21 @@ class _DocumentCenterScreenState extends ConsumerState<DocumentCenterScreen> {
   bool _isUploading = false;
   Map<String, dynamic>? _lastUploadResult;
 
-  /// Simulates a document upload to the backend.
+  /// Uploads a genuine document to the backend via file picker.
   Future<void> _uploadDocument(String docType) async {
+    final picked = await PlatformFilePicker.pickDocument(accept: '.pdf,.jpg,.jpeg,.png');
+    if (picked == null) return; // User dismissed file picker
+
+    final bytes = picked.bytes;
+    if (bytes == null || bytes.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selected file is empty or unreadable.')),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isUploading = true;
       _lastUploadResult = null;
@@ -45,15 +59,16 @@ class _DocumentCenterScreenState extends ConsumerState<DocumentCenterScreen> {
       final dio = ref.read(apiClientProvider);
       final studentId = ref.read(authProvider).studentId;
 
-      // Create a mock multipart upload.
-      // In a real kiosk, this would use file_picker or camera.
+      final ext = picked.name.split('.').last.toLowerCase();
+      final mimeSub = ext == 'pdf' ? 'pdf' : (ext == 'png' ? 'png' : 'jpeg');
+
       final formData = FormData.fromMap({
         'student_id': studentId,
         'document_type': docType,
-        'file': MultipartFile.fromString(
-          'Mock document content for $docType — this simulates a kiosk scan.',
-          filename: '${docType.toLowerCase().replaceAll(' ', '_')}.pdf',
-          contentType: DioMediaType('application', 'pdf'),
+        'file': MultipartFile.fromBytes(
+          bytes,
+          filename: picked.name,
+          contentType: DioMediaType('application', mimeSub),
         ),
       });
 
@@ -69,7 +84,10 @@ class _DocumentCenterScreenState extends ConsumerState<DocumentCenterScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Document uploaded successfully!')),
+          SnackBar(
+            content: Text('${picked.name} uploaded successfully!'),
+            backgroundColor: AppColors.successGreen,
+          ),
         );
       }
     } on DioException catch (e) {

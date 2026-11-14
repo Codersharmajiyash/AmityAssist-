@@ -1239,86 +1239,6 @@ class PolicySearchService:
         words = q_clean.split()
         word_count = len(words)
 
-        # =========================================================================
-        # 00-DATABASE CUSTOM PROCEDURES CHECK: Match active procedures in SQLite first
-        # =========================================================================
-        matched_custom_proc = None
-        try:
-            from .procedure_service import ProcedureService
-            active_procs = ProcedureService.list_procedures(active_only=False)
-            q_tokens = [w for w in q_lower.split() if len(w) >= 3 and w not in ("want", "have", "need", "give", "please", "with", "from", "where", "what", "which", "how", "tell", "show", "chahiye")]
-            # Multilingual keyword bridge: map Hindi words to procedure concepts
-            if "कार्ड" in q_lower or "card" in q_lower:
-                q_tokens.append("card")
-            if "पुस्तकालय" in q_lower or "लाइब्रेरी" in q_lower or "library" in q_lower:
-                q_tokens.append("library")
-            if "हॉस्टल" in q_lower or "hostel" in q_lower:
-                q_tokens.append("hostel")
-
-            for cp in active_procs:
-                cp_title = (cp.get("title") or "").lower()
-                cp_dept = (cp.get("department") or "").lower()
-                if cp_title in q_lower or any(t in cp_title for t in q_tokens) or any(t in cp_dept for t in q_tokens):
-                    matched_custom_proc = cp
-                    break
-        except Exception:
-            matched_custom_proc = None
-
-        if matched_custom_proc:
-            cp_title = matched_custom_proc.get("title", "Configured Procedure")
-            cp_dept = matched_custom_proc.get("department", "University Desk")
-            cp_sla = matched_custom_proc.get("sla_days", 3)
-            cp_docs = ", ".join(matched_custom_proc.get("required_docs") or ["No physical documents required (100% Digital)"])
-            cp_steps = matched_custom_proc.get("steps") or []
-            total_steps = len(cp_steps) or 1
-
-            if cp_steps:
-                steps_str = "\n".join([f"   • Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')}) - SLA: {s.get('sla_days', 1)} day(s)" for idx, s in enumerate(cp_steps)])
-                voice_steps_en = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} at {s.get('responsible_desk', 'Desk')}" for idx, s in enumerate(cp_steps)])
-                voice_steps_latn = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} me {s.get('title')}" for idx, s in enumerate(cp_steps)])
-                voice_steps_hi = "। ".join([f"चरण {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} में {s.get('title')}" for idx, s in enumerate(cp_steps)])
-            else:
-                steps_str = "   • Step 1: Initial Desk Review & Approval"
-                voice_steps_en = "Step 1: Initial Desk Review and Approval"
-                voice_steps_latn = "Pehla step hai Initial Desk Review aur Approval"
-                voice_steps_hi = "पहला चरण: प्रारंभिक डेस्क समीक्षा एवं अनुमोदन"
-
-            if language == "hi-IN":
-                answer = (
-                    f"{student_name}, {cp_title} ({cp_dept}) के लिए आधिकारिक प्रक्रिया के {total_steps} चरण:\n\n"
-                    f"1. आवश्यक दस्तावेज: {cp_docs}\n"
-                    f"2. प्रक्रिया के चरण:\n{steps_str}\n"
-                    f"3. समाधान समयसीमा (SLA): {cp_sla} कार्य दिवस।"
-                )
-                voice_text = f"{student_name}, {cp_title} की पूरी प्रक्रिया में कुल {total_steps} चरण हैं। {voice_steps_hi}। यह {cp_sla} कार्य दिवसों में पूरी होती है।"
-            elif language == "hi-Latn":
-                answer = (
-                    f"{student_name}, {cp_title} ({cp_dept}) ke liye official procedure ke {total_steps} steps:\n\n"
-                    f"1. Required Documents: {cp_docs}\n"
-                    f"2. Process Steps:\n{steps_str}\n"
-                    f"3. SLA Timeline: {cp_sla} working days."
-                )
-                voice_text = f"{student_name}, {cp_title} ke total {total_steps} steps hain. {voice_steps_latn}. Iska processing SLA {cp_sla} working days hai."
-            else:
-                answer = (
-                    f"{student_name}, here is the official procedure for {cp_title} ({cp_dept}):\n\n"
-                    f"1. Required Documents: {cp_docs}\n"
-                    f"2. Approval Workflow ({total_steps} step(s)):\n{steps_str}\n"
-                    f"3. Processing SLA: {cp_sla} working day(s)."
-                )
-                voice_text = f"{student_name}, the complete procedure for {cp_title} consists of {total_steps} steps. {voice_steps_en}. The total SLA is {cp_sla} working days."
-
-            return {
-                "answer": answer,
-                "domain": cp_dept,
-                "citations": [],
-                "recommended_action": f"View {cp_title}",
-                "action_url": "/services",
-                "voice_speech_text": voice_text,
-                "screen_instruction": None,
-                "highlight_target": None,
-                "engine": "UniAssist Policy Engine",
-            }
         is_pii_query = (
             any(w in q_lower for w in [
                 "stu001", "stu002", "stu003", "stu004", "stu005", "aisha", "aisha sharma", "rahul sharma", "other student", "another student",
@@ -1352,16 +1272,36 @@ class PolicySearchService:
             any(p in q_clean or p in q_lower for p in [
                 "my attendance", "meri attendance", "mera attendance", "mere attendance", "kitni attendance", "attendance kitni",
                 "मेरी अटेंडेंस", "मेरा अटेंडेंस", "अटेंडेंस कितनी", "कितनी अटेंडेंस", "उपस्थिति कितनी", "मेरी उपस्थिति", "मेरा हाजिरी", "मेरी हाजिरी",
+                "can i sit for exam", "can i sit for exams", "can i give exam", "can i give exams", "can i write exam", "can i write exams",
+                "am i eligible for exam", "am i eligible for exams", "exam eligibility", "can i take exam", "can i take exams",
                 "my fee", "my fees", "meri fee", "mera fee", "fees due", "fee due", "fee status", "kitni fee bachi", "baki fee",
+                "fee pending", "pending dues", "outstanding dues", "how much fee do i owe", "how much do i have to pay",
+                "what are my pending dues", "pending fee", "dues kitne", "fee kitni baki", "fees kitni", "fee balance",
                 "मेरी फीस", "मेरा फीस", "फीस कितनी", "बकाया फीस", "फीस का स्टेटस", "कितनी फीस बाकी", "फीस ड्यू",
                 "my cgpa", "mera cgpa", "my grade", "my grades", "mera grade", "my marks", "mera marks", "mere marks",
                 "मेरा सीजीपीए", "मेरी सीजीपीए", "मेरे मार्क्स", "मेरा रिजल्ट", "मेरे अंक",
                 "my status", "mera status", "my application", "meri application", "my withdrawal status", "mera withdrawal status",
+                "status of my withdrawal", "status of withdrawal", "withdrawal status", "clearance status", "my clearance status",
+                "is my withdrawal approved", "what is the status of my withdrawal", "where is my withdrawal", "track my application",
+                "track my withdrawal", "my application status", "application status", "withdrawal application status",
+                "clearance progress", "my clearance progress", "mera refund kab aayega", "when will i get my refund",
+                "status of my withdrawal", "status of withdrawal", "withdrawal status", "clearance status", "my clearance status",
+                "is my withdrawal approved", "what is the status of my withdrawal", "where is my withdrawal", "track my application",
+                "track my withdrawal", "my application status", "application status", "withdrawal application status",
+                "clearance progress", "my clearance progress", "mera refund kab aayega", "when will i get my refund",
                 "मेरा स्टेटस", "मेरी एप्लीकेशन", "मेरा विड्रॉल", "विड्रॉल स्टेटस",
                 "my refund status", "mera refund kitna", "my refund amount", "who am i", "my profile", "my account", "mera account",
                 "open my account", "aisha s account", "aisha account", "my admit card", "mera admit card",
                 "मेरा रिफंड", "मेरा अकाउंट", "मेरी प्रोफाइल", "मेरा एडमिट कार्ड"
             ])
+            or bool(
+                re.search(r'\b(withdrawal|clearance|refund|application)\b', q_lower)
+                and re.search(r'\b(status|track|tracking|progress|update|kahan|state|pahucha|check|where|approved|stage|kab)\b', q_lower)
+            )
+            or bool(
+                re.search(r'\b(withdrawal|clearance|refund|application)\b', q_lower)
+                and re.search(r'\b(status|track|tracking|progress|update|kahan|state|pahucha|check|where|approved|stage|kab)\b', q_lower)
+            )
             or (
                 not is_authenticated
                 and not is_staff_user
@@ -1441,24 +1381,48 @@ class PolicySearchService:
             }
 
         if is_authenticated and not is_staff_user:
-            if any(fq in q_clean for fq in ["my fee", "my fees", "meri fee", "mera fee", "fees due", "fee due", "fee status", "kitni fee bachi", "baki fee"]):
+            fee_triggers = [
+                "my fee", "my fees", "meri fee", "mera fee", "fees due", "fee due", "fee status",
+                "kitni fee bachi", "baki fee", "fee pending", "pending dues", "outstanding dues",
+                "how much fee do i owe", "how much do i have to pay", "dues kitne", "fee kitni baki",
+                "outstanding fee", "what are my pending dues", "pending fee", "fees kitni", "fee balance",
+                "कितनी फीस", "बकाया फीस", "फीस ड्यू", "फीस का स्टेटस"
+            ]
+            if any(fq in q_lower or fq in q_clean for fq in fee_triggers):
                 due = float(student.get("fee_due") or 0)
                 stat = student.get("fee_status", "Clear")
-                if language == "hi-IN":
-                    fee_ans = (
-                        f"{student_name}, आपकी वर्तमान फीस स्थिति '{stat}' है और कुल बकाया राशि ₹{due:,.0f} है। "
-                        "यदि कोई बकाया राशि है, तो आप स्टूडेंट डैशबोर्ड पर जाकर इसका ऑनलाइन भुगतान कर सकते हैं।"
-                    )
-                elif language == "hi-Latn":
-                    fee_ans = (
-                        f"{student_name}, aapka fee status '{stat}' hai aur outstanding dues ₹{due:,.0f} hain. "
-                        "Dues clear karne ke liye aap Student Dashboard par online payment kar sakte hain."
-                    )
+                if due == 0 or stat.lower() == "clear":
+                    if language == "hi-IN":
+                        fee_ans = (
+                            f"{student_name}, आपका वर्तमान फीस स्टेटस **'{stat}'** है और कुल बकाया राशि **₹0** है। "
+                            "आपके सभी शैक्षणिक व संस्थागत खाते पूरी तरह से चुकता हैं। आप स्टूडेंट डैशबोर्ड पर अपनी फीस रसीदें देख सकते हैं।"
+                        )
+                    elif language == "hi-Latn":
+                        fee_ans = (
+                            f"{student_name}, aapka recorded fee status **'{stat}'** hai aur total dues **₹0** hain. "
+                            "Aapke accounts fully clear hain. Fees receipts aap Dashboard par check kar sakte hain."
+                        )
+                    else:
+                        fee_ans = (
+                            f"{student_name}, your official recorded fee status is **'{stat}'** with **₹0** outstanding dues. "
+                            "Your accounts are fully settled. You can review your verified fee receipts and transaction ledger on your Dashboard."
+                        )
                 else:
-                    fee_ans = (
-                        f"{student_name}, your recorded fee status is '{stat}' with outstanding dues of INR {due:,.0f}. "
-                        "You can review your fee ledger and complete payments directly on your Student Dashboard."
-                    )
+                    if language == "hi-IN":
+                        fee_ans = (
+                            f"{student_name}, आपकी वर्तमान फीस स्थिति '{stat}' है और कुल बकाया राशि ₹{due:,.0f} है। "
+                            "यदि कोई बकाया राशि है, तो आप स्टूडेंट डैशबोर्ड पर जाकर इसका ऑनलाइन भुगतान कर सकते हैं।"
+                        )
+                    elif language == "hi-Latn":
+                        fee_ans = (
+                            f"{student_name}, aapka fee status '{stat}' hai aur outstanding dues ₹{due:,.0f} hain. "
+                            "Dues clear karne ke liye aap Student Dashboard par online payment kar sakte hain."
+                        )
+                    else:
+                        fee_ans = (
+                            f"{student_name}, your recorded fee status is '{stat}' with outstanding dues of INR {due:,.0f}. "
+                            "You can review your fee ledger and complete payments directly on your Student Dashboard."
+                        )
                 return {
                     "answer": fee_ans,
                     "domain": "Fee Clearance & Accounts",
@@ -1466,6 +1430,77 @@ class PolicySearchService:
                     "recommended_action": "View Fee Ledger",
                     "action_url": "/dashboard",
                     "voice_speech_text": fee_ans,
+                    "screen_instruction": None,
+                    "highlight_target": None,
+                    "engine": "UniAssist Policy Engine",
+                }
+
+            exam_elig_triggers = [
+                "can i sit for exam", "can i sit for exams", "can i give exam", "can i give exams",
+                "can i write exam", "can i write exams", "am i eligible for exam", "am i eligible for exams",
+                "exam eligibility", "can i take exam", "can i take exams", "eligibility for exam",
+                "exam de sakta hu", "exam de sakti hu", "pariksha me baith sakta hu", "pariksha de sakte hain",
+                "can i sit for semester exams", "can i write semester exams"
+            ]
+            if any(eq in q_lower or eq in q_clean for eq in exam_elig_triggers):
+                att_val = float(student.get("attendance") or 0)
+                course_val = student.get("course", "Degree Program")
+                if att_val >= 75.0:
+                    if language == "hi-IN":
+                        elig_ans = (
+                            f"{student_name}, हाँ! आपकी वर्तमान संचयी उपस्थिति **{att_val}%** है ({course_val}), जो अध्यादेश ORD-ACAD-7.2 के 75% अनिवार्य कटऑफ से अधिक है। "
+                            "आप सेमेस्टर परीक्षाओं में बैठने के लिए पूरी तरह पात्र हैं और आपका एडमिट कार्ड सक्रिय है।"
+                        )
+                    elif language == "hi-Latn":
+                        elig_ans = (
+                            f"{student_name}, haan! Aapki recorded attendance **{att_val}%** hai ({course_val}), jo 75% mandatory cutoff se zyada hai. "
+                            "Aap semester exams me appear hone ke liye fully eligible hain aur admit card unblocked hai."
+                        )
+                    else:
+                        elig_ans = (
+                            f"{student_name}, yes! Your official recorded attendance is **{att_val}%** in {course_val}, "
+                            f"which exceeds the mandatory 75% threshold under University Ordinance ORD-ACAD-7.2. "
+                            "You are fully eligible to sit for your semester examinations, and your examination hall ticket / admit card is unblocked."
+                        )
+                elif att_val >= 60.0:
+                    if language == "hi-IN":
+                        elig_ans = (
+                            f"{student_name}, आपकी वर्तमान उपस्थिति **{att_val}%** है, जो 75% के सामान्य कटऑफ से कम है। "
+                            "हालाँकि, चूँकि यह 60% से अधिक है, आप चिकित्सा प्रमाण पत्र या विश्वविद्यालय कर्तव्य के आधार पर **अटेंडेंस कंडोनेशन (फॉर्म AC-04)** के लिए आवेदन कर सकते हैं।"
+                        )
+                    elif language == "hi-Latn":
+                        elig_ans = (
+                            f"{student_name}, aapki recorded attendance **{att_val}%** hai, jo 75% cutoff se kam hai. "
+                            "Lekin 60% se upar hone ke kaaran aap medical grounds par Attendance Condonation (Form AC-04) apply kar sakte hain."
+                        )
+                    else:
+                        elig_ans = (
+                            f"{student_name}, your current recorded attendance is **{att_val}%**, which is below the 75% mandatory threshold. "
+                            "However, because your attendance is between 60% and 74.9%, you are eligible under Ordinance ORD-ACAD-7.2 to apply for Attendance Condonation (Form AC-04) on verified medical or institutional activity grounds."
+                        )
+                else:
+                    if language == "hi-IN":
+                        elig_ans = (
+                            f"{student_name}, आपकी वर्तमान उपस्थिति **{att_val}%** है, जो 60% की न्यूनतम सीमा से कम है। "
+                            "अध्यादेश ORD-ACAD-7.2 के अनुसार 60% से कम उपस्थिति पर कंडोनेशन स्वीकार्य नहीं है। कृपया तुरंत अपने विभाग प्रमुख से संपर्क करें।"
+                        )
+                    elif language == "hi-Latn":
+                        elig_ans = (
+                            f"{student_name}, aapki attendance **{att_val}%** hai, jo 60% minimum cutoff se kam hai. "
+                            "Ordinance ORD-ACAD-7.2 ke mutabiq 60% se neeche condonation allow nahi hota. Please Dean ya HOD se contact karein."
+                        )
+                    else:
+                        elig_ans = (
+                            f"{student_name}, your recorded attendance is **{att_val}%**, which is below the 60% absolute minimum threshold. "
+                            "Under Ordinance ORD-ACAD-7.2, debarment cannot be condoned below 60%. Please meet your Department Academic Advisor or HOD immediately."
+                        )
+                return {
+                    "answer": elig_ans,
+                    "domain": "Academic Examination Eligibility",
+                    "citations": [DEFAULT_POLICIES[0]],
+                    "recommended_action": "View Attendance & Admit Card",
+                    "action_url": "/dashboard",
+                    "voice_speech_text": elig_ans,
                     "screen_instruction": None,
                     "highlight_target": None,
                     "engine": "UniAssist Policy Engine",
@@ -1501,6 +1536,363 @@ class PolicySearchService:
                     "highlight_target": None,
                     "engine": "UniAssist Policy Engine",
                 }
+
+            # --- LIVE ATTENDANCE TRACKER ---
+            if any(aq in q_clean for aq in ["my attendance", "meri attendance", "mera attendance", "mere attendance", "kitni attendance", "attendance kitni", "मेरी अटेंडेंस", "मेरा अटेंडेंस", "हाजिरी"]):
+                att_val = student.get("attendance", 0)
+                course_val = student.get("course", "Degree Program")
+                if language == "hi-IN":
+                    att_ans = (
+                        f"{student_name}, आपकी वर्तमान संचयी उपस्थिति **{att_val}%** है ({course_val})। "
+                        "विश्वविद्यालय अध्यादेश ORD-ACAD-7.2 के अनुसार परीक्षा में बैठने के लिए न्यूनतम 75% उपस्थिति अनिवार्य है।"
+                    )
+                elif language == "hi-Latn":
+                    att_ans = (
+                        f"{student_name}, aapki recorded attendance **{att_val}%** hai ({course_val}). "
+                        "Semester exam appear hone ke liye minimum 75% attendance mandatory hai."
+                    )
+                else:
+                    att_ans = (
+                        f"{student_name}, your official recorded cumulative attendance is **{att_val}%** in {course_val}. "
+                        "Under Ordinance ORD-ACAD-7.2, maintaining a minimum of 75% attendance is required to sit for semester examinations."
+                    )
+                return {
+                    "answer": att_ans,
+                    "domain": "Attendance Records",
+                    "citations": [DEFAULT_POLICIES[0]],
+                    "recommended_action": "View Attendance",
+                    "action_url": "/dashboard",
+                    "voice_speech_text": att_ans,
+                    "screen_instruction": None,
+                    "highlight_target": None,
+                    "engine": "UniAssist Policy Engine",
+                }
+
+            # --- LIVE WITHDRAWAL & CLEARANCE TRACKER ---
+            wth_triggers = [
+                "status of my withdrawal", "my withdrawal status", "withdrawal status", "withdrawal ka status",
+                "mera withdrawal status", "clearance status", "my clearance status", "withdrawal kahan tak",
+                "where is my withdrawal", "how can i check my withdrawal progress", "is my withdrawal approved",
+                "what is the status of my withdrawal", "track my application", "track my withdrawal",
+                "my application status", "application status", "withdrawal application status",
+                "clearance progress", "my clearance progress", "mera refund kab aayega", "when will i get my refund",
+                "refund kab milega", "refund status"
+            ]
+            is_wth_query = any(wt in q_lower or wt in q_clean for wt in wth_triggers) or bool(
+                re.search(r'\b(withdrawal|clearance|refund|application)\b', q_lower)
+                and re.search(r'\b(status|track|tracking|progress|update|kahan|state|pahucha|check|where|approved|stage|kab)\b', q_lower)
+            )
+
+            if is_wth_query:
+                active_req = conn.execute(
+                    """SELECT * FROM withdrawal_requests 
+                       WHERE student_id = ? 
+                       ORDER BY id DESC LIMIT 1""",
+                    (student["id"],)
+                ).fetchone()
+
+                if active_req:
+                    req_dict = dict(active_req)
+                    ref_no = req_dict.get("reference_no") or f"AMITY-WTH-{req_dict.get('id', 'REQ')}"
+                    cur_status = (req_dict.get("status") or "PENDING").upper().replace("_", " ")
+
+                    gates = conn.execute(
+                        "SELECT department, status FROM clearance_gates WHERE reference_no = ? ORDER BY sequence_order",
+                        (ref_no,)
+                    ).fetchall()
+
+                    cleared_desks = [g["department"] for g in gates if (g["status"] or "").lower() in ("cleared", "approved", "completed")]
+                    pending_desks = [g["department"] for g in gates if (g["status"] or "").lower() not in ("cleared", "approved", "completed")]
+
+                    cleared_txt = ", ".join(cleared_desks) if cleared_desks else "None yet"
+                    pending_txt = ", ".join(pending_desks) if pending_desks else "All gates cleared"
+
+                    is_refund_timing = any(rq in q_lower for rq in ["refund", "money", "rupees", "paisa", "cheque", "neft"])
+
+                    if language == "hi-IN":
+                        wth_ans = (
+                            f"{student_name}, आपकी विड्रॉल व डिजिटल क्लीयरेंस अर्जी (Ref: **{ref_no}**) वर्तमान में **{cur_status}** स्थिति में है।\n\n"
+                            f"• स्वीकृत विभाग (Cleared): {cleared_txt}\n"
+                            f"• लंबित विभाग (Pending): {pending_txt}\n\n"
+                        )
+                        if is_refund_timing:
+                            wth_ans += "यूजीसी दिशा-निर्देशों के तहत, ₹10,000 कॉशन डिपॉजिट 100% रिफंडेबल है। रजिस्ट्रार की अंतिम स्वीकृति मिलते ही 7 कार्य दिवसों में रिफंड आपके बैंक खाते (NEFT) में क्रेडिट कर दिया जाएगा।"
+                        else:
+                            wth_ans += "आप 'रिक्वेस्ट स्टेटस' पेज पर अपनी पूरी क्लीयरेंस पाइपलाइन और रिफंड विवरण देख सकते हैं।"
+                    elif language == "hi-Latn":
+                        wth_ans = (
+                            f"{student_name}, aapki withdrawal aur clearance application (Ref: **{ref_no}**) abhi **{cur_status}** stage par hai.\n\n"
+                            f"• Cleared Desks: {cleared_txt}\n"
+                            f"• Pending Clearance: {pending_txt}\n\n"
+                        )
+                        if is_refund_timing:
+                            wth_ans += "UGC guidelines ke tehat ₹10,000 caution deposit 100% refundable hai. Registrar clearance hote hi 7 working days me NEFT transfer ho jayega."
+                        else:
+                            wth_ans += "Aap Request Status screen par live clearance gates aur timeline track kar sakte hain."
+                    else:
+                        wth_ans = (
+                            f"{student_name}, your official withdrawal & clearance request (Ref: **{ref_no}**) is currently in **{cur_status}** stage.\n\n"
+                            f"• Cleared Desks: {cleared_txt}\n"
+                            f"• Pending Clearance: {pending_txt}\n\n"
+                        )
+                        if is_refund_timing:
+                            wth_ans += "Under UGC 2024 directives (ORD-WTH-14.1), your ₹10,000 caution deposit is 100% refundable. Upon final Registrar notesheet sign-off, refund proceeds are transferred via NEFT to your bank within 7 working days."
+                        else:
+                            wth_ans += "You can track real-time gate sign-offs and UGC fee refund calculation under Request Status."
+
+                    return {
+                        "answer": wth_ans,
+                        "domain": "Digital Clearance & Withdrawal",
+                        "citations": [DEFAULT_POLICIES[1]],
+                        "recommended_action": "View Clearance Progress",
+                        "action_url": "/request-status",
+                        "voice_speech_text": f"{student_name}, your withdrawal application {ref_no} is currently {cur_status}. Cleared desks: {cleared_txt}. Pending gates: {pending_txt}.",
+                        "screen_instruction": None,
+                        "highlight_target": None,
+                        "engine": "UniAssist Workflow Engine",
+                    }
+                else:
+                    if language == "hi-IN":
+                        no_wth = f"{student_name}, आपके नाम पर अभी कोई सक्रिय विड्रॉल अर्जी दर्ज नहीं है। यदि आप आधिकारिक निकासी शुरू करना चाहते हैं, तो 'प्रक्रियाएं' टैब पर जाएं।"
+                    elif language == "hi-Latn":
+                        no_wth = f"{student_name}, aapka koi active withdrawal application system me registered nahi hai. Naya withdrawal apply karne ke liye 'Procedures' tab par click karein."
+                    else:
+                        no_wth = f"{student_name}, you do not currently have any active withdrawal application on record. If you wish to begin the 4-gate clearance, select Official Withdrawal from the Procedures catalog."
+                    return {
+                        "answer": no_wth,
+                        "domain": "Digital Clearance & Withdrawal",
+                        "citations": [DEFAULT_POLICIES[1]],
+                        "recommended_action": "Start Withdrawal Procedure",
+                        "action_url": "/withdrawal",
+                        "voice_speech_text": no_wth,
+                        "screen_instruction": None,
+                        "highlight_target": None,
+                        "engine": "UniAssist Policy Engine",
+                    }
+
+            # --- LIVE ATTENDANCE TRACKER ---
+            if any(aq in q_clean for aq in ["my attendance", "meri attendance", "mera attendance", "mere attendance", "kitni attendance", "attendance kitni", "मेरी अटेंडेंस", "मेरा अटेंडेंस", "हाजिरी"]):
+                att_val = student.get("attendance", 0)
+                course_val = student.get("course", "Degree Program")
+                if language == "hi-IN":
+                    att_ans = (
+                        f"{student_name}, आपकी वर्तमान संचयी उपस्थिति **{att_val}%** है ({course_val})। "
+                        "विश्वविद्यालय अध्यादेश ORD-ACAD-7.2 के अनुसार परीक्षा में बैठने के लिए न्यूनतम 75% उपस्थिति अनिवार्य है।"
+                    )
+                elif language == "hi-Latn":
+                    att_ans = (
+                        f"{student_name}, aapki recorded attendance **{att_val}%** hai ({course_val}). "
+                        "Semester exam appear hone ke liye minimum 75% attendance mandatory hai."
+                    )
+                else:
+                    att_ans = (
+                        f"{student_name}, your official recorded cumulative attendance is **{att_val}%** in {course_val}. "
+                        "Under Ordinance ORD-ACAD-7.2, maintaining a minimum of 75% attendance is required to sit for semester examinations."
+                    )
+                return {
+                    "answer": att_ans,
+                    "domain": "Attendance Records",
+                    "citations": [DEFAULT_POLICIES[0]],
+                    "recommended_action": "View Attendance",
+                    "action_url": "/dashboard",
+                    "voice_speech_text": att_ans,
+                    "screen_instruction": None,
+                    "highlight_target": None,
+                    "engine": "UniAssist Policy Engine",
+                }
+
+            # --- LIVE WITHDRAWAL & CLEARANCE TRACKER ---
+            wth_triggers = [
+                "status of my withdrawal", "my withdrawal status", "withdrawal status", "withdrawal ka status",
+                "mera withdrawal status", "clearance status", "my clearance status", "withdrawal kahan tak",
+                "where is my withdrawal", "how can i check my withdrawal progress", "is my withdrawal approved",
+                "what is the status of my withdrawal", "track my application", "track my withdrawal",
+                "my application status", "application status", "withdrawal application status",
+                "clearance progress", "my clearance progress", "mera refund kab aayega", "when will i get my refund",
+                "refund kab milega", "refund status"
+            ]
+            is_wth_query = any(wt in q_lower or wt in q_clean for wt in wth_triggers) or bool(
+                re.search(r'\b(withdrawal|clearance|refund|application)\b', q_lower)
+                and re.search(r'\b(status|track|tracking|progress|update|kahan|state|pahucha|check|where|approved|stage|kab)\b', q_lower)
+            )
+
+            if is_wth_query:
+                active_req = conn.execute(
+                    """SELECT * FROM withdrawal_requests 
+                       WHERE student_id = ? 
+                       ORDER BY id DESC LIMIT 1""",
+                    (student["id"],)
+                ).fetchone()
+
+                if active_req:
+                    req_dict = dict(active_req)
+                    ref_no = req_dict.get("reference_no") or f"AMITY-WTH-{req_dict.get('id', 'REQ')}"
+                    cur_status = (req_dict.get("status") or "PENDING").upper().replace("_", " ")
+
+                    gates = conn.execute(
+                        "SELECT department, status FROM clearance_gates WHERE reference_no = ? ORDER BY sequence_order",
+                        (ref_no,)
+                    ).fetchall()
+
+                    cleared_desks = [g["department"] for g in gates if (g["status"] or "").lower() in ("cleared", "approved", "completed")]
+                    pending_desks = [g["department"] for g in gates if (g["status"] or "").lower() not in ("cleared", "approved", "completed")]
+
+                    cleared_txt = ", ".join(cleared_desks) if cleared_desks else "None yet"
+                    pending_txt = ", ".join(pending_desks) if pending_desks else "All gates cleared"
+
+                    is_refund_timing = any(rq in q_lower for rq in ["refund", "money", "rupees", "paisa", "cheque", "neft"])
+
+                    if language == "hi-IN":
+                        wth_ans = (
+                            f"{student_name}, आपकी विड्रॉल व डिजिटल क्लीयरेंस अर्जी (Ref: **{ref_no}**) वर्तमान में **{cur_status}** स्थिति में है।\n\n"
+                            f"• स्वीकृत विभाग (Cleared): {cleared_txt}\n"
+                            f"• लंबित विभाग (Pending): {pending_txt}\n\n"
+                        )
+                        if is_refund_timing:
+                            wth_ans += "यूजीसी दिशा-निर्देशों के तहत, ₹10,000 कॉशन डिपॉजिट 100% रिफंडेबल है। रजिस्ट्रार की अंतिम स्वीकृति मिलते ही 7 कार्य दिवसों में रिफंड आपके बैंक खाते (NEFT) में क्रेडिट कर दिया जाएगा।"
+                        else:
+                            wth_ans += "आप 'रिक्वेस्ट स्टेटस' पेज पर अपनी पूरी क्लीयरेंस पाइपलाइन और रिफंड विवरण देख सकते हैं।"
+                    elif language == "hi-Latn":
+                        wth_ans = (
+                            f"{student_name}, aapki withdrawal aur clearance application (Ref: **{ref_no}**) abhi **{cur_status}** stage par hai.\n\n"
+                            f"• Cleared Desks: {cleared_txt}\n"
+                            f"• Pending Clearance: {pending_txt}\n\n"
+                        )
+                        if is_refund_timing:
+                            wth_ans += "UGC guidelines ke tehat ₹10,000 caution deposit 100% refundable hai. Registrar clearance hote hi 7 working days me NEFT transfer ho jayega."
+                        else:
+                            wth_ans += "Aap Request Status screen par live clearance gates aur timeline track kar sakte hain."
+                    else:
+                        wth_ans = (
+                            f"{student_name}, your official withdrawal & clearance request (Ref: **{ref_no}**) is currently in **{cur_status}** stage.\n\n"
+                            f"• Cleared Desks: {cleared_txt}\n"
+                            f"• Pending Clearance: {pending_txt}\n\n"
+                        )
+                        if is_refund_timing:
+                            wth_ans += "Under UGC 2024 directives (ORD-WTH-14.1), your ₹10,000 caution deposit is 100% refundable. Upon final Registrar notesheet sign-off, refund proceeds are transferred via NEFT to your bank within 7 working days."
+                        else:
+                            wth_ans += "You can track real-time gate sign-offs and UGC fee refund calculation under Request Status."
+
+                    return {
+                        "answer": wth_ans,
+                        "domain": "Digital Clearance & Withdrawal",
+                        "citations": [DEFAULT_POLICIES[1]],
+                        "recommended_action": "View Clearance Progress",
+                        "action_url": "/request-status",
+                        "voice_speech_text": f"{student_name}, your withdrawal application {ref_no} is currently {cur_status}. Cleared desks: {cleared_txt}. Pending gates: {pending_txt}.",
+                        "screen_instruction": None,
+                        "highlight_target": None,
+                        "engine": "UniAssist Workflow Engine",
+                    }
+                else:
+                    if language == "hi-IN":
+                        no_wth = f"{student_name}, आपके नाम पर अभी कोई सक्रिय विड्रॉल अर्जी दर्ज नहीं है। यदि आप आधिकारिक निकासी शुरू करना चाहते हैं, तो 'प्रक्रियाएं' टैब पर जाएं।"
+                    elif language == "hi-Latn":
+                        no_wth = f"{student_name}, aapka koi active withdrawal application system me registered nahi hai. Naya withdrawal apply karne ke liye 'Procedures' tab par click karein."
+                    else:
+                        no_wth = f"{student_name}, you do not currently have any active withdrawal application on record. If you wish to begin the 4-gate clearance, select Official Withdrawal from the Procedures catalog."
+                    return {
+                        "answer": no_wth,
+                        "domain": "Digital Clearance & Withdrawal",
+                        "citations": [DEFAULT_POLICIES[1]],
+                        "recommended_action": "Start Withdrawal Procedure",
+                        "action_url": "/withdrawal",
+                        "voice_speech_text": no_wth,
+                        "screen_instruction": None,
+                        "highlight_target": None,
+                        "engine": "UniAssist Policy Engine",
+                    }
+
+        # =========================================================================
+        # 00-DATABASE CUSTOM PROCEDURES CHECK: Match active procedures in SQLite
+        # =========================================================================
+        matched_custom_proc = None
+        try:
+            from .procedure_service import ProcedureService
+            active_procs = ProcedureService.list_procedures(active_only=False)
+            generic_stop = {
+                "want", "have", "need", "give", "please", "with", "from", "where", "what", "which",
+                "how", "tell", "show", "chahiye", "card", "request", "application", "permission",
+                "form", "office", "visit", "change", "desk", "student", "university", "status",
+                "check", "track", "apply", "for", "the", "get", "karna", "hai", "karein", "process", "procedure"
+            }
+
+            for cp in active_procs:
+                cp_title = (cp.get("title") or "").lower().strip()
+                cp_dept = (cp.get("department") or "").lower().strip()
+
+                if cp_title and (cp_title in q_lower or (len(cp_title) > 10 and cp_title[:15] in q_lower)):
+                    matched_custom_proc = cp
+                    break
+
+                title_words = [w for w in re.findall(r'\b\w+\b', cp_title) if len(w) >= 3 and w not in generic_stop]
+                if len(title_words) >= 2:
+                    matched_words = [w for w in title_words if w in q_lower]
+                    if len(matched_words) >= 2:
+                        matched_custom_proc = cp
+                        break
+                elif len(title_words) == 1:
+                    if title_words[0] in q_lower:
+                        matched_custom_proc = cp
+                        break
+        except Exception:
+            matched_custom_proc = None
+
+        if matched_custom_proc:
+            cp_title = matched_custom_proc.get("title", "Configured Procedure")
+            cp_dept = matched_custom_proc.get("department", "University Desk")
+            cp_sla = matched_custom_proc.get("sla_days", 3)
+            cp_docs = ", ".join(matched_custom_proc.get("required_docs") or ["No physical documents required (100% Digital)"])
+            cp_steps = matched_custom_proc.get("steps") or []
+            total_steps = len(cp_steps) or 1
+
+            if cp_steps:
+                steps_str = "\n".join([f"   • Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')}) - SLA: {s.get('sla_days', 1)} day(s)" for idx, s in enumerate(cp_steps)])
+                voice_steps_en = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} at {s.get('responsible_desk', 'Desk')}" for idx, s in enumerate(cp_steps)])
+                voice_steps_latn = ". ".join([f"Step {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} me {s.get('title')}" for idx, s in enumerate(cp_steps)])
+                voice_steps_hi = "। ".join([f"चरण {s.get('step_number', idx+1)}: {s.get('responsible_desk', 'Desk')} में {s.get('title')}" for idx, s in enumerate(cp_steps)])
+            else:
+                steps_str = "   • Step 1: Initial Desk Review & Approval"
+                voice_steps_en = "Step 1: Initial Desk Review and Approval"
+                voice_steps_latn = "Pehla step hai Initial Desk Review aur Approval"
+                voice_steps_hi = "पहला चरण: प्रारंभिक डेस्क समीक्षा एवं अनुमोदन"
+
+            if language == "hi-IN":
+                answer = (
+                    f"{student_name}, {cp_title} ({cp_dept}) के लिए आधिकारिक प्रक्रिया के {total_steps} चरण:\n\n"
+                    f"1. आवश्यक दस्तावेज: {cp_docs}\n"
+                    f"2. प्रक्रिया के चरण:\n{steps_str}\n"
+                    f"3. समाधान समयसीमा (SLA): {cp_sla} कार्य दिवस।"
+                )
+                voice_text = f"{student_name}, {cp_title} की पूरी प्रक्रिया में कुल {total_steps} चरण हैं। {voice_steps_hi}। यह {cp_sla} कार्य दिवसों में पूरी होती है।"
+            elif language == "hi-Latn":
+                answer = (
+                    f"{student_name}, {cp_title} ({cp_dept}) ke liye official procedure ke {total_steps} steps:\n\n"
+                    f"1. Required Documents: {cp_docs}\n"
+                    f"2. Process Steps:\n{steps_str}\n"
+                    f"3. SLA Timeline: {cp_sla} working days."
+                )
+                voice_text = f"{student_name}, {cp_title} ke total {total_steps} steps hain. {voice_steps_latn}. Iska processing SLA {cp_sla} working days hai."
+            else:
+                answer = (
+                    f"{student_name}, here is the official procedure for {cp_title} ({cp_dept}):\n\n"
+                    f"1. Required Documents: {cp_docs}\n"
+                    f"2. Approval Workflow ({total_steps} step(s)):\n{steps_str}\n"
+                    f"3. Processing SLA: {cp_sla} working day(s)."
+                )
+                voice_text = f"{student_name}, the complete procedure for {cp_title} consists of {total_steps} steps. {voice_steps_en}. The total SLA is {cp_sla} working days."
+
+            return {
+                "answer": answer,
+                "domain": cp_dept,
+                "citations": [],
+                "recommended_action": f"View {cp_title}",
+                "action_url": "/services",
+                "voice_speech_text": voice_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
 
         # =========================================================================
         # 00-DISCIPLINE: Institutional Misconduct, Bunking, Proxy & Cheating Guard
@@ -2533,7 +2925,7 @@ class PolicySearchService:
             any(w in q_lower for w in [
                 "lose something", "lost something", "lost and found", "lost item", "found item", "lost my", "kuch kho gaya"
             ])
-            and not any(w in q_lower for w in ["offset", "caution", "deposit", "fine", "200", "withdrawal", "refund"])
+            and not any(w in q_lower for w in ["offset", "caution", "deposit", "fine", "200", "withdrawal", "refund", "id card", "id", "identity card"])
         )
         if is_lost_and_found:
             lost_msg = (

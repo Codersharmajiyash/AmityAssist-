@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import '../../../core/utils/download_service.dart';
 import '../application/staff_provider.dart';
 
 class StaffWithdrawalScreen extends ConsumerStatefulWidget {
@@ -887,22 +888,72 @@ class _StaffWithdrawalScreenState extends ConsumerState<StaffWithdrawalScreen> {
                   decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child: InteractiveViewer(
-                      child: Image.network(
-                        '${AppConfig.apiBaseUrl}/documents/$docId/stream',
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.description, size: 48, color: Colors.white54),
-                              SizedBox(height: 8),
-                              Text('Document preview ready', style: TextStyle(color: Colors.white70)),
-                            ],
+                    child: docName.toLowerCase().endsWith('.pdf')
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.urgentRed.withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.picture_as_pdf_rounded, size: 52, color: AppColors.urgentRed),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    docName,
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  const Text(
+                                    'PDF Dossier Record • In-Memory Stream',
+                                    style: TextStyle(color: Colors.white60, fontSize: 11),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: AppColors.amityBlue,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () => DownloadService.downloadFile(
+                                      '${AppConfig.apiBaseUrl}/documents/$docId/stream',
+                                      fileName: docName,
+                                    ),
+                                    icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                                    label: const Text('Open in Native PDF Viewer', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : InteractiveViewer(
+                            panEnabled: true,
+                            minScale: 0.8,
+                            maxScale: 3.5,
+                            child: Center(
+                              child: Image.network(
+                                '${AppConfig.apiBaseUrl}/documents/$docId/stream',
+                                fit: BoxFit.contain,
+                                errorBuilder: (_, __, ___) => const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.description, size: 48, color: Colors.white54),
+                                      SizedBox(height: 8),
+                                      Text('Document preview ready', style: TextStyle(color: Colors.white70)),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                    ),
                   ),
                 ),
               ),

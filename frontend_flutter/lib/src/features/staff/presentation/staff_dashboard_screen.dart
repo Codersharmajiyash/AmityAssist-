@@ -309,16 +309,6 @@ class StaffDashboardScreen extends ConsumerWidget {
                             ),
                             _buildModernActionCard(
                               context: context,
-                              title: 'Accreditation Hub',
-                              value: 'NAAC',
-                              subtitle: 'CO/PO Attainment & Reports',
-                              tag: 'AUDIT',
-                              icon: Icons.verified_rounded,
-                              cardColor: const Color(0xFF7C3AED),
-                              onTap: () => context.push('/staff/accreditation'),
-                            ),
-                            _buildModernActionCard(
-                              context: context,
                               title: 'Campus Notices',
                               value: 'Broadcast',
                               subtitle: 'Publish & Target Student Circulars',

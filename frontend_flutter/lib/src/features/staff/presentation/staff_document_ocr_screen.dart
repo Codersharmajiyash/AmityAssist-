@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/api_client.dart';
 import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import '../../../core/utils/download_service.dart';
 
 /// Phase 25: Staff Document OCR Cockpit.
 /// Displays uploaded documents with extracted OCR fields and identity
@@ -313,18 +314,65 @@ class _StaffDocumentOcrScreenState extends ConsumerState<StaffDocumentOcrScreen>
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: InteractiveViewer(
-                              child: Image.network(
-                                streamUrl,
-                                fit: BoxFit.contain,
-                                errorBuilder: (_, __, ___) => const Center(
-                                  child: Text(
-                                    'Document preview ready via in-memory stream',
-                                    style: TextStyle(color: Colors.white70),
+                            child: fileName.toLowerCase().endsWith('.pdf')
+                                ? Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(24),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.all(18),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.urgentRed.withValues(alpha: 0.15),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(Icons.picture_as_pdf_rounded, size: 56, color: AppColors.urgentRed),
+                                          ),
+                                          const SizedBox(height: 14),
+                                          Text(
+                                            fileName,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          const Text(
+                                            'PDF Format • Official University Record',
+                                            style: TextStyle(color: Colors.white60, fontSize: 12),
+                                          ),
+                                          const SizedBox(height: 20),
+                                          FilledButton.icon(
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: AppColors.amityBlue,
+                                              foregroundColor: Colors.white,
+                                              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            ),
+                                            onPressed: () => DownloadService.downloadFile(streamUrl, fileName: fileName),
+                                            icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                                            label: const Text('Open in Native PDF Viewer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : InteractiveViewer(
+                                    panEnabled: true,
+                                    minScale: 0.8,
+                                    maxScale: 3.5,
+                                    child: Center(
+                                      child: Image.network(
+                                        streamUrl,
+                                        fit: BoxFit.contain,
+                                        errorBuilder: (_, __, ___) => const Center(
+                                          child: Text(
+                                            'Document preview ready via in-memory stream',
+                                            style: TextStyle(color: Colors.white70),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                            ),
                           ),
                         ),
                       ),

@@ -4,6 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/api_config.dart';
 import '../../../core/theme/kiosk_theme.dart';
+import '../../../core/utils/download_service.dart';
 import '../application/staff_provider.dart';
 
 class StaffDocumentScreen extends ConsumerStatefulWidget {
@@ -255,8 +256,9 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
     final fileName = (doc['file_name'] ?? doc['filename'] ?? '').toString();
     final isPdf = fileName.toLowerCase().endsWith('.pdf');
     final streamUrl = '${AppConfig.apiBaseUrl}/documents/$docId/stream';
+
     if (!isPdf) {
-      // Pure In-Memory Image Viewer
+      // Pure In-Memory Image Viewer for JPG, PNG
       return InteractiveViewer(
         panEnabled: true,
         minScale: 0.8,
@@ -274,30 +276,59 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
         ),
       );
     } else {
-      // PDF In-Memory Viewer via Stream
+      // PDF Document Viewer Pane
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.picture_as_pdf_rounded, size: 64, color: AppColors.urgentRed),
-            const SizedBox(height: 12),
-            Text(
-              fileName,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'In-Memory Stream Active (Zero Local Disk Storage)',
-              style: TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.amityBlue),
-              onPressed: () => _openFullscreenMemoryPreview(context, streamUrl, fileName),
-              icon: const Icon(Icons.fullscreen_rounded, size: 18),
-              label: const Text('Open Fullscreen Inspector'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.urgentRed.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.picture_as_pdf_rounded, size: 64, color: AppColors.urgentRed),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                fileName,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white12,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'PDF Format • Official University Record',
+                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.amityBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => DownloadService.downloadFile(streamUrl, fileName: fileName),
+                icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                label: const Text('Open in Native PDF Viewer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: () => _openFullscreenMemoryPreview(context, streamUrl, fileName, isPdf: true),
+                icon: const Icon(Icons.fullscreen_rounded, size: 16, color: Colors.white70),
+                label: const Text('Document Details & Preview Modal', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -324,7 +355,7 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
     );
   }
 
-  void _openFullscreenMemoryPreview(BuildContext context, String streamUrl, String fileName) {
+  void _openFullscreenMemoryPreview(BuildContext context, String streamUrl, String fileName, {bool isPdf = false}) {
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -358,27 +389,53 @@ class _StaffDocumentScreenState extends ConsumerState<StaffDocumentScreen> {
               ),
               const Divider(height: 1, color: Colors.white24),
               Expanded(
-                child: InteractiveViewer(
-                  panEnabled: true,
-                  minScale: 0.5,
-                  maxScale: 4.0,
-                  child: Center(
-                    child: Image.network(
-                      streamUrl,
-                      fit: BoxFit.contain,
-                      loadingBuilder: (c, child, progress) {
-                        if (progress == null) return child;
-                        return const Center(child: CircularProgressIndicator(color: Colors.white));
-                      },
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Text(
-                          'Document preview ready via in-memory stream',
-                          style: TextStyle(color: Colors.white70),
+                child: isPdf
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.picture_as_pdf_rounded, size: 80, color: AppColors.urgentRed),
+                            const SizedBox(height: 16),
+                            Text(
+                              fileName,
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'In-Memory PDF Stream Active • Zero Local Disk Footprint',
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                            ),
+                            const SizedBox(height: 24),
+                            FilledButton.icon(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.amityBlue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onPressed: () => DownloadService.downloadFile(streamUrl, fileName: fileName),
+                              icon: const Icon(Icons.open_in_browser_rounded, size: 20),
+                              label: const Text('Open in Native PDF Viewer', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                      )
+                    : InteractiveViewer(
+                        panEnabled: true,
+                        minScale: 0.5,
+                        maxScale: 4.0,
+                        child: Center(
+                          child: Image.network(
+                            streamUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (c, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(child: CircularProgressIndicator(color: Colors.white));
+                            },
+                            errorBuilder: (_, __, ___) => _buildViewerFallback(fileName),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ],
           ),
