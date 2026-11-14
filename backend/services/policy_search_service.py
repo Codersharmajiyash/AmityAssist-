@@ -1267,22 +1267,126 @@ class PolicySearchService:
 
         query_clean = query.strip()
         FOLLOW_UP_PATTERNS = [
-            r"\b(step\s*\d+|pehla\s*step|first\s*step|next\s*step|what\s+next)\b",
-            r"\b(what\s+was\s+step|repeat|tell\s+again|fir\s+se\s+batao|bhool\s+gaya|forgot)\b",
+            r"\b(one\s+by\s+one|step\s+by\s+step|ek\s+ek|each\s+step|one\s+step\s+at\s+a\s+time)\b",
+            r"(?:step\s*(?:no\.?|number)?\s*\d+|(?:first|pehla|next|agla|aage|last|final|previous|pichla|aakhri)\s*step|\bnext\b|\bagla\b|\baage\b)",
+            r"\bwhat\s+(?:was|is)\s+(?:the\s+)?(?:last|previous|final|first)\s+step\b|step\s+before",
+            r"\b(what\s+was\s+step|repeat|tell\s+again|fir\s+se\s+batao|bhool\s+gaya|forgot|pichla\s+step|aakhri\s+step)\b",
             r"\b(which\s+button|what\s+to\s+click|kaha\s+click\s+kare)\b",
         ]
         is_follow_up = any(re.search(pat, query_clean.lower()) for pat in FOLLOW_UP_PATTERNS)
+        # If it's a step follow-up in a fresh session with no prior topic, ask which procedure to guide
+        if is_follow_up and not history:
+            if language == "hi-IN":
+                clarify_msg = f"{student_name}, आप किस विश्वविद्यालय प्रक्रिया के बारे में पूछ रहे हैं? कृपया विषय (जैसे विड्रॉल, डुप्लीकेट आईडी कार्ड, या परीक्षा रीचेकिंग) बताएं ताकि मैं आपको सही चरण बता सकूँ।"
+            elif language == "hi-Latn":
+                clarify_msg = f"{student_name}, aap kis university procedure ke baare mein pooch rahe hain? Please topic mention karein (jaise withdrawal, duplicate ID card, ya rechecking) taaki main aapko exact steps bata sakoon."
+            else:
+                clarify_msg = f"{student_name}, which university procedure are you referring to? Please specify the topic (such as Program Withdrawal, Duplicate ID Card, Fee Clearance, or Rechecking) so I can guide you through the exact steps."
+            return {
+                "answer": clarify_msg,
+                "speech_text": clarify_msg,
+                "voice_speech_text": clarify_msg,
+                "engine": "UniAssist Step Counselor",
+                "domain": "Step Guidance",
+                "citations": [],
+                "status": "success",
+                "recommended_action": None,
+                "action_url": None,
+            }
+
         # If it's a follow-up and we have conversation history:
         if is_follow_up and history:
-            # 1. Extract the active topic/procedure from previous turns
             last_assistant_turn = next(
                 (h.get("content", "") or h.get("text", "") or h.get("message", "") or h.get("speech_text", "")
                  for h in reversed(history) 
                  if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor")), 
                 ""
             )
-            # 2. Feed the active context + history to Ollama for instant contextual recall
-            if last_assistant_turn:
+            # Find original multi-step procedure turn in history that contains numbered steps
+            proc_turn = next(
+                (str(h.get("content", "") or h.get("text", "") or h.get("speech_text", ""))
+                 for h in history
+                 if str(h.get("role", "")).lower() in ("assistant", "bot", "counselor")
+                 and re.search(r"(?:step\s*1|\b1\.)", str(h.get("content", "") or h.get("text", "")), re.I)
+                 and (re.search(r"(?:step\s*2|\b2\.)", str(h.get("content", "") or h.get("text", "")), re.I) and len(str(h.get("content", "") or h.get("text", ""))) > 150)),
+                ""
+            )
+
+            # If not in history text, look up active topic procedure in DEFAULT_POLICIES
+            if not proc_turn:
+                hist_combined = " ".join([str(h.get("content", "") or h.get("text", "")) for h in history]).lower()
+                for p in DEFAULT_POLICIES:
+                    p_content = p.get("content", "")
+                    if ("1." in p_content or "Step 1" in p_content):
+                        p_title = p.get("title", "").lower()
+                        p_cat = p.get("category", "").lower()
+                        if any(w in hist_combined for w in ["withdrawal", "withdraw", "विड्रॉल"]):
+                            if p.get("doc_id") == "PROC-FORM-WITHDRAWAL-APP" or ("withdrawal" in p_title and "application" in p_title):
+                                proc_turn = p_content
+                                break
+                        elif any(w in hist_combined for w in ["id card", "lost card", "identity card"]) and "id card" in p_title:
+                            proc_turn = p_content
+                            break
+                        elif any(w in hist_combined for w in ["rechecking", "revaluation"]) and "rechecking" in p_title:
+                            proc_turn = p_content
+                            break
+                        elif any(w in hist_combined for w in ["migration"]) and "migration" in p_title:
+                            proc_turn = p_content
+                            break
+            if not proc_turn:
+                proc_turn = last_assistant_turn
+
+            # Linguistic distinction: "What WAS the last step?" (previous step) vs "What IS the last step?" (final/terminal step)
+            q_lower = query_clean.lower()
+            is_terminal_final = (
+                bool(re.search(r'\b(?:what\s+is\s+(?:the\s+)?(?:last|final|ultimate)\s+step|final\s+step|aakhri\s+step|sabse\s+last)\b', q_lower))
+                or ('last step' in q_lower and any(w in q_lower for w in ['process', 'procedure', 'overall', 'end', 'is the']))
+            )
+            is_previous_recent = (
+                bool(re.search(r'\b(?:what\s+was\s+(?:the\s+)?(?:last|previous)\s+step|previous\s+step|pichla\s+step|before\s+(?:this|that)|step\s+before)\b', q_lower))
+                or ('last step' in q_lower and any(w in q_lower for w in ['was', 'pehle', 'pichla', 'before', 'you said', 'you mentioned']))
+            )
+
+            all_step_nums = [int(n) for n in re.findall(r'(?:step\s*|\b)(\d+)[:\.\-]', proc_turn, re.I)]
+            max_step = max(all_step_nums) if all_step_nums else 3
+
+            target_num = None
+            if is_terminal_final and not is_previous_recent:
+                target_num = max_step
+            elif is_previous_recent:
+                single_step_m = re.search(r"^\s*(?:Step\s*)?(\d+)[:\.\-]", last_assistant_turn, re.IGNORECASE)
+                target_num = int(single_step_m.group(1)) if single_step_m else 1
+            else:
+                step_m = re.search(r'(?:step\s*(?:no\.?|number)?\s*(\d+)|(?:first|pehla)\s*step)', q_lower)
+                if step_m and not any(p in q_lower for p in ["next", "what next", "agla"]):
+                    target_num = int(step_m.group(1)) if (step_m.group(1) and step_m.group(1).isdigit()) else 1
+                elif any(p in q_lower for p in ["one by one", "step by step", "ek ek", "each step", "first step", "pehla"]):
+                    target_num = 1
+                elif any(p in q_lower for p in ["next", "agla", "what next", "aage", "continue", "ok next"]):
+                    single_step_m = re.search(r"^\s*(?:Step\s*)?(\d+)[:\.\-]", last_assistant_turn, re.IGNORECASE)
+                    if single_step_m:
+                        target_num = int(single_step_m.group(1)) + 1
+                    else:
+                        target_num = 2
+
+            synthesized_follow_up = None
+            if target_num is not None and proc_turn:
+                pat = rf"(?:step\s*{target_num}[:\.\-]?\s*|\b{target_num}\.\s*)(.*?)(?=(?:step\s*{target_num+1}[:\.\-]?\s*|\b{target_num+1}\.\s*)|$)"
+                m = re.search(pat, proc_turn, re.IGNORECASE | re.DOTALL)
+                if m:
+                    step_body = m.group(1).strip()
+                    if is_terminal_final and not is_previous_recent:
+                        synthesized_follow_up = f"The final step (Step {target_num}) is: {step_body} This is the final step! You can now proceed to submit your clearance."
+                    elif is_previous_recent:
+                        synthesized_follow_up = f"The previous step was Step {target_num}: {step_body} Let me know when you are ready to continue."
+                    else:
+                        next_pat = rf"(?:step\s*{target_num+1}[:\.\-]?\s*|\b{target_num+1}\.\s*)"
+                        if re.search(next_pat, proc_turn, re.IGNORECASE):
+                            synthesized_follow_up = f"Step {target_num}: {step_body} Let me know when you are ready for Step {target_num+1}."
+                        else:
+                            synthesized_follow_up = f"Step {target_num}: {step_body} This is the final step! You can now proceed to submit your clearance."
+
+            if not synthesized_follow_up and last_assistant_turn:
                 synthesized_follow_up = call_ollama_llama3(
                     prompt=f"The student is asking: '{query_clean}'. Based on the previous step guidance given above, answer their question concisely in 1 to 2 spoken sentences.",
                     system_instruction=(
@@ -1292,16 +1396,22 @@ class PolicySearchService:
                     ),
                     history=history
                 )
-                if synthesized_follow_up:
-                    return {
-                        "answer": synthesized_follow_up,
-                        "speech_text": synthesized_follow_up,
-                        "voice_speech_text": synthesized_follow_up,
-                        "engine": "Ollama Local AI (Conversational)",
-                        "domain": "Step Guidance",
-                        "citations": [],
-                        "status": "success",
-                    }
+                if not synthesized_follow_up and any(w in query_clean.lower() for w in ["repeat", "again", "fir se", "tell again", "forgot", "bhool"]):
+                    first_sentence = re.split(r"[.\n]", last_assistant_turn)[0].strip()
+                    synthesized_follow_up = f"As mentioned earlier: {first_sentence}. Would you like to proceed with this?"
+
+            if synthesized_follow_up:
+                return {
+                    "answer": synthesized_follow_up,
+                    "speech_text": synthesized_follow_up,
+                    "voice_speech_text": synthesized_follow_up,
+                    "engine": "UniAssist Step Counselor",
+                    "domain": "Step Guidance",
+                    "citations": [],
+                    "status": "success",
+                    "recommended_action": None,
+                    "action_url": None,
+                }
 
         # =========================================================================
         # 00-ROLE-BASED PERSONAL RECORD ACCESS GUARD: Staff vs Authenticated Student vs Guest
@@ -5866,12 +5976,24 @@ class PolicySearchService:
                         f"{student_name}, regarding {p_title}, here is the official university guidance:\n\n"
                         f"{p_content}"
                     )
+                # Strict button gating: only attach button if user query explicitly asks for an action/form/portal
+                # or if the query clearly targets this policy's topic. Never attach random buttons.
+                q_lower_check = query.lower()
+                action_keywords = ["apply", "download", "start", "form", "portal", "link", "kaha se", "how to", "procedure", "kaha milega"]
+                p_topic_keywords = [w for w in p_title.lower().split() if len(w) >= 4 and w not in ("form", "application", "procedure", "guidelines")]
+                is_action_relevant = any(w in q_lower_check for w in action_keywords) or any(w in q_lower_check for w in p_topic_keywords)
+
+                valid_routes = {"/withdrawal", "/forms", "/exams", "/services", "/chat", "/scholarship", "/profile", "/login"}
+                target_url = top_p.get("action_url")
+                is_valid_route = target_url in valid_routes
+
+                has_action = is_action_relevant and is_valid_route and top_p.get("action_label")
                 res = {
                     "answer": answer,
                     "domain": top_p.get("category", "General Policies"),
                     "citations": policies[:3],
-                    "recommended_action": top_p.get("action_label", "View Details"),
-                    "action_url": top_p.get("action_url", "/forms"),
+                    "recommended_action": top_p.get("action_label") if has_action else None,
+                    "action_url": target_url if has_action else None,
                     "voice_speech_text": answer.replace("₹", "Rupees ").replace("INR ", "Rupees "),
                     "engine": "UniAssist Policy Engine",
                 }
@@ -6002,18 +6124,10 @@ class PolicySearchService:
                     res["screen_instruction"] = f"On this {scr_name}, you can click '{primary_act}' to proceed immediately."
                 res["highlight_target"] = primary_act
 
-        # Guaranteed UI Action Button for all campus services
-        if res.get("domain") not in ("Conversational", "Domain Boundary Guard"):
-            if is_staff_user:
-                if not res.get("action_url") or res.get("action_url") in ("/forms", "/withdrawal", "/services"):
-                    res["action_url"] = "/staff"
-                if not res.get("recommended_action") or res.get("recommended_action") in ("Browse Forms & Policies", "Open Forms Catalog", "Start Withdrawal Procedure"):
-                    res["recommended_action"] = "Open Staff Admin Portal"
-            else:
-                if not res.get("action_url"):
-                    res["action_url"] = "/forms"
-                if not res.get("recommended_action"):
-                    res["recommended_action"] = "Open Forms Catalog"
+        # Staff route adjustment if action button is present
+        if is_staff_user and res.get("action_url") in ("/forms", "/withdrawal", "/services"):
+            res["action_url"] = "/staff"
+            res["recommended_action"] = "Open Staff Admin Portal"
 
         # Universal asterisk sanitizer - strip all raw markdown from any answer
         if res.get("answer"):

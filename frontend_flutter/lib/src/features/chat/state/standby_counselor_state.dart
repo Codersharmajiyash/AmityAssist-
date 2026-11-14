@@ -31,12 +31,18 @@ class StandbyCounselorState {
 class StandbyCounselorNotifier extends StateNotifier<StandbyCounselorState> {
   StandbyCounselorNotifier() : super(const StandbyCounselorState());
 
-  void enterStandby({required String topic, required String lastGuidance, required List<dynamic> currentHistory}) {
+  void enterStandby({
+    required String topic,
+    required String lastGuidance,
+    List<dynamic>? currentHistory,
+  }) {
     state = StandbyCounselorState(
       isStandbyActive: true,
-      activeTopic: topic,
-      lastSpokenGuidance: lastGuidance,
-      history: List.from(currentHistory),
+      activeTopic: topic.isNotEmpty ? topic : (state.activeTopic.isNotEmpty ? state.activeTopic : 'Campus Guidance'),
+      lastSpokenGuidance: lastGuidance.isNotEmpty ? lastGuidance : state.lastSpokenGuidance,
+      history: (currentHistory != null && currentHistory.isNotEmpty)
+          ? List.from(currentHistory)
+          : state.history,
     );
   }
 
@@ -44,8 +50,18 @@ class StandbyCounselorNotifier extends StateNotifier<StandbyCounselorState> {
     state = state.copyWith(isStandbyActive: false);
   }
 
+  void updateHistory(List<dynamic> newHistory) {
+    if (newHistory.isNotEmpty) {
+      state = state.copyWith(history: List.from(newHistory));
+    }
+  }
+
   void appendTurn(dynamic turn) {
     state = state.copyWith(history: [...state.history, turn]);
+  }
+
+  void clearHistory() {
+    state = const StandbyCounselorState();
   }
 }
 

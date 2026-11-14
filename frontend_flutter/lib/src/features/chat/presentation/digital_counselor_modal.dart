@@ -197,6 +197,19 @@ class _DigitalCounselorModalState extends ConsumerState<DigitalCounselorModal> {
                     ),
                   ),
                   IconButton(
+                    icon: const Icon(Icons.remove_rounded, color: Colors.white, size: 24),
+                    tooltip: 'Minimize to Standby Pill',
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    constraints: const BoxConstraints(),
+                    onPressed: () {
+                      ref.read(standbyCounselorProvider.notifier).enterStandby(
+                        topic: 'Campus Guidance',
+                        lastGuidance: 'Assistant on standby.',
+                      );
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                  IconButton(
                     icon: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
@@ -542,7 +555,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     });
 
     final standby = ref.read(standbyCounselorProvider);
-    if (standby.isStandbyActive && standby.history.isNotEmpty) {
+    if (standby.history.isNotEmpty) {
       _hasChosenLanguage = true;
       for (final item in standby.history) {
         if (item is _VoiceChatTurn) {
@@ -550,6 +563,26 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
         }
       }
       _scrollToBottom();
+    } else if (widget.autoStartVoice) {
+      _hasChosenLanguage = true;
+      _selectedLanguage = 'en-IN';
+      final defaultGreeting = 'Hello! I am your University Digital Counselor. How can I assist you today?';
+      _counselorGreeting = defaultGreeting;
+      _conversationHistory.add(_VoiceChatTurn(
+        isUser: false,
+        text: defaultGreeting,
+        speechText: defaultGreeting,
+        domain: 'Campus Counselor',
+        engine: 'UniAssist Voice AI',
+      ));
+    }
+
+    if (widget.autoStartVoice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isListening) {
+          _toggleVoice();
+        }
+      });
     }
   }
 
@@ -624,6 +657,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     TtsService().stop();
     WebVoiceBridge.stopSpeaking();
     WebVoiceBridge.stopListening();
+    ref.read(standbyCounselorProvider.notifier).clearHistory();
     setState(() {
       _isListening = false;
       _isSpeaking = false;
@@ -668,6 +702,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
       _errorMessage = null;
       _queryController.clear();
     });
+    ref.read(standbyCounselorProvider.notifier).updateHistory(_conversationHistory);
     _scrollToBottom();
 
     try {
@@ -771,7 +806,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
           }
           _conversationHistory.add(_VoiceChatTurn(
             isUser: false,
-            text: (speak && speech.isNotEmpty) ? speech : answer,
+            text: answer.isNotEmpty ? answer : speech,
             speechText: speech,
             engine: engine,
             domain: domain,
@@ -785,6 +820,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
           ));
           _isLoading = false;
         });
+        ref.read(standbyCounselorProvider.notifier).updateHistory(_conversationHistory);
         _scrollToBottom();
 
         // Trigger pulse highlight if target button exists
@@ -1053,6 +1089,21 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onPressed: _restartConversation,
+              ),
+              const SizedBox(width: 6),
+              IconButton(
+                tooltip: 'Minimize to Standby Pill',
+                icon: const Icon(Icons.picture_in_picture_alt_rounded, size: 20, color: AppColors.primary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () {
+                  ref.read(standbyCounselorProvider.notifier).enterStandby(
+                    topic: _conversationHistory.isNotEmpty ? (_conversationHistory.last.domain ?? 'Guidance') : 'Campus Counselor',
+                    lastGuidance: _conversationHistory.isNotEmpty ? (_conversationHistory.last.speechText ?? _conversationHistory.last.text) : 'Counselor on Standby',
+                    currentHistory: _conversationHistory,
+                  );
+                  Navigator.of(context).pop();
+                },
               ),
             ],
           ),

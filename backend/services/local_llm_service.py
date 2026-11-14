@@ -61,6 +61,9 @@ def sanitize_and_verify_response(text: str) -> str:
 
     # 0. Intercept LLM meta-roleplay preambles & conversational scenario setups
     meta_patterns = [
+        r"^based on the (provided|verified) (text|documents|records|information)[^\n:.]*[:.]?\s*",
+        r"^here are the (detailed )?(budget breakdowns|steps|procedures)[^\n:.]*[:.]?\s*",
+        r"^detailed budget breakdown:\s*",
         r"^here is the updated conversation:.*?(counselor response:|counselor:)\s*",
         r"^here is an updated conversation:.*?(counselor response:|counselor:)\s*",
         r"^user query:.*?(counselor response:|counselor:)\s*",
@@ -289,6 +292,18 @@ def generate_local_policy_answer(
         if not matched_procedure and history:
             combined_h = " ".join([str(h.get("content") or "").lower() for h in history[-3:]])
             matched_procedure = get_procedure_by_keyword(combined_h)
+
+        # Anti-Hallucination Relevance Guard: Never send unrelated citations to LLM
+        q_words = [w for w in re.sub(r"[^\w\s]", " ", query.lower()).split() if len(w) >= 3 and w not in ("what", "which", "where", "how", "tell", "give", "from", "with", "this", "that", "there", "then", "have", "need", "want", "please", "karo", "batao", "step", "steps", "final", "last", "next", "pehla", "aakhri")]
+        citation_text = " ".join([f"{_safe_title(c)} {_safe_content(c)}" for c in citations]).lower()
+        has_subject_overlap = any(w in citation_text for w in q_words) or matched_procedure is not None
+
+        if not has_subject_overlap and q_words:
+            if language == "hi-IN":
+                return f"मुझे क्षमा करें, {student_name}, लेकिन मुझे आपके इस प्रश्न से संबंधित कोई विशिष्ट विश्वविद्यालय अध्यादेश नहीं मिला। कृपया अपने विषय (जैसे विड्रॉल, उपस्थिति, परीक्षा, या फॉर्म का नाम) के साथ पूछें।"
+            elif language == "hi-Latn":
+                return f"Sorry {student_name}, mujhe aapke question se matching koi specific university rule nahi mila. Please topic mention karein (jaise withdrawal, attendance, exam, ya fee)."
+            return f"I am sorry, {student_name}, but I could not find a specific university ordinance matching your inquiry. Please specify the topic (such as withdrawal, attendance, fees, or form name) so I can assist you."
 
         if matched_procedure:
             req_docs = ", ".join(matched_procedure.get("required_documents") or ["None required (100% digital process)"])

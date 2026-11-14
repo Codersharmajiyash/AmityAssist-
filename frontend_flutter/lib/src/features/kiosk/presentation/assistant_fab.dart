@@ -48,7 +48,7 @@ class AssistantFab extends ConsumerWidget {
                           showDigitalCounselor(
                             context,
                             initialTab: 1,
-                            autoStartVoice: false,
+                            autoStartVoice: true,
                             currentRoute: currentRoute,
                           );
                         },
