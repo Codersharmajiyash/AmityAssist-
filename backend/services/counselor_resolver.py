@@ -207,7 +207,10 @@ def resolve_query(
         lambda m: typo_map.get(m.group(0).lower(), m.group(0)),
         q_clean,
     )
-    q_lower = q_clean.lower()
+    q_clean = q_clean.replace("लाइब्रेरी", "library").replace("पुस्तकालय", "library")
+    q_clean = q_clean.replace("कार्ड", "card").replace("सदस्यता", "membership")
+    q_raw_lower = q_clean.lower()
+    q_lower = re.sub(r"(?<=\w)-(?=\w)", " ", q_raw_lower)
     intent, target_step = detect_aspect_and_step(q_lower)
     if procedures is None or procedure_map is None or office_map is None:
         loaded_procedures, loaded_map, loaded_offices = configured_catalog()
@@ -219,7 +222,7 @@ def resolve_query(
         return Resolution(status=status, offices=office_map, **kwargs)  # type: ignore[arg-type]
 
     def candidate_match(text: str, proc: Procedure) -> bool:
-        if any(has_phrase(text, alias) for alias in proc.aliases) or has_phrase(text, proc.id):
+        if any(has_phrase(text, alias) for alias in proc.aliases) or has_phrase(q_raw_lower, proc.id) or has_phrase(text, proc.id.replace("-", " ")):
             return True
         title_words = set(tokens(" ".join(proc.names.values())))
         query_words = set(tokens(text))
@@ -227,6 +230,7 @@ def resolve_query(
             "the", "and", "for", "application", "form", "change", "step", "steps",
             "tell", "me", "what", "was", "is", "of", "previous", "last", "that",
             "it", "earlier", "third", "3rd", "first", "second", "1st", "2nd",
+            "i", "to", "need", "my", "want", "a", "an", "do", "does", "please",
         }
         return bool((title_words & query_words) - stop)
 
@@ -325,15 +329,73 @@ def resolve_query(
                 session.current_step = final_step
                 return result("hit", procedure=active_p, intent=intent, target_step=final_step)
 
+    # An exact active admin procedure name is the institution's configured
+    # workflow. Prefer it over a seeded procedure with a similar title. If the
+    # admin has multiple same-title entries, the newest active entry wins; the
+    # procedure records themselves remain unchanged.
+    custom_matches: list[tuple[int, Procedure]] = []
+    for procedure in procedures:
+        if not procedure.is_custom:
+            continue
+        matched_lengths = [
+            len(tokens(alias))
+            for alias in procedure.aliases
+            if alias.strip() and has_phrase(q_lower, alias)
+        ]
+        if matched_lengths:
+            custom_matches.append((max(matched_lengths), procedure))
+    if custom_matches:
+        longest = max(length for length, _ in custom_matches)
+        candidates = [procedure for length, procedure in custom_matches if length == longest]
+        candidate_names = {
+            re.sub(r"[^a-z0-9]+", " ", (procedure.names.get("en") or procedure.id).casefold()).strip()
+            for procedure in candidates
+        }
+        if len(candidate_names) > 1:
+            session.active_procedure_id = None
+            session.pending_procedure_ids = [procedure.id for procedure in candidates[:3]]
+            session.pending_conflict = None
+            return result("clarify", candidates=candidates[:3], intent=intent)
+        selected = candidates[0]  # custom catalog is ordered newest first
+        session.active_procedure_id = selected.id
+        session.pending_conflict = None
+        session.pending_procedure_ids.clear()
+        if selected.id not in session.recent_procedures:
+            session.recent_procedures.append(selected.id)
+        session.current_step = target_step if (target_step and target_step > 0) else 1
+        return result("hit", procedure=selected, intent=intent, target_step=session.current_step)
+
     # 2. Score candidates across all 39 procedures
     scored: list[tuple[float, Procedure]] = []
     q_tokens = set(tokens(q_lower))
+    generic_alias_terms = {"student", "id", "card", "form", "application"}
+    common_terms = {
+        "the", "and", "for", "application", "form", "step", "steps",
+        "i", "to", "need", "my", "want", "a", "an", "do", "does", "please",
+        "what", "is", "of", "in", "on", "at", "me", "can", "how", "where",
+        "kya", "hai", "ka", "ki", "ke", "ko",
+    }
+    query_topics = q_tokens - common_terms
 
     for p in procedures:
         score = 0.0
 
+        title_blob = f"{p.names.get('en', '')} {p.names.get('hi', '')} {p.names.get('hinglish', '')}"
+        title_tokens = set(tokens(title_blob))
+        title_topics = title_tokens - common_terms - generic_alias_terms
+
         # Exact Alias Phrase Matching
-        matched_aliases = [alias for alias in p.aliases if has_phrase(q_lower, alias)]
+        matched_aliases = []
+        for alias in p.aliases:
+            if not has_phrase(q_lower, alias):
+                continue
+            alias_tokens = set(tokens(alias))
+            alias_topics = alias_tokens - generic_alias_terms - common_terms
+            # Do not route a cross-topic question to a generic "student ID"
+            # record when a different, specific university topic is present.
+            if alias_tokens and not alias_topics and query_topics and not (query_topics & title_topics):
+                continue
+            matched_aliases.append(alias)
         if matched_aliases:
             longest_len = max(len(a.split()) for a in matched_aliases)
             score += 10.0 + (longest_len * 2.0)
@@ -343,15 +405,20 @@ def resolve_query(
         # Form Code Matching (e.g. 'AC-04', 'EX-02', 'ADM-01', 'Form 28', 'Form 15')
         if p.form_code:
             code_lower = p.form_code.lower()
-            if has_phrase(q_lower, code_lower) or has_phrase(q_lower, f"form {code_lower}"):
+            if p.form_code.isdigit():
+                code_match = any(
+                    has_phrase(q_raw_lower, label)
+                    for label in (f"form {code_lower}", f"form no {code_lower}", f"form number {code_lower}")
+                )
+            else:
+                code_match = has_phrase(q_raw_lower, code_lower) or has_phrase(q_raw_lower, f"form {code_lower}")
+            if code_match:
                 score = max(score, 16.0)
 
         # Title Token Overlap (Devanagari + English)
-        title_blob = f"{p.names.get('en', '')} {p.names.get('hi', '')} {p.names.get('hinglish', '')}"
-        title_tokens = set(tokens(title_blob))
         overlap = q_tokens & title_tokens
         # Filter out common stop words and numeric tokens (e.g. '20', '10', '15')
-        overlap = {t for t in overlap if not t.isdigit() and t not in ("the", "and", "for", "application", "form", "kya", "hai", "ka", "ki", "ke", "ko")}
+        overlap = {t for t in overlap if not t.isdigit() and t not in common_terms}
         if overlap:
             score += len(overlap) * 1.5
 

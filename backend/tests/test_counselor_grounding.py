@@ -101,7 +101,7 @@ def test_three_languages_keep_same_route_and_unverified_numbers_are_rejected():
     assert sanitize_and_verify_response("Go to Room 201.", evidence_text="Go to Room 201.") == "Go to Room 201."
 
 
-def test_duplicate_procedure_records_abstain_instead_of_picking_one():
+def test_same_named_admin_procedure_uses_configured_admin_workflow():
     canonical, _ = _catalog("library-regulations")
     source = canonical[0]
     duplicate_a = replace(
@@ -118,9 +118,9 @@ def test_duplicate_procedure_records_abstain_instead_of_picking_one():
 
     result = _resolve("what about library card", session, procedures, procedure_map)
     answer = render_counselor_response(result, None, session, "en-IN")
-    assert result.status == "clarify"
-    assert "conflicting records" in answer["answer"]
-    assert answer["citations"] == []
+    assert result.status == "hit"
+    assert result.procedure.id in {"duplicate-library-a", "duplicate-library-b"}
+    assert "official verified procedure" in answer["answer"]
 
 
 def test_unreferenced_general_answer_abstains():

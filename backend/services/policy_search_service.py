@@ -5010,7 +5010,7 @@ class PolicySearchService:
                         f"AVAILABLE ACTIONS ON THIS PAGE: {actions_str}\n"
                         f"STUDENT QUERY: {query}"
                     )
-                    ollama_out = call_ollama_llama3(user_msg, sys_inst, history=history)
+                    ollama_out = call_ollama_llama3(user_msg, sys_inst, history=history, evidence_text=user_msg)
                     if ollama_out and len(ollama_out.strip()) > 20:
                         ai_counselor_reply = ollama_out.strip()
                         ai_engine_name = "Ollama Local AI (Llama 3.2)"

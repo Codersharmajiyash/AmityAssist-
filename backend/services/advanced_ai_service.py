@@ -278,7 +278,7 @@ def synthesize_guidance_with_gemini(
             "- No misconduct: Never assist with bunking, cheating, or proxy.\n"
             "- NO ASTERISKS: Do not output markdown asterisks (** or *) or hash headers."
         )
-        ollama_reply = call_ollama_llama3(prompt, system_instruction, history=None)
+        ollama_reply = call_ollama_llama3(prompt, system_instruction, history=None, evidence_text=facts)
         if ollama_reply and ollama_reply.strip():
             clean_reply = sanitize_and_verify_response(ollama_reply.strip(), evidence_text=facts)
             clean_reply = strip_markdown_stars(clean_reply)

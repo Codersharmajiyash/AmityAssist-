@@ -211,6 +211,7 @@ def call_ollama_llama3(
     model: str | None = None,
     timeout: float | None = None,
     history: list[dict[str, Any]] | None = None,
+    evidence_text: str | None = None,
 ) -> str | None:
     """Send an inference request to the local Ollama daemon with optional multi-turn conversation history."""
     target_model = model or settings.ollama_model
@@ -251,7 +252,7 @@ def call_ollama_llama3(
                 data = resp.json()
                 content = data.get("message", {}).get("content", "")
                 if content and content.strip():
-                    return sanitize_and_verify_response(content.strip(), evidence_text=facts_text)
+                    return sanitize_and_verify_response(content.strip(), evidence_text=evidence_text)
     except Exception:
         return None
     return None
@@ -408,7 +409,12 @@ def generate_local_policy_answer(
             f"STUDENT QUESTION:\n{query}"
         )
 
-        ollama_result = call_ollama_llama3(user_prompt, system_instruction, history=None)
+        ollama_result = call_ollama_llama3(
+            user_prompt,
+            system_instruction,
+            history=None,
+            evidence_text=facts_text,
+        )
         if ollama_result:
             grounded_reply = sanitize_and_verify_response(ollama_result[:1200], evidence_text=facts_text)
             if grounded_reply:

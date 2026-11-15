@@ -104,7 +104,7 @@ def test_generate_local_policy_answer_with_ollama_mock():
             language="en-IN",
             use_ollama=True,
         )
-        assert ans == "Yes, you qualify for Dean condonation under Ordinance ACAD 7.2."
+        assert "not listed in the verified university records" in ans.lower()
 
 
 def test_generate_local_policy_answer_fallback_when_ollama_offline():
@@ -136,7 +136,7 @@ def test_generate_local_policy_answer_fallback_when_ollama_offline():
             language="hi-IN",
             use_ollama=True,
         )
-        assert "अध्यादेश संदर्भ ORD-WTH-14.1" in ans_hi
+        assert "सत्यापित रिकॉर्ड में नहीं मिली" in ans_hi
 
 
 def test_synthesize_guidance_waterfall_ollama_priority():
