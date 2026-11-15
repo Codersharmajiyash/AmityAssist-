@@ -15,6 +15,7 @@ from typing import Any
 from ..config import settings
 from ..database.connection import get_connection
 from ..services.nlp_service import score_sentiment, normalize_query_typos
+from .text_match import has_phrase, has_any, has_stem, tokens
 from ..services.advanced_ai_service import synthesize_guidance_with_gemini
 from ..services.local_llm_service import call_ollama_llama3, strip_markdown_stars
 from ..data.kiosk_master_procedures import MASTER_PROCEDURES, get_procedure_by_keyword
@@ -641,6 +642,11 @@ DEFAULT_POLICIES = [
     },
 ]
 
+_POL: dict[str, dict[str, Any]] = {p["doc_id"]: p for p in DEFAULT_POLICIES}
+
+def pol(doc_id: str) -> dict[str, Any] | None:
+    return _POL.get(doc_id)
+
 
 class PolicySearchService:
     """Provides SQLite FTS5 full-text search and personalized policy guidance."""
@@ -686,8 +692,13 @@ class PolicySearchService:
         for p in DEFAULT_POLICIES:
             conn.execute(
                 """
-                INSERT OR IGNORE INTO university_policies (doc_id, category, title, clause_code, content, action_url, action_label, is_custom, updated_at)
+                INSERT INTO university_policies (doc_id, category, title, clause_code, content, action_url, action_label, is_custom, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+                ON CONFLICT(doc_id) DO UPDATE SET
+                  category=excluded.category, title=excluded.title, clause_code=excluded.clause_code,
+                  content=excluded.content, action_url=excluded.action_url,
+                  action_label=excluded.action_label, updated_at=excluded.updated_at
+                WHERE university_policies.is_custom = 0
                 """,
                 (
                     p["doc_id"],
@@ -702,32 +713,26 @@ class PolicySearchService:
             )
         conn.commit()
 
-        cur = conn.execute("SELECT count(*) FROM university_policies")
-        pol_count = cur.fetchone()[0]
-
-        cur = conn.execute("SELECT count(*) FROM policy_fts")
-        count = cur.fetchone()[0]
-
-        if count < pol_count:
-            conn.execute("DELETE FROM policy_fts")
-            all_rows = conn.execute("SELECT doc_id, category, title, clause_code, content, action_url, action_label FROM university_policies").fetchall()
-            for p in all_rows:
-                conn.execute(
-                    """
-                    INSERT INTO policy_fts (doc_id, category, title, clause_code, content, action_url, action_label)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        p["doc_id"],
-                        p["category"],
-                        p["title"],
-                        p["clause_code"],
-                        p["content"],
-                        p["action_url"],
-                        p["action_label"],
-                    ),
-                )
-            conn.commit()
+        # Rebuild FTS5 unconditionally (~50 baseline rows costs < 5ms)
+        conn.execute("DELETE FROM policy_fts")
+        all_rows = conn.execute("SELECT doc_id, category, title, clause_code, content, action_url, action_label FROM university_policies").fetchall()
+        for p in all_rows:
+            conn.execute(
+                """
+                INSERT INTO policy_fts (doc_id, category, title, clause_code, content, action_url, action_label)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    p["doc_id"],
+                    p["category"],
+                    p["title"],
+                    p["clause_code"],
+                    p["content"],
+                    p["action_url"],
+                    p["action_label"],
+                ),
+            )
+        conn.commit()
 
     @classmethod
     def list_policies(cls) -> list[dict[str, Any]]:
@@ -1411,47 +1416,51 @@ class PolicySearchService:
         is_math = (
             not any(w in q_lower for w in ["grv-", "ord-", "pol-", "proc-", "form", "ticket", "2024-", "2025-", "2026-", "2027-"])
             and bool(re.search(r'\b\d+\s*[\+\*\/]\s*\d+\b|\b\d+\s+\-\s+\d+\b', q_lower))
-        ) or any(w in q_lower for w in [
+        ) or has_any(q_lower, [
             "whats 2+2", "what is 2+2", "2+2", "2 + 2", "math question", "solve this equation",
-            "calculate ", "multiplication table", "square root"
+            "multiplication table", "square root"
         ])
 
-        is_coding = any(w in q_lower for w in [
+        is_coding = has_any(q_lower, [
             "python code", "code in python", "code for addition", "arithmatic operators", "arithmetic operators",
             "write a function", "write a code", "write code", "javascript code", "java code", "c++ code",
-            "html code", "css code", "sql query to", "for loop in", "while loop in"
+            "html code", "css code", "sql query to", "for loop in", "while loop in",
+            "python program", "python script", "write a python", "program in python", "programming in",
+            "write a script", "algorithm", "quicksort", "binary search", "traveling salesman", "leetcode", "debug this code"
         ])
 
-        is_campus_mess = any(w in q_lower for w in ["hostel mess", "mess fee", "mess rebate", "mess timing", "canteen timings"])
-        is_food = not is_campus_mess and any(w in q_lower for w in [
+        is_campus_mess = has_any(q_lower, ["hostel mess", "mess fee", "mess rebate", "mess timing", "canteen timings"])
+        is_food = not is_campus_mess and has_any(q_lower, [
             "eat food", "i want to eat food", "want to eat", "want food", "order food",
             "buy food", "cook food", "cooking", "hungry", "recipe", "pizza", "burger",
             "khana khana", "khana chahiye", "khana khau", "khana hai", "bhookh", "bhook lagi",
             "खाना खाना", "खाना चाहिए", "खाना है", "भूख लगी", "भूख", "भोजन"
         ])
 
-        is_sports = any(w in q_lower for w in [
+        is_sports = has_any(q_lower, [
             "cricket score", "cricket match", "football match", "ipl score", "ipl match", "ipl",
             "world cup", "sports news", "pubg", "minecraft", "free fire", "play a game", "game score",
             "क्रिकेट स्कोर", "क्रिकेट मैच", "स्कोर क्या है"
         ])
 
-        is_weather = any(w in q_lower for w in [
+        is_weather = has_any(q_lower, [
             "weather", "weather today", "what is the weather", "temperature", "mausam", "मौसम", "तापमान"
         ])
 
-        is_crypto = any(w in q_lower for w in [
+        is_crypto = has_any(q_lower, [
             "crypto", "bitcoin", "ethereum", "dogecoin", "stock market", "shares price", "trading"
         ])
 
-        is_trivia = any(w in q_lower for w in [
+        is_trivia = has_any(q_lower, [
             "who won the", "who is the prime minister", "who is the president", "who is elon musk",
             "who is narendra modi", "capital of france", "capital of", "who invented",
-            "tell me a joke", "tell a joke", "sing a song", "tell me a story", "tell a story"
+            "tell me a joke", "tell a joke", "sing a song", "tell me a story", "tell a story",
+            "movie", "song", "write an essay"
         ])
 
-        is_casual_chat = any(w in q_lower for w in [
-            "love you", "marry me", "dance for me", "are you human", "chat with me", "date me"
+        is_casual_chat = has_any(q_lower, [
+            "love you", "marry me", "dance for me", "are you human", "chat with me", "date me",
+            "girlfriend", "boyfriend"
         ])
 
         if is_math or is_coding or is_food or is_sports or is_weather or is_crypto or is_trivia or is_casual_chat:
@@ -1511,18 +1520,10 @@ class PolicySearchService:
             return None
 
         for h in reversed(history):
+            if str(h.get("role", "")).lower() not in ("user",):
+                continue
             content = str(h.get("content") or h.get("text") or "").lower()
             if not content:
-                continue
-
-            # CRITICAL GUARD: Ignore clarification prompts or disambiguation prompts from the assistant!
-            # If the assistant was asking the user to specify or listed examples ("such as Library Card..."),
-            # that is NEVER an active procedure!
-            if any(p in content for p in [
-                "please specify", "such as", "which university procedure",
-                "which procedure", "clarify", "are you asking about",
-                "कृपया स्पष्ट करें", "aap kis procedure"
-            ]):
                 continue
 
             matched = cls._match_procedure_in_query(content, all_procs)
@@ -2212,7 +2213,8 @@ class PolicySearchService:
         is_authenticated = student is not None
         student_name = staff_designation if is_staff_user else ((student or {}).get("name", "").split()[0] if is_authenticated else "Guest")
         greeting_prefix = f"{student_name}, " if is_authenticated else (f"{staff_designation}, " if is_staff_user else "")
-        attendance = float((student or {}).get("attendance", 75.0))
+        raw_att = (student or {}).get("attendance")
+        attendance = float(raw_att) if raw_att is not None else None
 
         # =========================================================================
         # 5-STAGE DETERMINISTIC PIPELINE: STAGE 1 - Typo Normalizer & Domain Guard
@@ -2258,7 +2260,8 @@ class PolicySearchService:
             }
 
         is_personal_record_query = (
-            any(p in q_clean or p in q_lower for p in [
+            (has_any(q_lower, ["my", "mera", "meri", "mere", "mine"]) and has_any(q_lower, ["attendance", "cgpa", "gpa", "marks", "fee", "fees", "dues", "status", "backpaper", "result", "grade", "record", "records"]))
+            or any(p in q_clean or p in q_lower for p in [
                 "my attendance", "meri attendance", "mera attendance", "mere attendance", "kitni attendance", "attendance kitni",
                 "मेरी अटेंडेंस", "मेरा अटेंडेंस", "अटेंडेंस कितनी", "कितनी अटेंडेंस", "उपस्थिति कितनी", "मेरी उपस्थिति", "मेरा हाजिरी", "मेरी हाजिरी",
                 "can i sit for exam", "can i sit for exams", "can i give exam", "can i give exams", "can i write exam", "can i write exams",
@@ -2866,6 +2869,17 @@ class PolicySearchService:
         # =========================================================================
         # 5-STAGE DETERMINISTIC PIPELINE: STAGE 2 - Multi-Turn & Step Intent Resolver
         # =========================================================================
+        # Step 3: Grounded Knowledge-Base & Session Counselor Engine
+        try:
+            from .counselor_resolver import get_or_create_session, resolve_query, render_counselor_response
+            sess_id = effective_student_id or "kiosk_session"
+            session = get_or_create_session(sess_id, language=language)
+            counselor_res = resolve_query(query, session)
+            if counselor_res.status in ("hit", "clarify"):
+                return render_counselor_response(counselor_res, student, session, language=language)
+        except Exception:
+            pass
+
         # Rule 1: Does the current user query explicitly specify a procedure?
         # Current query topic ALWAYS takes absolute precedence over prior history!
         query_proc = cls._match_procedure_in_query(q_lower, all_procs)
@@ -2923,9 +2937,12 @@ class PolicySearchService:
         # Check if user is replying to an interactive cross-question from previous turn
         if history:
             last_assistant_turn = ""
+            NON_ANSWER = {"General", "Domain Boundary Guard", "Policy Guardrails", "Conversational", "General Policies", "General Ordinance Guidance"}
             for h in reversed(history):
                 role = str(h.get("role", "")).lower()
                 if role in ("assistant", "model", "bot", "counselor"):
+                    if str(h.get("domain")) in NON_ANSWER:
+                        continue
                     last_assistant_turn = str(h.get("content") or h.get("text") or "").lower()
                     break
 
@@ -3553,18 +3570,23 @@ class PolicySearchService:
 
         # A01: Attendance requirement
         is_attendance_requirement = (
-            any(w in q_lower for w in ["attendance requirement", "minimum attendance", "attendance cutoff", "attendance criteria", "attendance policy", "attendance for my course"])
-            and not any(w in q_lower for w in ["below", "shortage", "condonation", "less than", "kam", "correction", "गलत", "कम", "scholarship", "scholarships", "छात्रवृत्ति", "स्कॉलरशिप", "cgpa", "renewal"])
+            has_any(q_lower, ["attendance requirement", "minimum attendance", "attendance cutoff", "attendance criteria", "attendance policy", "attendance for my course"])
+            and not has_any(q_lower, ["below", "shortage", "condonation", "less than", "kam", "correction", "गलत", "कम", "scholarship", "scholarships", "छात्रवृत्ति", "स्कॉलरशिप", "cgpa", "renewal"])
         )
         if is_attendance_requirement:
+            personal = (f" Your current recorded attendance is {attendance:.1f}%, which "
+                        f"{'meets' if attendance >= 75 else 'does not meet'} the requirement."
+                        if attendance is not None else
+                        " Sign in to see how your recorded attendance compares.")
             att_req_msg = (
                 f"Under University Ordinance ORD-ACAD-7.2, every student must maintain a minimum attendance of 75% in each registered course to be eligible to appear in End Term Semester Examinations. "
-                f"A 25% margin is permitted for personal contingencies. Your current recorded attendance is {attendance:.1f}%, which meets eligibility requirements."
+                f"A 25% margin is permitted for personal contingencies.{personal}"
             )
+            acad_policy = pol("POL-ACAD-01") or DEFAULT_POLICIES[0]
             return {
                 "answer": att_req_msg,
                 "domain": "Academics",
-                "citations": [DEFAULT_POLICIES[0]],
+                "citations": [acad_policy],
                 "recommended_action": "View Attendance Policy (ORD-ACAD-7.2)",
                 "action_url": "/forms",
                 "voice_speech_text": att_req_msg,
@@ -3591,7 +3613,7 @@ class PolicySearchService:
                 return {
                     "answer": staff_att_msg,
                     "domain": "Academics",
-                    "citations": [DEFAULT_POLICIES[0], DEFAULT_POLICIES[1]],
+                    "citations": [c for c in [pol("POL-ACAD-01")] if c],
                     "recommended_action": "Staff Admin Portal",
                     "action_url": "/staff",
                     "voice_speech_text": f"{staff_designation}, Ordinance ORD-ACAD-7.2 requires 75% attendance. Condonation applies between 60% and 74.9%. Debarment below 60%. Audit rosters on the Staff Portal.",
@@ -3607,7 +3629,7 @@ class PolicySearchService:
             return {
                 "answer": below_att_msg,
                 "domain": "Academics",
-                "citations": [DEFAULT_POLICIES[0], DEFAULT_POLICIES[1]],
+                "citations": [c for c in [pol("POL-ACAD-01")] if c],
                 "recommended_action": "Download Form AC-04 (Condonation)",
                 "action_url": "/forms",
                 "voice_speech_text": below_att_msg,
@@ -3630,7 +3652,7 @@ class PolicySearchService:
             return {
                 "answer": med_msg,
                 "domain": "Academics",
-                "citations": [DEFAULT_POLICIES[1]],
+                "citations": [c for c in [pol("POL-ACAD-01")] if c],
                 "recommended_action": "Download Form AC-04 (Condonation)",
                 "action_url": "/forms",
                 "voice_speech_text": med_msg,
@@ -4326,9 +4348,12 @@ class PolicySearchService:
         )
         if is_short_affirmative and history:
             last_assistant_turn = ""
+            NON_ANSWER = {"General", "Domain Boundary Guard", "Policy Guardrails", "Conversational", "General Policies", "General Ordinance Guidance"}
             for h in reversed(history):
                 role = str(h.get("role", "")).lower()
                 if role in ("assistant", "model", "bot", "counselor"):
+                    if str(h.get("domain")) in NON_ANSWER:
+                        continue
                     last_assistant_turn = str(h.get("content") or h.get("text") or "").lower()
                     break
 
@@ -6769,11 +6794,21 @@ class PolicySearchService:
                 active_procs = ProcedureService.list_procedures(active_only=True)
                 for cp in active_procs:
                     cp_title = (cp.get("title") or "").lower()
-                    words_in_title = [w for w in cp_title.split() if len(w) >= 4 and w not in ("application", "procedure", "form", "desk", "office", "hostel", "room")]
-                    matched_words = [w for w in words_in_title if w in q_lower]
-                    if cp_title in q_lower or (words_in_title and len(matched_words) >= max(1, len(words_in_title) // 2 + 1)):
+                    if has_phrase(q_lower, cp_title):
                         matched_custom_proc = cp
                         break
+                    if "room change" in cp_title or "hostel swap" in cp_title:
+                        if has_any(q_lower, ["hostel room change", "room change", "hostel swap", "change hostel room", "shifting a block", "shift block", "hostel shift"]):
+                            matched_custom_proc = cp
+                            break
+                    elif "library" in cp_title:
+                        if has_any(q_lower, ["library card", "library pass", "library issue", "book borrow"]):
+                            matched_custom_proc = cp
+                            break
+                    elif "bonafide" in cp_title:
+                        if has_any(q_lower, ["bonafide", "bonafide certificate", "character certificate"]):
+                            matched_custom_proc = cp
+                            break
             except Exception:
                 matched_custom_proc = None
 

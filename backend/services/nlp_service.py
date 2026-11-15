@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from typing import Literal
 
+from .text_match import has_phrase, has_stem
+
 Intent = Literal["financial", "academic", "personal", "health", "career", "unclear"]
 Sentiment = Literal["positive", "neutral", "negative"]
 RouterIntent = Literal[
@@ -158,12 +160,15 @@ def classify_intent(text: str) -> Intent:
     lower_text = text.lower()
     tokens = set(_tokenize(text))
 
+    STEM_KEYWORDS = {"relocat", "immigrat", "diagnos", "employ"}
     scores: dict[str, int] = {}
     for intent, keywords in _INTENT_KEYWORDS.items():
         count = 0
         for kw in keywords:
-            # Match whole-word tokens OR substring inside longer words
-            if kw in tokens or kw in lower_text:
+            if kw in STEM_KEYWORDS:
+                if has_stem(lower_text, kw):
+                    count += 1
+            elif has_phrase(lower_text, kw):
                 count += 1
         scores[intent] = count
 
@@ -183,15 +188,15 @@ def route_intent(text: str) -> RouterIntent:
         "अपडेट", "पहुँचा", "पहुंचा"
     }
     withdrawal_signals = {"withdraw", "withdrawal", "विथड्रॉल", "वापसी"}
-    if any(s in lower_text or s in tokens for s in status_signals):
-        if any(w in lower_text or w in tokens for w in withdrawal_signals):
+    if any(s in tokens or has_phrase(lower_text, s) for s in status_signals):
+        if any(w in tokens or has_phrase(lower_text, w) for w in withdrawal_signals):
             return "request_status"
 
     scores: dict[str, int] = {}
     for intent, keywords in _ROUTER_KEYWORDS.items():
         score = 0
         for kw in keywords:
-            if kw in tokens or kw in lower_text:
+            if has_phrase(lower_text, kw):
                 score += len(kw.split())
         scores[intent] = score
 
@@ -208,8 +213,8 @@ def detect_language(text: str) -> Language:
         # Interrogatives
         "kya", "kaise", "kahan", "kaha", "kab", "kyun", "kyu", "kis", "kise", "kisko",
         "kitna", "kitni", "kitne", "kaun", "kaunsa", "kaunsi",
-        # Pronouns
-        "mera", "meri", "mere", "mujhe", "mujhko", "main", "hum", "hume", "humein",
+        # Pronouns (removed 'main', 'hum' which conflict with English 'main library')
+        "mera", "meri", "mere", "mujhe", "mujhko", "hume", "humein",
         "aap", "aapka", "aapki", "aapke", "tum", "tumhara", "tumhari", "tumhare",
         "tera", "teri", "tere", "uska", "uski", "uske", "unka", "unki", "unke",
         # Verbs & Conjugations
@@ -228,10 +233,10 @@ def detect_language(text: str) -> Language:
         "chhodna", "chhodani", "chhodne", "chhod",
         "karwana", "karwani", "karwane",
         "pucha", "pucho", "poocho", "poochna",
-        # Negation, Particles & Connectors
-        "nahi", "nahin", "mat",
+        # Negation, Particles & Connectors (removed 'mat', 'ko', 'se' which conflict with English)
+        "nahi", "nahin",
         "bhi", "toh", "lekin", "magar",
-        "mein", "ka", "ke", "ki", "ko", "se",
+        "mein", "ka", "ke", "ki",
         "kuch", "kuchh", "sabhi", "koi",
         # Domain terms & Vocatives
         "wapas", "paise", "shikayat", "pareshani", "samasya", "padhai", "chhutti",

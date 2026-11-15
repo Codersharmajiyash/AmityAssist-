@@ -133,9 +133,12 @@ async def get_llm_status() -> dict[str, Any]:
     }
 
 
+import hashlib
+
 @router.get("/admin/list")
-async def list_admin_policies() -> dict[str, Any]:
+async def list_admin_policies(request: Request) -> dict[str, Any]:
     """List all university policies with customization flags and last updated timestamps."""
+    require_any_role(request, {"Administrator"})
     policies = PolicySearchService.list_policies()
     return {
         "status": "success",
@@ -155,8 +158,9 @@ class PolicyUpsertRequest(BaseModel):
 
 
 @router.post("/admin/save")
-async def save_policy(payload: PolicyUpsertRequest) -> dict[str, Any]:
+async def save_policy(payload: PolicyUpsertRequest, request: Request) -> dict[str, Any]:
     """Create or update a university policy ordinance with real-time FTS5 sync."""
+    require_any_role(request, {"Administrator"})
     saved = PolicySearchService.upsert_policy(
         doc_id=payload.doc_id,
         category=payload.category,
@@ -176,6 +180,7 @@ async def save_policy(payload: PolicyUpsertRequest) -> dict[str, Any]:
 
 @router.post("/admin/upload-handbook", summary="Ingest University Policy Handbook (Zero-Training AI)")
 async def upload_policy_handbook(
+    request: Request,
     file: UploadFile = File(..., description="Official University Ordinance or Academic Regulations PDF"),
     category: str = Form("Academics & Regulations", description="Category for indexed clauses"),
     institution_name: str = Form("University", description="Name of the university adopting the system"),
@@ -187,6 +192,7 @@ async def upload_policy_handbook(
     3. Indexes each clause directly into SQLite FTS5 (BM25 Inverted Index).
     4. The AI model immediately retrieves these clauses to guide students with 100% citation accuracy.
     """
+    require_any_role(request, {"Administrator"})
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
@@ -227,14 +233,14 @@ async def upload_policy_handbook(
             clause_header = chunks[i].strip()
             clause_body = chunks[i + 1].strip() if i + 1 < len(chunks) else ""
             if len(clause_body) > 30:
-                doc_id = f"HB-{re.sub(r'[^A-Za-z0-9]', '', clause_header).upper()[:20]}"
+                doc_id = "HB-" + hashlib.sha1(f"{file.filename}|{i}|{clause_header}".encode()).hexdigest()[:10]
                 PolicySearchService.upsert_policy(
                     doc_id=doc_id,
                     category=category,
                     title=f"{institution_name}: {clause_header}",
                     clause_code=clause_header.upper(),
                     content=clause_body[:1800],  # Fits into high-speed BM25 search window
-                    action_url="/withdrawal",
+                    action_url="/forms",
                     action_label="View Procedure",
                     is_custom=True,
                 )
@@ -243,7 +249,7 @@ async def upload_policy_handbook(
         # Fallback: Split by double newline paragraphs of at least 100 characters
         paragraphs = [p.strip() for p in raw_text.split("\n\n") if len(p.strip()) > 80]
         for idx, para in enumerate(paragraphs[:40]):
-            doc_id = f"HB-SECTION-{idx + 1}"
+            doc_id = "HB-" + hashlib.sha1(f"{file.filename}|{idx}".encode()).hexdigest()[:10]
             PolicySearchService.upsert_policy(
                 doc_id=doc_id,
                 category=category,
@@ -265,7 +271,11 @@ async def upload_policy_handbook(
 
 
 @router.delete("/admin/{doc_id}")
-async def delete_or_reset_policy(doc_id: str) -> dict[str, Any]:
+async def delete_or_reset_policy(doc_id: str, request: Request) -> dict[str, Any]:
+    """Delete a custom policy or reset a default policy to original seed."""
+    require_any_role(request, {"Administrator"})
+    result = PolicySearchService.delete_policy(doc_id)
+    return result
     """Delete a custom policy or reset a default policy to original seed."""
     result = PolicySearchService.delete_policy(doc_id)
     return result
