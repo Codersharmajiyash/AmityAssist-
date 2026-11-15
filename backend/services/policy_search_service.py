@@ -2882,7 +2882,23 @@ class PolicySearchService:
             if counselor_res.status in ("hit", "clarify") or counselor_res.explicit_unknown_target:
                 return render_counselor_response(counselor_res, student, session, language=language)
         except Exception:
-            pass
+            # If the grounded resolver fails, do not silently fall through to
+            # legacy keyword rules or an LLM with potentially stale context.
+            if language == "hi-IN":
+                safe_answer = "इस प्रश्न के लिए सत्यापित प्रक्रिया अभी उपलब्ध नहीं है। कृपया संबंधित विभाग से पुष्टि करें।"
+            elif language == "hi-Latn":
+                safe_answer = "Is sawaal ke liye verified procedure abhi available nahi hai. Kripya concerned department se confirm karein."
+            else:
+                safe_answer = "I can’t verify the procedure for this question right now. Please confirm with the responsible department."
+            return {
+                "answer": safe_answer,
+                "domain": "General Guidance",
+                "citations": [],
+                "recommended_action": None,
+                "action_url": None,
+                "voice_speech_text": safe_answer,
+                "engine": "UniAssist Grounded Precision Engine",
+            }
 
         # Rule 1: Does the current user query explicitly specify a procedure?
         # Current query topic ALWAYS takes absolute precedence over prior history!

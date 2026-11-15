@@ -23,6 +23,25 @@ class ProcedureService:
         return datetime.now(timezone.utc).isoformat()
 
     @classmethod
+    def _active_institution_name(cls, conn) -> str:
+        """Add institution scope to legacy rows and return the active college name."""
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(custom_procedures)").fetchall()}
+        if "institution_name" not in columns:
+            conn.execute("ALTER TABLE custom_procedures ADD COLUMN institution_name TEXT NOT NULL DEFAULT ''")
+        row = conn.execute(
+            "SELECT value FROM institution_config WHERE key = 'institution_name'"
+        ).fetchone()
+        active_name = str((row["value"] if row else None) or "University").strip()
+        # Existing unscoped procedures belong to the institution active at the
+        # time of migration. New procedures receive this value at creation.
+        conn.execute(
+            "UPDATE custom_procedures SET institution_name = ? WHERE COALESCE(TRIM(institution_name), '') = ''",
+            (active_name,),
+        )
+        conn.commit()
+        return active_name
+
+    @classmethod
     def list_procedures(
         cls,
         department: Optional[str] = None,
@@ -31,8 +50,9 @@ class ProcedureService:
     ) -> List[Dict[str, Any]]:
         """List custom procedures with step counts and document checklists."""
         conn = get_connection()
-        query = "SELECT * FROM custom_procedures WHERE 1=1"
-        params: List[Any] = []
+        active_institution = cls._active_institution_name(conn)
+        query = "SELECT * FROM custom_procedures WHERE institution_name = ?"
+        params: List[Any] = [active_institution]
 
         if active_only:
             query += " AND is_active = 1"
@@ -83,6 +103,7 @@ class ProcedureService:
                 "required_docs": docs,
                 "is_active": bool(r["is_active"]),
                 "created_by": r["created_by"],
+                "institution_name": r["institution_name"],
                 "created_at": r["created_at"],
                 "updated_at": r["updated_at"],
                 "steps": steps,
@@ -94,8 +115,10 @@ class ProcedureService:
     def get_procedure(cls, procedure_id: str) -> Optional[Dict[str, Any]]:
         """Fetch a single custom procedure by its identifier with all step details."""
         conn = get_connection()
+        active_institution = cls._active_institution_name(conn)
         row = conn.execute(
-            "SELECT * FROM custom_procedures WHERE id = ?", (procedure_id,)
+            "SELECT * FROM custom_procedures WHERE id = ? AND institution_name = ?",
+            (procedure_id, active_institution),
         ).fetchone()
         if not row:
             return None
@@ -133,6 +156,7 @@ class ProcedureService:
             "required_docs": docs,
             "is_active": bool(row["is_active"]),
             "created_by": row["created_by"],
+            "institution_name": row["institution_name"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "steps": steps,
@@ -169,14 +193,15 @@ class ProcedureService:
         now = cls._now_iso()
 
         conn = get_connection()
+        active_institution = cls._active_institution_name(conn)
         conn.execute(
             """
             INSERT INTO custom_procedures (
                 id, title, department, category, description, sla_days,
-                required_docs, is_active, created_by, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                required_docs, is_active, created_by, institution_name, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
             """,
-            (proc_id, title, department, category, description.strip(), sla_days, docs_json, created_by, now, now),
+            (proc_id, title, department, category, description.strip(), sla_days, docs_json, created_by, active_institution, now, now),
         )
 
         created_steps = []
@@ -218,6 +243,7 @@ class ProcedureService:
             "required_docs": required_docs or [],
             "is_active": True,
             "created_by": created_by,
+            "institution_name": active_institution,
             "created_at": now,
             "updated_at": now,
             "steps": created_steps,
@@ -228,9 +254,19 @@ class ProcedureService:
     def delete_procedure(cls, procedure_id: str) -> bool:
         """Permanently delete a procedure and its associated steps."""
         conn = get_connection()
+        active_institution = cls._active_institution_name(conn)
         cursor = conn.cursor()
+        exists = conn.execute(
+            "SELECT 1 FROM custom_procedures WHERE id = ? AND institution_name = ?",
+            (procedure_id, active_institution),
+        ).fetchone()
+        if not exists:
+            return False
         cursor.execute("DELETE FROM custom_procedure_steps WHERE procedure_id = ?", (procedure_id,))
-        cursor.execute("DELETE FROM custom_procedures WHERE id = ?", (procedure_id,))
+        cursor.execute(
+            "DELETE FROM custom_procedures WHERE id = ? AND institution_name = ?",
+            (procedure_id, active_institution),
+        )
         conn.commit()
         return cursor.rowcount > 0
 

@@ -8,6 +8,7 @@ configured, the same interface can call Gemini for a concise answer.
 from __future__ import annotations
 
 import textwrap
+import re
 from typing import Any
 
 import httpx
@@ -177,32 +178,37 @@ def synthesize_guidance_with_gemini(
     Tier 2 (Cloud): Google Gemini 1.5 Flash (if configured)
     Tier 3 (Offline): Deterministic SQLite FTS5 Citation Formatter
     """
+    if not citations:
+        return None
+
     from .local_llm_service import call_ollama_llama3, clean_text_for_speech
     from ..data.kiosk_master_procedures import get_procedure_by_keyword
 
     facts = "\n".join(
         [
-            f"- [{c.get('clause_code', 'ORD')}] {c.get('title', '')}: {c.get('content', '')}"
+            f"- {c.get('title', '')}: {c.get('content', '')}"
             for c in citations[:3]
         ]
     )
+    query_terms = {w for w in re.findall(r"[^\W_]+", query.casefold(), flags=re.UNICODE) if len(w) > 2}
+    evidence_terms = {w for w in re.findall(r"[^\W_]+", facts.casefold(), flags=re.UNICODE) if len(w) > 2}
+    generic_terms = {"what", "which", "where", "when", "who", "how", "can", "could", "would", "tell", "give", "please", "about", "step", "steps", "next", "previous", "the", "and", "for", "with", "from", "is", "are", "was", "were", "मेरी", "मेरा", "क्या", "है", "कहाँ", "कैसे"}
+    query_terms -= generic_terms
+    if not query_terms or not query_terms.intersection(evidence_terms):
+        return None
 
     # Master Procedural Grounding (Pillar 1 & 3): Eliminate hallucinations like 'सेवा केंद्र 3'
     matched_procedure = get_procedure_by_keyword(query)
-    if not matched_procedure and history:
-        combined_h = " ".join([str(h.get("content") or "").lower() for h in history[-3:]])
-        matched_procedure = get_procedure_by_keyword(combined_h)
-
     if matched_procedure:
-        req_docs = ", ".join(matched_procedure.get("required_documents") or ["None required (100% digital process)"])
+        req_docs = ", ".join(matched_procedure.get("required_documents") or ["Not specified in the verified records"])
         proc_grounding = (
             f"\nOFFICIAL MASTER PROCEDURE GROUNDING:\n"
             f"- Official Form: {matched_procedure.get('official_name', 'University Form')}\n"
-            f"- Kiosk Access: Download directly right here on this UniAssist kiosk screen using the action button below ({matched_procedure.get('action_label', 'Download Form')}). Never send student to wander across campus counters to obtain it.\n"
-            f"- Eligibility: {matched_procedure.get('eligibility', 'All eligible university members')}\n"
+            f"- Kiosk Access: {matched_procedure.get('action_label') or 'Not specified in the verified records'}\n"
+            f"- Eligibility: {matched_procedure.get('eligibility') or 'Not specified in the verified records'}\n"
             f"- Required Attachments: {req_docs}\n"
-            f"- Verified Submission Office: {matched_procedure.get('submission_office', 'UniAssist Portal / Department Desk')}\n"
-            f"- Turnaround SLA: {matched_procedure.get('deadline_sla', 'Standard campus SLA')}\n"
+            f"- Verified Submission Office: {matched_procedure.get('submission_office') or 'Not specified in the verified records'}\n"
+            f"- Turnaround SLA: {matched_procedure.get('deadline_sla') or 'Not specified in the verified records'}\n"
         )
         facts += proc_grounding
 
@@ -210,27 +216,16 @@ def synthesize_guidance_with_gemini(
     if language == "hi-IN":
         lang_instruction = (
             "\nCRITICAL LANGUAGE INSTRUCTION: The user has chosen HINDI (हिन्दी).\n"
-            "You MUST generate your entire answer and speech text ONLY in pure, natural, fluent Hindi "
-            "using Devanagari script (e.g. 'हाँ, आप 71% उपस्थिति के साथ परीक्षा दे सकते हैं, लेकिन आपको डीन छूट के लिए फॉर्म AC-04 जमा करना होगा...'). "
-            "Keep official form names (like Form AC-04) intact. Do NOT output English sentences.\n"
+            "Write in natural Hindi using Devanagari script. Preserve facts, numbers, dates, desks, and steps from the evidence exactly; translate wording only.\n"
         )
     elif language == "hi-Latn":
         lang_instruction = (
             "\nCRITICAL LANGUAGE INSTRUCTION: The user has chosen HINGLISH.\n"
-            "You MUST generate your response in conversational Hinglish (Hindi written in Roman English alphabet, "
-            "e.g. 'Haan, aap 71% attendance ke sath exam de sakte hain, lekin aapko Dean condonation ke liye Form AC-04 submit karna hoga...').\n"
+            "Write in conversational Hinglish using Roman script. Preserve facts, numbers, dates, desks, and steps from the evidence exactly; translate wording only.\n"
         )
 
+    # Follow-ups are resolved before synthesis; old turns are not factual evidence.
     history_context = ""
-    if history:
-        turns_summary = []
-        for t in history[-4:]:
-            r = "Student" if t.get("role") in ("user", "student") else "Counselor"
-            msg = str(t.get("content") or t.get("message") or "")[:200].strip()
-            if msg:
-                turns_summary.append(f"{r}: {msg}")
-        if turns_summary:
-            history_context = "\nRecent Conversation History:\n" + "\n".join(turns_summary) + "\n"
 
     is_staff = bool(page_context and (page_context.get("is_staff") or "/staff" in str(page_context.get("route", "")).lower()))
     staff_role = (page_context.get("staff_role") if page_context else None) or "Registrar Staff"
@@ -242,16 +237,16 @@ def synthesize_guidance_with_gemini(
 
     prompt = textwrap.dedent(
         f"""
-        You are UniAssist, the official university digital counselor and intelligent campus voice guide.
+        You are UniAssist, a university procedures and student-services guide.
         {lang_instruction}
-        Provide a helpful, articulate, and friendly answer to the user query.
+        Explain only information supported by Verified University Knowledge below. If the records do not state an answer, say it is not verified and direct the student to the responsible department. Do not fill gaps from general knowledge or conversation history.
 
         Core Guidelines:
-        1. PROCEDURAL GROUNDING: When answering questions regarding university forms, fee refunds, caution deposits, attendance condonation, or clearance workflows, strictly follow the verified facts provided below. Never invent arbitrary fee amounts, fake forms, or non-existent rooms.
-        2. ACADEMIC & CAMPUS ASSISTANCE: For questions regarding academic courses, computer science, engineering, subjects, grading, curriculum, campus life, study advice, and university facilities, provide clear, accurate, and supportive academic guidance.
-        3. NO MISCONDUCT: Strictly uphold institutional discipline. Never encourage skipping classes, proxy attendance, or exam cheating. Reiterate the mandatory 75% attendance requirement (Ordinance ORD-ACAD-7.2).
+        1. Use only facts present in the supplied records for university-specific answers. Do not invent fees, thresholds, eligibility, steps, dates, desks, or room numbers.
+        2. If the user asks about unrelated topics, politely say UniAssist is for the university services described in its verified records.
+        3. If two records conflict, do not choose one; ask a brief clarification or say the record needs confirmation.
         4. ZERO CODE IN SPEECH: Never dump raw programming code (such as Python scripts or HTML blocks); speak conceptually and helpfully.
-        5. KIOSK-FIRST RULE: When directing users to university forms, state that they can download them right here on screen via the action button. Verified submission offices: Dean (Room 201), Exam Cell (Room 110), HR (Room 103), Registrar (Room 102).
+        5. Mention an on-screen action or office only when it appears in the supplied records or active screen context.
         6. NO LEGAL CODES IN SPEECH: Do not recite internal legal codes (like ORD-..., OCRM) in spoken speech; explain rules naturally like a warm, supportive counselor.
         7. NO MARKDOWN ASTERISKS: Do not use markdown bold asterisks (** or *) in your answer text.
         8. CONCISE & SPOKEN: Keep responses within 3 to 4 spoken sentences suitable for text-to-speech.
@@ -273,22 +268,22 @@ def synthesize_guidance_with_gemini(
     # --- Priority 1: Ollama Llama 3.2 Local (only when explicitly configured as provider) ---
     if settings.is_ollama_enabled:
         system_instruction = (
-            "You are UniAssist, an intelligent, empathetic digital university counselor (Amity).\n"
+            "You are UniAssist, an empathetic university student-services counselor.\n"
             + (f"Respond in pure Devanagari Hindi (हिन्दी).\n" if language == "hi-IN" else (f"Respond in conversational Hinglish.\n" if language == "hi-Latn" else "Respond in warm, spoken English.\n"))
             + ("- STAFF PORTAL MODE: The user is a logged-in Staff Member. Address them as university staff and provide administrative review guidance. Never tell them to apply as a student.\n" if is_staff else "")
             + "GUIDELINES:\n"
             "- Answer in 2-4 natural, informative sentences.\n"
             "- Help students with academic topics, subjects, procedures, and campus advice.\n"
-            "- For procedures, use verified facts provided. Verified rooms: Dean (201), Exam Cell (110), HR (103), Registrar (102).\n"
-            "- Kiosk-First: Download forms directly on screen via the action button. Never invent non-existent locations or सेवा केंद्र 3, and never use cryptic abbreviations like EX-2.\n"
+            "- Use only the supplied verified records for university-specific facts. If a detail is absent or records conflict, say so instead of guessing.\n"
             "- No misconduct: Never assist with bunking, cheating, or proxy.\n"
             "- NO ASTERISKS: Do not output markdown asterisks (** or *) or hash headers."
         )
-        ollama_reply = call_ollama_llama3(prompt, system_instruction, history=history)
+        ollama_reply = call_ollama_llama3(prompt, system_instruction, history=None)
         if ollama_reply and ollama_reply.strip():
-            clean_reply = sanitize_and_verify_response(ollama_reply.strip())
+            clean_reply = sanitize_and_verify_response(ollama_reply.strip(), evidence_text=facts)
             clean_reply = strip_markdown_stars(clean_reply)
-            return (clean_reply, "Ollama Local AI (Llama 3.2)") if return_source else clean_reply
+            if clean_reply:
+                return (clean_reply, "Ollama Local AI (Llama 3.2)") if return_source else clean_reply
 
     # --- Priority 2: Gemini Cloud Hybrid Fallback ---
     if settings.llm_enabled:
@@ -319,8 +314,9 @@ def synthesize_guidance_with_gemini(
                 .get("text")
             )
             if text and text.strip():
-                clean_text = sanitize_and_verify_response(text.strip())
-                return (clean_text, "Gemini Hybrid AI") if return_source else clean_text
+                clean_text = sanitize_and_verify_response(text.strip(), evidence_text=facts)
+                if clean_text:
+                    return (clean_text, "Gemini Hybrid AI") if return_source else clean_text
         except Exception:
             pass
 

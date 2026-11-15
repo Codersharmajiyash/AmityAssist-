@@ -93,6 +93,8 @@ class SessionState:
     last_domain: str = "General"
     recent_procedures: list[str] = field(default_factory=list)
     pending_step_query: int | None = None
+    pending_procedure_ids: list[str] = field(default_factory=list)
+    pending_conflict: str | None = None
 
 
 _SESSIONS: dict[str, SessionState] = {}
@@ -149,7 +151,11 @@ def detect_aspect_and_step(q_lower: str) -> tuple[Intent, int | None]:
         if has_any(q_lower, phrases):
             return "steps", step_num
 
-    if has_any(q_lower, ["next step", "agla step", "aage kya kare", "aur aage", "अगला कदम", "what next"]):
+    if has_any(q_lower, [
+        "next step", "what next", "what's next", "what is next", "what should i do next",
+        "agla step", "aage kya kare", "aage kya karna hai", "aage kya karu", "aur aage",
+        "अगला कदम", "अगला स्टेप", "अब क्या",
+    ]):
         return "steps", -1  # Next step signal
 
     if has_any(q_lower, _INTENT_DOCS):
@@ -189,6 +195,18 @@ def resolve_query(
     office_map: dict[str, Office] | None = None,
 ) -> Resolution:
     q_clean = query.strip()
+    # Small, deterministic corrections for frequent student typos/voice errors.
+    # This only normalizes routing terms; it never adds policy facts.
+    typo_map = {
+        "withdra": "withdrawal", "withdrwal": "withdrawal", "withrawal": "withdrawal",
+        "libray": "library", "libary": "library", "hosetl": "hostel",
+        "bonafid": "bonafide", "bonafidee": "bonafide",
+    }
+    q_clean = re.sub(
+        r"[A-Za-z]+",
+        lambda m: typo_map.get(m.group(0).lower(), m.group(0)),
+        q_clean,
+    )
     q_lower = q_clean.lower()
     intent, target_step = detect_aspect_and_step(q_lower)
     if procedures is None or procedure_map is None or office_map is None:
@@ -213,13 +231,45 @@ def resolve_query(
         return bool((title_words & query_words) - stop)
 
     def has_explicit_unknown_step_target(text: str) -> bool:
-        match = re.search(r"\b(?:step|स्टेप|चरण)\b.*?\b(?:of|for)\s+([a-z][a-z-]*)\b", text)
+        match = re.search(
+            r"\b(?:step|स्टेप|चरण)\b.*?\b(?:of|for|ka|ki|ke|का|की|के)\s+([a-z][a-z-]*)\b"
+            r"|\b([a-z][a-z-]*)\s+(?:ka|ki|ke|का|की|के)\s+.*?\b(?:step|स्टेप|चरण)\b",
+            text,
+        )
         if not match:
             return False
-        target = match.group(1)
+        target = match.group(1) or match.group(2)
         if target in {"previous", "last", "that", "it", "earlier", "pehle", "pichla"}:
             return False
         return not any(candidate_match(target, proc) for proc in procedures)
+
+    if session.pending_procedure_ids:
+        pending = [procedure_map[pid] for pid in session.pending_procedure_ids if pid in procedure_map]
+        choice = None
+        if q_lower.strip() in {"1", "first", "option 1", "one"} and pending:
+            choice = pending[0]
+        elif q_lower.strip() in {"2", "second", "option 2", "two"} and len(pending) > 1:
+            choice = pending[1]
+        elif q_lower.strip() in {"3", "third", "option 3", "three"} and len(pending) > 2:
+            choice = pending[2]
+        else:
+            choice = next((p for p in pending if candidate_match(q_lower, p)), None)
+        session.pending_procedure_ids.clear()
+        if choice:
+            session.pending_conflict = None
+            session.active_procedure_id = choice.id
+            session.current_step = 1
+            if choice.id not in session.recent_procedures:
+                session.recent_procedures.append(choice.id)
+            return result("hit", procedure=choice, intent="overview", target_step=1)
+
+    if session.pending_conflict and intent in ("steps", "docs", "fee", "deadline", "sla", "office"):
+        named = any(
+            any(has_phrase(q_lower, alias) for alias in proc.aliases if len(alias.split()) > 1)
+            for proc in procedures
+        )
+        if not named:
+            return result("not_found", explicit_unknown_target=True)
 
     # 0. Check if user is replying to a pending step clarification ("for library", "withdrawal", "1", "2")
     if session.pending_step_query and session.recent_procedures:
@@ -316,18 +366,38 @@ def resolve_query(
 
     top_score, top_p = scored[0]
 
-    # Threshold gate: must have meaningful score
+    # A broad but balanced keyword like “change” should prompt a choice when it
+    # points equally to multiple procedures, even though neither is a strong hit.
     if top_score < 4.0:
+        close_candidates = [p for score, p in scored if top_score - score < 0.01]
+        if len(close_candidates) > 1 and set(q_tokens) & {"change", "form", "apply", "application", "room"}:
+            session.active_procedure_id = None
+            session.pending_procedure_ids = [p.id for p in close_candidates[:3]]
+            session.pending_conflict = None
+            return result("clarify", candidates=close_candidates[:3])
         return result("not_found")
 
-    # Disambiguation: if top 2 are very close and not high-confidence exact matches
+    # Never choose between similarly supported procedures, even when both have
+    # exact phrase matches. A strong score does not resolve a genuine collision.
     if len(scored) > 1:
-        second_score, second_p = scored[1]
-        if (top_score - second_score) < 1.8 and top_score < 12.0:
-            return result("clarify", candidates=[top_p, second_p])
+        close_candidates = [p for score, p in scored if top_score - score < 1.8]
+        if len(close_candidates) > 1:
+            candidate_names = [
+                re.sub(r"[^a-z0-9]+", " ", (p.names.get("en") or p.id).casefold()).strip()
+                for p in close_candidates[:3]
+            ]
+            session.active_procedure_id = None
+            if len(set(candidate_names)) < len(candidate_names):
+                session.pending_conflict = close_candidates[0].names.get("en") or close_candidates[0].id
+                session.pending_procedure_ids.clear()
+            else:
+                session.pending_conflict = None
+                session.pending_procedure_ids = [p.id for p in close_candidates[:3]]
+            return result("clarify", candidates=close_candidates[:3])
 
     # Verified Hit! Bind to session state
     session.active_procedure_id = top_p.id
+    session.pending_conflict = None
     if top_p.id not in session.recent_procedures:
         session.recent_procedures.append(top_p.id)
     if len(session.recent_procedures) > 5:
@@ -355,7 +425,13 @@ def render_counselor_response(
     # --- Scenario 1: Not Found Fallback ---
     if res.status == "not_found":
         session.active_procedure_id = None
-        if language == "hi-IN":
+        if session.pending_conflict and language == "hi-IN":
+            ans = f"उस अगले चरण को बताने से पहले, **{session.pending_conflict}** के विरोधी रिकॉर्ड की पुष्टि आवश्यक है। कृपया संबंधित विभाग से सही प्रक्रिया की पुष्टि करें।"
+        elif session.pending_conflict and language == "hi-Latn":
+            ans = f"Agla step batane se pehle **{session.pending_conflict}** ke conflicting records verify karne honge. Kripya department se sahi process confirm karein."
+        elif session.pending_conflict:
+            ans = f"Before I give that step, the conflicting records for **{session.pending_conflict}** need to be verified. Please confirm the correct procedure with the responsible department."
+        elif language == "hi-IN":
             ans = (
                 f"क्षमा करें {student_name}, मुझे आपके प्रश्न से मेल खाती कोई सत्यापित विश्वविद्यालय प्रक्रिया या फॉर्म नहीं मिला। "
                 "कृपया प्रक्रिया का नाम बताकर फिर से पूछें, या छात्र सेवा डेस्क से संपर्क करें।"
@@ -383,18 +459,40 @@ def render_counselor_response(
 
     # --- Scenario 2: Clarification Options ---
     if res.status == "clarify" and res.candidates:
-        cands = res.candidates[:2]
+        cands = res.candidates[:3]
         opt_names = [c.names.get(lang_key) or c.names["en"] for c in cands]
+        normalized_names = [
+            re.sub(r"[^a-z0-9]+", " ", (c.names.get("en") or c.id).casefold()).strip()
+            for c in cands
+        ]
+        if len(set(normalized_names)) < len(normalized_names):
+            conflict_title = opt_names[0]
+            if language == "hi-IN":
+                ans = f"मुझे **{conflict_title}** के लिए एक से अधिक विरोधी रिकॉर्ड मिले हैं। गलत प्रक्रिया बताने से बचने के लिए मैं अनुमान नहीं लगाऊँगा। कृपया संबंधित विभाग से पुष्टि करें।"
+            elif language == "hi-Latn":
+                ans = f"Mujhe **{conflict_title}** ke liye ek se zyada conflicting records mile hain. Galat process batane se bachne ke liye main guess nahi karunga. Kripya department se verify karein."
+            else:
+                ans = f"I found conflicting records for **{conflict_title}** and can’t verify which applies to your campus. I won’t guess; please confirm with the responsible department."
+            return {
+                "answer": ans,
+                "domain": "Conflicting Procedure Records",
+                "citations": [],
+                "recommended_action": None,
+                "action_url": None,
+                "voice_speech_text": ans,
+                "engine": "UniAssist Grounded Precision Engine",
+            }
         options = [
             {"label": opt_names[i], "value": cands[i].id, "action_url": cands[i].action_url}
             for i in range(len(cands))
         ]
+        numbered_options = "\n".join(f"{i}. {name}" for i, name in enumerate(opt_names, 1))
         if language == "hi-IN":
-            ans = f"{student_name}, क्या आप इनमें से किस प्रक्रिया के बारे में जानकारी चाहते हैं?\n1. {opt_names[0]}\n2. {opt_names[1]}\nकृपया विकल्प चुनें।"
+            ans = f"{student_name}, आप इनमें से किस प्रक्रिया के बारे में जानकारी चाहते हैं?\n{numbered_options}\nकृपया विकल्प चुनें।"
         elif language == "hi-Latn":
-            ans = f"{student_name}, kya aap inme se kiske baare me pooch rahe hain?\n1. {opt_names[0]}\n2. {opt_names[1]}\nKripya option select karein."
+            ans = f"{student_name}, aap inme se kis procedure ke baare me pooch rahe hain?\n{numbered_options}\nKripya option select karein."
         else:
-            ans = f"{student_name}, please clarify which university procedure you are referring to:\n1. {opt_names[0]}\n2. {opt_names[1]}\nPlease choose an option."
+            ans = f"{student_name}, please clarify which university procedure you mean:\n{numbered_options}\nPlease choose an option."
 
         return {
             "answer": ans,
@@ -425,7 +523,7 @@ def render_counselor_response(
                 ans = f"{student_name}, here are the required documents for **{title}**:\n{docs_lines}"
             voice = f"The required documents for {title} are displayed on your screen."
         else:
-            ans = f"No physical documents are required for **{title}** (100% Digital Submission on portal)."
+            ans = f"The required documents for **{title}** are not listed in the verified university information available to me. Please check with the responsible department."
             voice = ans
 
     # 3B: Prescribed Fee Aspect
@@ -439,7 +537,7 @@ def render_counselor_response(
             else:
                 ans = f"{student_name}, the official prescribed fee for **{title}** is **{fee}**."
         else:
-            ans = f"There is **no fee** for **{title}** (Provided free of charge)."
+            ans = f"The fee for **{title}** is not listed in the verified university information available to me. Please check with the responsible department."
         voice = ans
 
     # 3C: Specific Step Aspect (e.g. '3rd step kya hai', 'first step')
@@ -462,7 +560,7 @@ def render_counselor_response(
 
     # 3D: Submission Office / Room Aspect
     elif res.intent == "office":
-        office_label = facts["office"] or "the designated Student Services desk"
+        office_label = facts["office"] or "not listed in the verified university information available to me"
         if language == "hi-IN":
             ans = f"{student_name}, **{title}** जमा करने का कार्यालय / कमरा: **{office_label}**।"
         elif language == "hi-Latn":

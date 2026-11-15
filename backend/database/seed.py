@@ -429,6 +429,7 @@ CREATE TABLE IF NOT EXISTS custom_procedures (
     required_docs   TEXT NOT NULL DEFAULT '[]',
     is_active       INTEGER NOT NULL DEFAULT 1,
     created_by      TEXT NOT NULL DEFAULT 'STAFF',
+    institution_name TEXT NOT NULL DEFAULT '',
     created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );

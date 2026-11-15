@@ -105,8 +105,9 @@ async def get_policy_guidance(body: PolicyGuideRequest, request: Request) -> dic
         staff_role=staff_role,
         session_id=body.session_id,
     )
-    from ..services.student_response import student_facing_text
+    from ..services.student_response import enforce_student_evidence, student_facing_text
     if not is_staff:
+        guidance = enforce_student_evidence(guidance, effective_language)
         guidance["answer"] = student_facing_text(guidance.get("answer"))
         if guidance.get("voice_speech_text"):
             guidance["voice_speech_text"] = student_facing_text(guidance["voice_speech_text"])

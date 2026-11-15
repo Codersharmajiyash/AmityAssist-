@@ -53,11 +53,16 @@ def clean_text_for_speech(text: str) -> str:
 VERIFIED_ROOMS = {"201", "103", "105", "110", "101", "102"}
 
 
-def sanitize_and_verify_response(text: str) -> str:
+def sanitize_and_verify_response(text: str, evidence_text: str | None = None) -> str:
     """Post-processing guardrails to ensure responses are concise, grounded, and free of fake rooms."""
     if not text:
         return ""
     cleaned = clean_text_for_speech(text)
+    if evidence_text is not None:
+        answer_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\s*%?", cleaned))
+        evidence_numbers = set(re.findall(r"\b\d+(?:[.,]\d+)?\s*%?", evidence_text))
+        if answer_numbers - evidence_numbers:
+            return ""
 
     # 0. Intercept LLM meta-roleplay preambles & conversational scenario setups
     meta_patterns = [
@@ -87,10 +92,15 @@ def sanitize_and_verify_response(text: str) -> str:
     cleaned = re.sub(r"\[?(ORD-[A-Z0-9.-]+|OCRM-[A-Z0-9.-]+)\]?", "university regulations", cleaned, flags=re.IGNORECASE)
 
     # 2. Intercept hallucinated room numbers: Room <number> or कमरा <number> or कक्ष <number>
+    allowed_rooms = (
+        set(re.findall(r"(?:Room|कमरा|कक्ष)\s*#?\s*(\d{2,4})", evidence_text, flags=re.IGNORECASE))
+        if evidence_text is not None else VERIFIED_ROOMS
+    )
+
     def _room_replacer(match: re.Match) -> str:
         prefix = match.group(1)
         num = match.group(2)
-        if num in VERIFIED_ROOMS:
+        if num in allowed_rooms:
             return match.group(0)
         if any(term in prefix.lower() for term in ["कमरा", "कक्ष"]):
             return "विश्वविद्यालय प्रशासनिक डेस्क"
@@ -241,7 +251,7 @@ def call_ollama_llama3(
                 data = resp.json()
                 content = data.get("message", {}).get("content", "")
                 if content and content.strip():
-                    return sanitize_and_verify_response(content.strip())
+                    return sanitize_and_verify_response(content.strip(), evidence_text=facts_text)
     except Exception:
         return None
     return None
@@ -264,13 +274,33 @@ def generate_local_policy_answer(
         return None
     if not citations:
         if language == "hi-IN":
-            return "मुझे क्षमा करें, मैं केवल सत्यापित विश्वविद्यालय नियमों और अभिलेखों के आधार पर ही उत्तर दे सकता हूँ। इस प्रश्न के लिए कोई मेल खाता अध्यादेश नहीं मिला।"
+            return "यह जानकारी विश्वविद्यालय के सत्यापित रिकॉर्ड में नहीं मिली। कृपया संबंधित विभाग से पुष्टि करें।"
         elif language == "hi-Latn":
-            return "Sorry, main keval verified university rules ke basis par answer kar sakta hoon. Is query ke liye koi matching policy nahi mili."
-        return (
-            "I am sorry, but I can only provide answers grounded in verified university policy and workflow records. "
-            "No matching ordinance or guidance was found for this request."
-        )
+            return "Yeh jaankari university ke verified records mein nahi mili. Kripya concerned department se confirm karein."
+        return "This information is not listed in the verified university records available to me. Please confirm with the responsible department."
+
+    # Reject a retrieval set that does not share a meaningful subject with the
+    # query before either model synthesis or deterministic citation formatting.
+    q_words = set(re.findall(r"[^\W_]+", query.lower(), flags=re.UNICODE))
+    stop_words = {
+        "what", "which", "where", "when", "who", "how", "is", "are", "was", "were", "the", "a", "an",
+        "of", "for", "to", "in", "on", "my", "me", "i", "you", "do", "does", "can", "could", "please",
+        "tell", "give", "show", "about", "step", "steps", "next", "previous", "this", "that", "it",
+        "kya", "hai", "ka", "ki", "ke", "ko", "mujhe", "mera", "meri", "batao", "please",
+        "क्या", "है", "का", "की", "के", "मुझे", "बताइए", "बताओ", "कौन", "कब", "कहाँ", "कैसे",
+    }
+    q_words = {word for word in q_words if len(word) > 2 and word not in stop_words and not word.isdigit()}
+    evidence_words = set(re.findall(
+        r"[^\W_]+",
+        " ".join(f"{_safe_title(c)} {_safe_content(c)}" for c in citations).lower(),
+        flags=re.UNICODE,
+    ))
+    if not q_words or not (q_words & evidence_words):
+        if language == "hi-IN":
+            return "यह जानकारी विश्वविद्यालय के सत्यापित रिकॉर्ड में नहीं मिली। कृपया संबंधित विभाग से पुष्टि करें।"
+        if language == "hi-Latn":
+            return "Yeh jaankari university ke verified records mein nahi mili. Kripya concerned department se confirm karein."
+        return "This information is not listed in the verified university records available to me. Please confirm with the responsible department."
 
     student_name = (student or {}).get("name", "Student").split()[0]
     student_attendance = (student or {}).get("attendance", "N/A")
@@ -283,15 +313,12 @@ def generate_local_policy_answer(
 
         facts_text = "\n".join(
             [
-                f"- [{_safe_clause(c)}] {_safe_title(c)}: {_safe_content(c)}"
+                f"- {_safe_title(c)}: {_safe_content(c)}"
                 for c in citations[:3]
             ]
         )
 
         matched_procedure = get_procedure_by_keyword(query)
-        if not matched_procedure and history:
-            combined_h = " ".join([str(h.get("content") or "").lower() for h in history[-3:]])
-            matched_procedure = get_procedure_by_keyword(combined_h)
 
         # Anti-Hallucination Relevance Guard: Never send unrelated citations to LLM
         q_words = [w for w in re.sub(r"[^\w\s]", " ", query.lower()).split() if len(w) >= 3 and w not in ("what", "which", "where", "how", "tell", "give", "from", "with", "this", "that", "there", "then", "have", "need", "want", "please", "karo", "batao", "step", "steps", "final", "last", "next", "pehla", "aakhri")]
@@ -306,15 +333,15 @@ def generate_local_policy_answer(
             return f"I am sorry, {student_name}, but I could not find a specific university ordinance matching your inquiry. Please specify the topic (such as withdrawal, attendance, fees, or form name) so I can assist you."
 
         if matched_procedure:
-            req_docs = ", ".join(matched_procedure.get("required_documents") or ["None required (100% digital process)"])
+            req_docs = ", ".join(matched_procedure.get("required_documents") or ["Not specified in verified records"])
             facts_text += (
                 f"\nOFFICIAL MASTER PROCEDURE GROUNDING:\n"
                 f"- Official Form: {matched_procedure.get('official_name', 'University Form')}\n"
-                f"- Kiosk Access: Download directly right here on this UniAssist kiosk screen using the action button below ({matched_procedure.get('action_label', 'Download Form')}). Never send student to wander across campus counters to obtain it.\n"
-                f"- Eligibility: {matched_procedure.get('eligibility', 'All eligible university members')}\n"
+                f"- Kiosk Access: {matched_procedure.get('action_label') or 'Not specified in verified records'}\n"
+                f"- Eligibility: {matched_procedure.get('eligibility') or 'Not specified in verified records'}\n"
                 f"- Required Attachments: {req_docs}\n"
-                f"- Verified Submission Office: {matched_procedure.get('submission_office', 'UniAssist Portal / Department Desk')}\n"
-                f"- Turnaround SLA: {matched_procedure.get('deadline_sla', 'Standard campus SLA')}\n"
+                f"- Verified Submission Office: {matched_procedure.get('submission_office') or 'Not specified in verified records'}\n"
+                f"- Turnaround SLA: {matched_procedure.get('deadline_sla') or 'Not specified in verified records'}\n"
             )
 
         # Dynamically inject live configured workflow steps and custom procedures into grounding
@@ -327,25 +354,22 @@ def generate_local_policy_answer(
                     steps_summary = "; ".join([f"Step {s['step_number']}: {s['title']} ({s['department']})" for s in live_wth_steps])
                     facts_text += f"\n- Live Clearance Workflow Steps ({len(live_wth_steps)} stages): {steps_summary}"
 
-            active_procs = ProcedureService.list_procedures(active_only=False)
-            matched_custom = None
-            q_tokens = [w for w in q_lower_check.split() if len(w) >= 3 and w not in ("want", "have", "need", "give", "with", "from", "where", "what", "which", "how")]
-            for ap in active_procs:
-                p_title = (ap.get("title") or "").lower()
-                p_dept = (ap.get("department") or "").lower()
-                if p_title and (p_title in q_lower_check or any(token in p_title for token in q_tokens) or any(token in p_dept for token in q_tokens)):
-                    matched_custom = ap
-                    break
-
+            active_procs = ProcedureService.list_procedures(active_only=True)
+            matched = [
+                ap for ap in active_procs
+                if (ap.get("title") or "").strip().lower()
+                and (ap.get("title") or "").strip().lower() in q_lower_check
+            ]
+            matched_custom = matched[0] if len(matched) == 1 else None
             if matched_custom:
                 step_list = matched_custom.get("steps") or []
-                s_desc = "; ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk', 'Desk')})" for idx, s in enumerate(step_list)]) if step_list else "Standard administrative review"
-                docs_desc = ", ".join(matched_custom.get("required_docs") or ["None required"])
+                s_desc = "; ".join([f"Step {s.get('step_number', idx+1)}: {s.get('title')} ({s.get('responsible_desk') or 'Desk'})" for idx, s in enumerate(step_list)]) if step_list else "Not specified in verified records"
+                docs_desc = ", ".join(matched_custom.get("required_docs") or ["Not specified in verified records"])
                 facts_text = (
                     f"OFFICIAL CONFIGURED PROCEDURE ({matched_custom.get('title')}):\n"
-                    f"- Department: {matched_custom.get('department', 'University Desk')}\n"
+                    f"- Department: {matched_custom.get('department') or 'Not specified in verified records'}\n"
                     f"- Total Steps ({len(step_list)}): {s_desc}\n"
-                    f"- SLA: {matched_custom.get('sla_days', 3)} working days\n"
+                    f"- SLA: {str(matched_custom.get('sla_days')) + ' days' if matched_custom.get('sla_days') else 'Not specified in verified records'}\n"
                     f"- Required Documents: {docs_desc}\n\n"
                     f"VERIFIED ORDINANCES:\n{facts_text}"
                 )
@@ -368,18 +392,13 @@ def generate_local_policy_answer(
             "You are UniAssist, an empathetic digital campus counselor at an official university kiosk.\n"
             f"{lang_instruction}\n"
             "STRICT RULES:\n"
-            "1. CLOSED-DOMAIN DOCUMENT RULE: Answer ONLY and EXCLUSIVELY using verified information from the verified university documents provided. If any information is not present in the documents, state that no matching university record is found. NEVER guess, assume, or extrapolate.\n"
-            "2. APP-SCOPE STRICT LIMITATION: Do NOT answer anything other than this university kiosk app's functionality (academics, 75% attendance rules, examinations, fee clearances, caution deposit offsets, withdrawal refunds, clearance tracking, and 31 official university forms). Politely refuse any off-topic inquiries.\n"
-            "3. Never hallucinate or alter fee amounts, refund percentages, dates, or attendance minimums.\n"
-            "4. Form EX-02 is EXCLUSIVELY and ONLY for Supplementary / Backpaper Examinations (INR 1,500 fee). You must NEVER state or suggest that Form EX-02 is for program withdrawal, job resignation, or refund.\n"
-            "5. If a faculty member or employee asks about quitting or resigning from their job, direct them to submit resignation notice to HOD/Dean and complete HR No-Dues clearance at Room 103. Never confuse faculty with students.\n"
-            "6. Never fabricate connections between unrelated questions and university forms or withdrawal procedures.\n"
-            "7. Keep the answer concise (2 to 3 sentences max) so it sounds natural when spoken aloud.\n"
-            "8. End with a helpful, actionable next step related ONLY to verified campus procedures.\n"
-            "9. Do NOT include bullet points, bold asterisks (**), or headers.\n"
-            "10. NEVER mention internal legalistic codes or clause numbers (such as ORD-..., OCRM, or clause codes) in spoken text. Speak naturally like a helpful campus counselor (e.g., 'विश्वविद्यालय के नियमों के अनुसार' or 'According to university rules').\n"
-            "11. Always use full, human-friendly form names (such as 'Supplementary / Backpaper Examination Application (Form EX-02)' or 'Attendance Condonation Application (Form AC-04)'), NEVER cryptic abbreviations like 'EX-2'.\n"
-            "12. Kiosk-First Policy: NEVER invent non-existent campus locations, counters, or service centers (like 'सेवा केंद्र 3'). Always clarify that forms are directly downloadable on this UniAssist kiosk screen using the action button below, and submit only to verified offices (Dean Room 201, Exam Cell Room 110, HR Room 103, Registrar Room 102)."
+            "1. Use only verified records below for university-specific facts. If a requested detail is absent, say it is not listed. Never guess or extrapolate.\n"
+            "2. If records conflict or match multiple procedures, do not choose one; ask which procedure applies or say the record needs confirmation.\n"
+            "3. Do not introduce facts, amounts, dates, thresholds, forms, desks, or rooms from general model knowledge.\n"
+            "4. Keep factual content the same in English, Hindi, and Hinglish; translate wording without changing facts.\n"
+            "5. Only give a next step if the records provide it.\n"
+            "6. Do not recite internal source codes to students.\n"
+            "7. Mention a kiosk action, office, or room only if the verified records below explicitly provide it."
         )
 
         user_prompt = (
@@ -389,9 +408,11 @@ def generate_local_policy_answer(
             f"STUDENT QUESTION:\n{query}"
         )
 
-        ollama_result = call_ollama_llama3(user_prompt, system_instruction, history=history)
+        ollama_result = call_ollama_llama3(user_prompt, system_instruction, history=None)
         if ollama_result:
-            return ollama_result[:1200]
+            grounded_reply = sanitize_and_verify_response(ollama_result[:1200], evidence_text=facts_text)
+            if grounded_reply:
+                return grounded_reply
 
     # Step 2: Deterministic Citation Fallback (Guaranteed Safe, Direct & Professional)
     first = citations[0]
@@ -403,19 +424,16 @@ def generate_local_policy_answer(
         answer = (
             f"{student_name}, {title} (अध्यादेश {clause}) के संबंध में आधिकारिक विश्वविद्यालय नियम निम्नलिखित हैं:\n\n"
             f"{summary}\n\n"
-            "आप सीधे इस कियोस्क पर संबंधित फॉर्म डाउनलोड कर सकते हैं या सेवा विंडो से आगे बढ़ सकते हैं।"
         )
     elif language == "hi-Latn":
         answer = (
             f"{student_name}, {title} (Ordinance {clause}) ke verified university rules yeh hain:\n\n"
             f"{summary}\n\n"
-            "Aap is screen par action button se direct form download ya process initiate kar sakte hain."
         )
     else:
         answer = (
             f"{student_name}, official university guidance regarding {title} (Ordinance {clause}):\n\n"
             f"{summary}\n\n"
-            "You can download the official format or proceed with clearance using the action button below."
         )
 
     return answer[:1200]

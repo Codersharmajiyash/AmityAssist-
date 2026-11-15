@@ -87,8 +87,9 @@ async def process_voice_query(body: VoiceQueryRequest, request: Request) -> dict
         staff_role=staff_role,
         session_id=body.session_id,
     )
-    from ..services.student_response import student_facing_text
+    from ..services.student_response import enforce_student_evidence, student_facing_text
     if not is_staff:
+        guidance = enforce_student_evidence(guidance, effective_language)
         guidance["answer"] = student_facing_text(guidance.get("answer"))
         if guidance.get("voice_speech_text"):
             guidance["voice_speech_text"] = student_facing_text(guidance["voice_speech_text"])
