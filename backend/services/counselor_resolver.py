@@ -16,10 +16,66 @@ from typing import Any, Literal
 
 from .text_match import count_hits, has_any, has_phrase, tokens
 from ..knowledge.data import OFFICES, ORDINANCES, PROCEDURES
-from ..knowledge.schema import Office, Procedure, grounded
+from ..knowledge.schema import Office, Procedure, Step, grounded
 
 OFFICE_MAP: dict[str, Office] = {o.id: o for o in OFFICES}
 PROC_MAP: dict[str, Procedure] = {p.id: p for p in PROCEDURES}
+
+
+def configured_catalog() -> tuple[list[Procedure], dict[str, Procedure], dict[str, Office]]:
+    """Return seeded procedures plus the active procedures created in the admin UI."""
+    procedures = list(PROCEDURES)
+    offices = dict(OFFICE_MAP)
+    try:
+        from .procedure_service import ProcedureService
+
+        for item in ProcedureService.list_procedures(active_only=True):
+            title = str(item.get("title") or "").strip()
+            raw_id = str(item.get("id") or "").strip().lower()
+            if not title or not raw_id:
+                continue
+            proc_id = re.sub(r"[^a-z0-9-]+", "-", raw_id).strip("-")
+            if not proc_id or any(p.id == proc_id for p in procedures):
+                continue
+
+            department = str(item.get("department") or "Student Services").strip()
+            office_id = f"custom-{proc_id}-office"
+            offices[office_id] = Office(office_id, department)
+            steps: list[Step] = []
+            for index, raw_step in enumerate(item.get("steps") or [], 1):
+                desk = str(raw_step.get("responsible_desk") or department).strip()
+                step_office_id = f"custom-{proc_id}-step-{index}"
+                offices[step_office_id] = Office(step_office_id, desk)
+                title_text = str(raw_step.get("title") or f"Step {index}").strip()
+                description = str(raw_step.get("description") or "").strip()
+                steps.append(Step(
+                    text=f"{title_text}: {description}" if description else title_text,
+                    office=step_office_id,
+                    sla_days=raw_step.get("sla_days"),
+                ))
+
+            category = str(item.get("category") or department).strip()
+            procedure = Procedure(
+                id=proc_id,
+                names={"en": title, "hi": title, "hinglish": title},
+                aliases=[title],
+                category=category,
+                audience=["student"],
+                kind="form",
+                docs=[str(doc) for doc in (item.get("required_docs") or []) if str(doc).strip()],
+                sla=f"{item['sla_days']} days" if item.get("sla_days") else None,
+                office=office_id,
+                steps=steps,
+                action_url="/services",
+                action_label=str(item.get("action_label") or f"View {title}"),
+                is_custom=True,
+            )
+            procedures.append(procedure)
+    except Exception:
+        # Seed procedures remain available if the custom-procedure store is unavailable.
+        pass
+
+    return procedures, {p.id: p for p in procedures}, offices
 
 Intent = Literal["overview", "steps", "docs", "fee", "deadline", "sla", "office", "clarify"]
 
@@ -121,27 +177,71 @@ class Resolution:
     intent: Intent = "overview"
     target_step: int | None = None
     candidates: list[Procedure] | None = None
+    offices: dict[str, Office] | None = None
+    explicit_unknown_target: bool = False
 
 
-def resolve_query(query: str, session: SessionState) -> Resolution:
+def resolve_query(
+    query: str,
+    session: SessionState,
+    procedures: list[Procedure] | None = None,
+    procedure_map: dict[str, Procedure] | None = None,
+    office_map: dict[str, Office] | None = None,
+) -> Resolution:
     q_clean = query.strip()
     q_lower = q_clean.lower()
     intent, target_step = detect_aspect_and_step(q_lower)
+    if procedures is None or procedure_map is None or office_map is None:
+        loaded_procedures, loaded_map, loaded_offices = configured_catalog()
+        procedures = procedures or loaded_procedures
+        procedure_map = procedure_map or loaded_map
+        office_map = office_map or loaded_offices
+
+    def result(status: str, **kwargs: Any) -> Resolution:
+        return Resolution(status=status, offices=office_map, **kwargs)  # type: ignore[arg-type]
+
+    def candidate_match(text: str, proc: Procedure) -> bool:
+        if any(has_phrase(text, alias) for alias in proc.aliases) or has_phrase(text, proc.id):
+            return True
+        title_words = set(tokens(" ".join(proc.names.values())))
+        query_words = set(tokens(text))
+        stop = {
+            "the", "and", "for", "application", "form", "change", "step", "steps",
+            "tell", "me", "what", "was", "is", "of", "previous", "last", "that",
+            "it", "earlier", "third", "3rd", "first", "second", "1st", "2nd",
+        }
+        return bool((title_words & query_words) - stop)
+
+    def has_explicit_unknown_step_target(text: str) -> bool:
+        match = re.search(r"\b(?:step|स्टेप|चरण)\b.*?\b(?:of|for)\s+([a-z][a-z-]*)\b", text)
+        if not match:
+            return False
+        target = match.group(1)
+        if target in {"previous", "last", "that", "it", "earlier", "pehle", "pichla"}:
+            return False
+        return not any(candidate_match(target, proc) for proc in procedures)
 
     # 0. Check if user is replying to a pending step clarification ("for library", "withdrawal", "1", "2")
     if session.pending_step_query and session.recent_procedures:
         for pid in session.recent_procedures:
-            cand = PROC_MAP.get(pid)
+            cand = procedure_map.get(pid)
             if cand:
-                alias_hit = any(has_phrase(q_lower, a) for a in cand.aliases) or has_phrase(q_lower, cand.id)
+                alias_hit = candidate_match(q_lower, cand)
                 num_hit = (q_lower.strip() in ("1", "first") and pid == session.recent_procedures[-2]) or (q_lower.strip() in ("2", "second") and pid == session.recent_procedures[-1])
-                topic_word_hit = any(w in q_lower for w in [w for w in cand.id.split("-") if len(w) > 3])
-                if alias_hit or num_hit or topic_word_hit:
+                if alias_hit or num_hit:
                     step_to_give = session.pending_step_query
                     session.pending_step_query = None
                     session.active_procedure_id = cand.id
                     session.current_step = step_to_give
-                    return Resolution(status="hit", procedure=cand, intent="steps", target_step=step_to_give)
+                    return result("hit", procedure=cand, intent="steps", target_step=step_to_give)
+        # A reply that names no candidate must not keep an old clarification alive.
+        session.pending_step_query = None
+
+    # A named but unknown target ("3rd step of petrol") overrides stale session context.
+    if intent == "steps" and has_explicit_unknown_step_target(q_lower):
+        session.active_procedure_id = None
+        session.pending_step_query = None
+        return result("not_found", explicit_unknown_target=True)
 
     # 1. State-bound multi-turn step / aspect follow-up
     is_pure_aspect = intent in ("steps", "docs", "fee", "deadline", "sla", "office")
@@ -149,33 +249,37 @@ def resolve_query(query: str, session: SessionState) -> Resolution:
 
     # Disambiguation if user asked a step ("what was the 3rd step") after discussing multiple procedures
     if is_pure_aspect and intent == "steps" and target_step and len(session.recent_procedures) >= 2:
-        named_any_explicit = any(any(has_phrase(q_lower, a) for a in p.aliases) for p in PROCEDURES)
+        named_any_explicit = any(candidate_match(q_lower, p) for p in procedures)
         if not named_any_explicit:
-            cands = [PROC_MAP[pid] for pid in session.recent_procedures[-2:] if pid in PROC_MAP]
+            refers_to_prior = has_any(q_lower, ["previous", "last", "that", "it", "earlier", "of previous", "of that", "pichla", "pehle", "उसका", "पिछला"])
+            if not refers_to_prior and re.search(r"\b(?:of|for)\s+[a-z][a-z-]*\b", q_lower):
+                session.active_procedure_id = None
+                return result("not_found")
+            cands = [procedure_map[pid] for pid in session.recent_procedures[-2:] if pid in procedure_map]
             if len(cands) >= 2:
                 session.pending_step_query = target_step
-                return Resolution(status="clarify", candidates=cands, intent="steps", target_step=target_step)
+                return result("clarify", candidates=cands, intent="steps", target_step=target_step)
 
     if session.active_procedure_id and (is_pure_aspect or is_affirmative):
         # If user explicitly named a different procedure, switch to the new procedure!
         named_other = any(
             any(has_phrase(q_lower, a) for a in p.aliases if len(a.split()) > 1)
-            for p in PROCEDURES if p.id != session.active_procedure_id
+            for p in procedures if p.id != session.active_procedure_id
         )
         if not named_other:
-            active_p = PROC_MAP.get(session.active_procedure_id)
+            active_p = procedure_map.get(session.active_procedure_id)
             if active_p:
                 if target_step == -1:
                     target_step = min(session.current_step + 1, len(active_p.steps) or 1)
                 final_step = target_step or session.current_step
                 session.current_step = final_step
-                return Resolution(status="hit", procedure=active_p, intent=intent, target_step=final_step)
+                return result("hit", procedure=active_p, intent=intent, target_step=final_step)
 
     # 2. Score candidates across all 39 procedures
     scored: list[tuple[float, Procedure]] = []
     q_tokens = set(tokens(q_lower))
 
-    for p in PROCEDURES:
+    for p in procedures:
         score = 0.0
 
         # Exact Alias Phrase Matching
@@ -208,19 +312,19 @@ def resolve_query(query: str, session: SessionState) -> Resolution:
 
     # Confidence Thresholding
     if not scored:
-        return Resolution(status="not_found")
+        return result("not_found")
 
     top_score, top_p = scored[0]
 
     # Threshold gate: must have meaningful score
     if top_score < 4.0:
-        return Resolution(status="not_found")
+        return result("not_found")
 
     # Disambiguation: if top 2 are very close and not high-confidence exact matches
     if len(scored) > 1:
         second_score, second_p = scored[1]
         if (top_score - second_score) < 1.8 and top_score < 12.0:
-            return Resolution(status="clarify", candidates=[top_p, second_p])
+            return result("clarify", candidates=[top_p, second_p])
 
     # Verified Hit! Bind to session state
     session.active_procedure_id = top_p.id
@@ -230,7 +334,7 @@ def resolve_query(query: str, session: SessionState) -> Resolution:
         session.recent_procedures.pop(0)
     session.current_step = target_step if (target_step and target_step > 0) else 1
 
-    return Resolution(status="hit", procedure=top_p, intent=intent, target_step=session.current_step)
+    return result("hit", procedure=top_p, intent=intent, target_step=session.current_step)
 
 
 # =========================================================================
@@ -254,25 +358,25 @@ def render_counselor_response(
         if language == "hi-IN":
             ans = (
                 f"क्षमा करें {student_name}, मुझे आपके प्रश्न से मेल खाती कोई सत्यापित विश्वविद्यालय प्रक्रिया या फॉर्म नहीं मिला। "
-                "UniAssist सभी 31 फॉर्म्स, क्लीयरेंस गेट्स, विड्रॉल रिफंड्स, और छात्र सेवाओं में सहायता करता है। कृपया मुख्य प्रशासनिक कार्यालय (कमरा 101) से संपर्क करें।"
+                "कृपया प्रक्रिया का नाम बताकर फिर से पूछें, या छात्र सेवा डेस्क से संपर्क करें।"
             )
         elif language == "hi-Latn":
             ans = (
                 f"Sorry {student_name}, mujhe aapke sawaal se matching koi verified university procedure ya form nahi mila. "
-                "UniAssist sabhi 31 forms, clearance gates, withdrawal refunds, aur student services me help karta hai. Kripya Admin Desk (Room 101) par contact karein."
+                "Procedure ka naam batakar dobara poochhein, ya Student Services se sampark karein."
             )
         else:
             ans = (
                 f"I am sorry, {student_name}, but I could not find a verified university procedure matching your inquiry. "
-                "UniAssist provides guidance for all 31 official university forms, digital clearance gates, and student services. Please check the Forms Catalog or visit Student Services (Room 101)."
+                "Please try again with the procedure name, or contact Student Services."
             )
 
         return {
             "answer": ans,
             "domain": "General Guidance",
             "citations": [],
-            "recommended_action": "Browse Forms Catalog",
-            "action_url": "/forms",
+            "recommended_action": None,
+            "action_url": None,
             "voice_speech_text": ans,
             "engine": "UniAssist Grounded Precision Engine",
         }
@@ -305,7 +409,7 @@ def render_counselor_response(
 
     # --- Scenario 3: Verified Procedure Hit ---
     proc = res.procedure
-    facts = proc.public_facts(OFFICE_MAP)
+    facts = proc.public_facts(res.offices or OFFICE_MAP)
     title = proc.names.get(lang_key) or proc.names["en"]
 
     # 3A: Required Documents Aspect
@@ -358,7 +462,7 @@ def render_counselor_response(
 
     # 3D: Submission Office / Room Aspect
     elif res.intent == "office":
-        office_label = facts["office"] or "Designated Student Services Desk (Room 101, Central Block)"
+        office_label = facts["office"] or "the designated Student Services desk"
         if language == "hi-IN":
             ans = f"{student_name}, **{title}** जमा करने का कार्यालय / कमरा: **{office_label}**।"
         elif language == "hi-Latn":
@@ -458,17 +562,17 @@ def render_counselor_response(
         })
 
     # Grounding check: verify that answer doesn't invent unverified numbers
-    allowed_tokens = proc.fact_tokens(OFFICE_MAP)
+    allowed_tokens = proc.fact_tokens(res.offices or OFFICE_MAP)
     # The rendered response is constructed only from public_facts, so it is mathematically grounded
 
     return {
-        "answer": ans,
+            "answer": ans,
         "domain": proc.category,
         "citations": citations,
         "recommended_action": proc.action_label,
         "action_url": proc.action_url,
         "voice_speech_text": voice,
-        "engine": "UniAssist Grounded Precision Engine",
+            "engine": "UniAssist Grounded Precision Engine",
     }
 
 

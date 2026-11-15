@@ -28,6 +28,7 @@ class PolicyGuideRequest(BaseModel):
     language: str = Field("en-IN", description="Selected language e.g. en-IN, hi-IN, hi-Latn")
     page_context: Optional[dict[str, Any]] = Field(None, description="Active client screen context")
     conversation_history: Optional[list[dict[str, Any]]] = Field(None, description="Recent conversation turns")
+    session_id: Optional[str] = Field(None, description="Client conversation identifier for isolated kiosk memory")
 
 
 @router.get("/search")
@@ -102,7 +103,20 @@ async def get_policy_guidance(body: PolicyGuideRequest, request: Request) -> dic
         history=body.conversation_history,
         is_staff=is_staff,
         staff_role=staff_role,
+        session_id=body.session_id,
     )
+    from ..services.student_response import student_facing_text
+    if not is_staff:
+        guidance["answer"] = student_facing_text(guidance.get("answer"))
+        if guidance.get("voice_speech_text"):
+            guidance["voice_speech_text"] = student_facing_text(guidance["voice_speech_text"])
+        guidance["citations"] = [
+            {**item,
+             "title": student_facing_text(item.get("title")),
+             "content": student_facing_text(item.get("content"))}
+            if isinstance(item, dict) else student_facing_text(item)
+            for item in guidance.get("citations", [])
+        ]
     guidance["detected_language"] = effective_language
     return guidance
 

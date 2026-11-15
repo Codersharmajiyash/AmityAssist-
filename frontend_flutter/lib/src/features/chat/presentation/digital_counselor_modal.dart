@@ -184,7 +184,7 @@ class _DigitalCounselorModalState extends ConsumerState<DigitalCounselorModal> {
                         ),
                         const SizedBox(height: 2),
                         const Text(
-                          'Guided procedures, ordinances & voice intelligence.',
+                          'Guided procedures & voice support.',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
@@ -533,6 +533,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
   bool _hasChosenLanguage = false;
   String _selectedLanguage = 'en-IN';
   String _counselorGreeting = '';
+  late String _conversationSessionId;
 
   static const _languageOptions = [
     {'code': 'en-IN', 'label': 'English', 'icon': '🇬🇧'},
@@ -555,6 +556,9 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     });
 
     final standby = ref.read(standbyCounselorProvider);
+    _conversationSessionId = standby.sessionId.isNotEmpty
+        ? standby.sessionId
+        : DateTime.now().microsecondsSinceEpoch.toString();
     if (standby.history.isNotEmpty) {
       _hasChosenLanguage = true;
       for (final item in standby.history) {
@@ -627,11 +631,11 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     } else {
       // Unauthenticated Guest
       if (langCode == 'hi-IN') {
-        greeting = 'नमस्ते! मैं UniAssist का आधिकारिक विश्वविद्यालय AI परामर्शदाता हूँ। आप मुझसे विश्वविद्यालय नियमावली, उपस्थिति नियम (75%), फीस रिफंड स्लैब और सभी 31 फॉर्मों के बारे में जानकारी प्राप्त कर सकते हैं। व्यक्तिगत उपस्थिति या आवेदन देखने के लिए कृपया लॉगिन करें।';
+        greeting = 'नमस्ते! मैं UniAssist हूँ। मैं आपके विश्वविद्यालय में उपलब्ध प्रक्रियाओं और सेवाओं की जानकारी दे सकता हूँ। व्यक्तिगत रिकॉर्ड देखने के लिए कृपया साइन इन करें।';
       } else if (langCode == 'hi-Latn') {
-        greeting = 'Namaste! Main UniAssist ka official university AI counselor hoon. Aap mujhse university ordinances, attendance rules (75%), fee refund slabs aur sabhi 31 forms ke baare me pooch sakte hain. Apne personal records dekhne ke liye please login karein.';
+        greeting = 'Namaste! Main UniAssist hoon. Main aapke university mein available procedures aur services ki jaankari de sakta hoon. Personal records dekhne ke liye sign in karein.';
       } else {
-        greeting = 'Welcome to UniAssist! I am your University Policy and Procedures AI Counselor. You can ask me about institutional ordinances, 75% attendance rules, fee refund slabs, and university forms. To view your personal academic records, please sign in.';
+        greeting = 'Welcome to UniAssist. I can help you understand procedures and services available at your university. Please sign in to view personal records.';
       }
     }
 
@@ -658,6 +662,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
     WebVoiceBridge.stopSpeaking();
     WebVoiceBridge.stopListening();
     ref.read(standbyCounselorProvider.notifier).clearHistory();
+    _conversationSessionId = DateTime.now().microsecondsSinceEpoch.toString();
     setState(() {
       _isListening = false;
       _isSpeaking = false;
@@ -756,6 +761,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
         'language': _selectedLanguage,
         'page_context': pageContextJson,
         'conversation_history': historyPayload,
+        'session_id': _conversationSessionId,
       };
 
       final requestOptions = (isAuth && studentId != null)
@@ -939,11 +945,11 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
           ]
         : [
             {'label': 'What page are we on?', 'q': 'What page are we on and what should I do next?'},
-            {'label': 'Attendance Shortage (ORD-7.2)', 'q': 'Can I write semester exams with 71% attendance?'},
-            {'label': 'Lost ID Card Offset (ORD-14.4)', 'q': 'Can I offset lost ID card ₹200 fine from caution deposit?'},
-            {'label': 'Withdrawal Slabs (ORD-14.1)', 'q': 'What is the tuition refund percentage for withdrawal?'},
-            {'label': '4-Gate Clearance (ORD-9.3)', 'q': 'How does the 4-gate clearance chain work?'},
-            {'label': 'Backpaper Exam Fee (ORD-12.1)', 'q': 'What is the backpaper exam fee and deadline?'},
+            {'label': 'Attendance', 'q': 'Can I write semester exams with 71% attendance?'},
+            {'label': 'Lost ID Card', 'q': 'Can I offset lost ID card ₹200 fine from caution deposit?'},
+            {'label': 'Withdrawal Refund', 'q': 'What is the tuition refund percentage for withdrawal?'},
+            {'label': 'Clearance', 'q': 'How does the 4-gate clearance chain work?'},
+            {'label': 'Exam Fee', 'q': 'What is the backpaper exam fee and deadline?'},
           ];
 
     final stopButton = IconButton(
@@ -1101,6 +1107,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                     topic: _conversationHistory.isNotEmpty ? (_conversationHistory.last.domain ?? 'Guidance') : 'Campus Counselor',
                     lastGuidance: _conversationHistory.isNotEmpty ? (_conversationHistory.last.speechText ?? _conversationHistory.last.text) : 'Counselor on Standby',
                     currentHistory: _conversationHistory,
+                    sessionId: _conversationSessionId,
                   );
                   Navigator.of(context).pop();
                 },
@@ -1218,7 +1225,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${turn.domain ?? 'University'} Ordinance Guidance',
+                                      '${turn.domain ?? 'University'} Guidance',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13,
@@ -1382,7 +1389,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                               ),
                             ),
                           ],
-                          // Citations (Legal Ordinances)
+                          // Student friendly source details
                           if (turn.citations.isNotEmpty) ...[
                             const SizedBox(height: 14),
                             const Row(
@@ -1390,7 +1397,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                                 Icon(Icons.menu_book_rounded, size: 14, color: AppColors.muted),
                                 SizedBox(width: 6),
                                 Text(
-                                  'Official Legal Citations (Sub-5ms FTS5 Inverted Index)',
+                                  'Sources used',
                                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5, color: AppColors.muted),
                                 ),
                               ],
@@ -1398,7 +1405,6 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                             const SizedBox(height: 8),
                             ...turn.citations.map((c) {
                               final clause = c is Map ? Map<String, dynamic>.from(c) : <String, dynamic>{};
-                              final code = clause['clause_code'] ?? 'ORD';
                               final title = clause['title'] ?? 'University Regulation';
                               final content = clause['content'] ?? '';
 
@@ -1413,28 +1419,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary.withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            code.toString(),
-                                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.primary),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            title.toString(),
-                                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                    Text(title.toString(), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold)),
                                     const SizedBox(height: 4),
                                     Text(
                                       content.toString(),
@@ -1481,7 +1466,7 @@ class _PolicyVoiceTabState extends ConsumerState<_PolicyVoiceTab> {
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                             Text(
-                              'Verified against University FTS5 Ordinance Knowledge Base',
+                              'Checking available university information',
                               style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                             ),
                           ],

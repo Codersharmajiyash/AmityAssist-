@@ -5,12 +5,14 @@ class StandbyCounselorState {
   final String activeTopic;
   final String lastSpokenGuidance;
   final List<dynamic> history;
+  final String sessionId;
 
   const StandbyCounselorState({
     this.isStandbyActive = false,
     this.activeTopic = '',
     this.lastSpokenGuidance = '',
     this.history = const [],
+    this.sessionId = '',
   });
 
   StandbyCounselorState copyWith({
@@ -18,12 +20,14 @@ class StandbyCounselorState {
     String? activeTopic,
     String? lastSpokenGuidance,
     List<dynamic>? history,
+    String? sessionId,
   }) {
     return StandbyCounselorState(
       isStandbyActive: isStandbyActive ?? this.isStandbyActive,
       activeTopic: activeTopic ?? this.activeTopic,
       lastSpokenGuidance: lastSpokenGuidance ?? this.lastSpokenGuidance,
       history: history ?? this.history,
+      sessionId: sessionId ?? this.sessionId,
     );
   }
 }
@@ -35,6 +39,7 @@ class StandbyCounselorNotifier extends StateNotifier<StandbyCounselorState> {
     required String topic,
     required String lastGuidance,
     List<dynamic>? currentHistory,
+    String? sessionId,
   }) {
     state = StandbyCounselorState(
       isStandbyActive: true,
@@ -43,6 +48,7 @@ class StandbyCounselorNotifier extends StateNotifier<StandbyCounselorState> {
       history: (currentHistory != null && currentHistory.isNotEmpty)
           ? List.from(currentHistory)
           : state.history,
+      sessionId: sessionId ?? state.sessionId,
     );
   }
 

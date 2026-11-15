@@ -46,6 +46,7 @@ class AdvisorNotifier extends StateNotifier<ChatState> {
   }
 
   final Ref _ref;
+  String _sessionId = DateTime.now().microsecondsSinceEpoch.toString();
 
   void _initWelcome() {
     state = ChatState(
@@ -192,6 +193,7 @@ class AdvisorNotifier extends StateNotifier<ChatState> {
         break;
 
       case 'Start Over':
+        _sessionId = DateTime.now().microsecondsSinceEpoch.toString();
         _initWelcome();
         return;
       
@@ -229,30 +231,14 @@ class AdvisorNotifier extends StateNotifier<ChatState> {
         body: jsonEncode({
           'query': query,
           'student_id': studentId,
+          'session_id': _sessionId,
           'conversation_history': historyPayload,
         }),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final guidance = data['answer']?.toString() ?? data['guidance']?.toString() ?? 'Here is the relevant university policy guidance.';
-        final citationsList = data['citations'] as List?;
-        String refs = '';
-        if (citationsList != null && citationsList.isNotEmpty) {
-          final titles = citationsList.map((r) {
-            if (r is Map) {
-              return (r['title'] ?? r['clause_code'] ?? '').toString();
-            }
-            return r.toString();
-          }).where((t) => t.trim().isNotEmpty).toSet().join(', ');
-          refs = titles;
-        } else {
-          final ordRefs = data['ordinance_references'] as List?;
-          if (ordRefs != null && ordRefs.isNotEmpty) {
-            refs = ordRefs.map((r) => r.toString()).join(', ');
-          }
-        }
-        final fullReply = refs.isNotEmpty ? '$guidance\n\nVerified Policy: $refs' : guidance;
-        newMessages.add(ChatMessage(text: fullReply, isUser: false));
+        newMessages.add(ChatMessage(text: guidance, isUser: false));
 
         List<String> nextOptions = ['Withdrawal', 'Certificates', 'Grievances', 'Start Over'];
         final status = data['status']?.toString();

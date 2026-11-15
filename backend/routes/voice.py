@@ -25,6 +25,7 @@ class VoiceQueryRequest(BaseModel):
     language: str = Field("en-IN", description="BCP 47 language tag e.g. en-IN, hi-IN")
     page_context: Optional[dict[str, Any]] = Field(None, description="Active client screen context")
     conversation_history: Optional[list[dict[str, Any]]] = Field(None, description="Recent conversation turns")
+    session_id: Optional[str] = Field(None, description="Client conversation identifier for isolated kiosk memory")
 
 
 @router.post("/query")
@@ -84,16 +85,29 @@ async def process_voice_query(body: VoiceQueryRequest, request: Request) -> dict
         history=body.conversation_history,
         is_staff=is_staff,
         staff_role=staff_role,
+        session_id=body.session_id,
     )
+    from ..services.student_response import student_facing_text
+    if not is_staff:
+        guidance["answer"] = student_facing_text(guidance.get("answer"))
+        if guidance.get("voice_speech_text"):
+            guidance["voice_speech_text"] = student_facing_text(guidance["voice_speech_text"])
+        guidance["citations"] = [
+            {**item,
+             "title": student_facing_text(item.get("title")),
+             "content": student_facing_text(item.get("content"))}
+            if isinstance(item, dict) else student_facing_text(item)
+            for item in guidance.get("citations", [])
+        ]
 
     clean_speech = guidance.get("voice_speech_text") or guidance.get("answer", "")
     # Strip complex marks/citations for natural text-to-speech cadence in the detected language
     if effective_language == "hi-IN":
-        clean_speech = clean_speech.replace("₹", "रुपये ").replace("INR ", "रुपये ").replace("ORD-", "अध्यादेश ")
+        clean_speech = clean_speech.replace("₹", "रुपये ").replace("INR ", "रुपये ")
     elif effective_language == "hi-Latn":
-        clean_speech = clean_speech.replace("₹", "rupaye ").replace("INR ", "rupaye ").replace("ORD-", "Ordinance ")
+        clean_speech = clean_speech.replace("₹", "rupaye ").replace("INR ", "rupaye ")
     else:
-        clean_speech = clean_speech.replace("₹", "Rupees ").replace("INR ", "Rupees ").replace("ORD-", "Ordinance ")
+        clean_speech = clean_speech.replace("₹", "Rupees ").replace("INR ", "Rupees ")
 
     return {
         "status": guidance.get("status"),

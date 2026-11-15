@@ -2176,6 +2176,7 @@ class PolicySearchService:
         history: list[dict[str, Any]] | None = None,
         is_staff: bool = False,
         staff_role: str | None = None,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         """Synthesize zero-hallucination guidance combining live student profile, FTS5 policy clauses, ambient screen awareness, and optional Gemini AI synthesis."""
         conn = get_connection()
@@ -2872,10 +2873,13 @@ class PolicySearchService:
         # Step 3: Grounded Knowledge-Base & Session Counselor Engine
         try:
             from .counselor_resolver import get_or_create_session, resolve_query, render_counselor_response
-            sess_id = effective_student_id or "kiosk_session"
+            # Each guest browser conversation owns its own state; never share a
+            # single kiosk-wide procedure context between unrelated students.
+            import uuid
+            sess_id = f"student:{effective_student_id}" if effective_student_id else f"guest:{session_id or uuid.uuid4().hex}"
             session = get_or_create_session(sess_id, language=language)
             counselor_res = resolve_query(query, session)
-            if counselor_res.status in ("hit", "clarify"):
+            if counselor_res.status in ("hit", "clarify") or counselor_res.explicit_unknown_target:
                 return render_counselor_response(counselor_res, student, session, language=language)
         except Exception:
             pass
