@@ -2,6 +2,7 @@
 // Provides high-reliability speech-to-text recognition and text-to-speech audio synthesis.
 
 window.uniassistVoice = {
+
   recognition: null,
   isListening: false,
   isSpeaking: false,
@@ -233,6 +234,7 @@ if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
 
 // Native Document File Picker Interop for Flutter Web
 window.uniassistFilePicker = {
+
   pickFile: function(accept, callback) {
     try {
       var input = document.createElement('input');
@@ -292,3 +294,16 @@ window.uniassistFilePicker = {
   }
 };
 
+// Ensure uniassistVoice and uniassistFilePicker are attached to window, globalThis, and self
+(function() {
+  var v = (typeof window !== 'undefined' && window.uniassistVoice) ? window.uniassistVoice : null;
+  var p = (typeof window !== 'undefined' && window.uniassistFilePicker) ? window.uniassistFilePicker : null;
+  if (v) {
+    if (typeof globalThis !== 'undefined') globalThis.uniassistVoice = v;
+    if (typeof self !== 'undefined') self.uniassistVoice = v;
+  }
+  if (p) {
+    if (typeof globalThis !== 'undefined') globalThis.uniassistFilePicker = p;
+    if (typeof self !== 'undefined') self.uniassistFilePicker = p;
+  }
+})();

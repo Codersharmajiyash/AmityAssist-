@@ -18,17 +18,22 @@ class AssistantFab extends ConsumerWidget {
       context: context,
       builder: (context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.all(32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.support_agent_rounded, size: 56, color: AppColors.primary),
+                const Icon(Icons.support_agent_rounded,
+                    size: 56, color: AppColors.primary),
                 const SizedBox(height: 16),
                 const Text(
                   'How would you like to communicate?',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.ink),
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.ink),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -43,7 +48,9 @@ class AssistantFab extends ConsumerWidget {
                         onTap: () {
                           Navigator.pop(context);
                           if (currentRoute != null) {
-                            ref.read(pageContextProvider.notifier).setRoute(currentRoute!);
+                            ref
+                                .read(pageContextProvider.notifier)
+                                .setRoute(currentRoute!);
                           }
                           showDigitalCounselor(
                             context,
@@ -63,7 +70,9 @@ class AssistantFab extends ConsumerWidget {
                         onTap: () {
                           Navigator.pop(context);
                           if (currentRoute != null) {
-                            ref.read(pageContextProvider.notifier).setRoute(currentRoute!);
+                            ref
+                                .read(pageContextProvider.notifier)
+                                .setRoute(currentRoute!);
                           }
                           showDigitalCounselor(
                             context,
@@ -123,10 +132,12 @@ class AssistantFab extends ConsumerWidget {
     return FloatingActionButton.extended(
       onPressed: () => _showModeSelection(context, ref),
       backgroundColor: AppColors.primary,
-      icon: const Icon(Icons.support_agent_rounded, color: Colors.white, size: 28),
+      icon: const Icon(Icons.support_agent_rounded,
+          color: Colors.white, size: 28),
       label: const Text(
         'Ask UniAssist',
-        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
+        style: TextStyle(
+            color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -206,7 +217,8 @@ class _StandbyCompanionPill extends ConsumerWidget {
             const SizedBox(width: 4),
             // Push-to-Talk Mic
             IconButton(
-              icon: const Icon(Icons.mic_rounded, color: Color(0xFF10B981), size: 22),
+              icon: const Icon(Icons.mic_rounded,
+                  color: Color(0xFF10B981), size: 22),
               tooltip: 'Tap to Speak',
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(),
@@ -215,7 +227,8 @@ class _StandbyCompanionPill extends ConsumerWidget {
             const SizedBox(width: 4),
             // Expand Chat
             IconButton(
-              icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white70, size: 20),
+              icon: const Icon(Icons.chat_bubble_outline_rounded,
+                  color: Colors.white70, size: 20),
               tooltip: 'Expand Chat History',
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(),
@@ -224,7 +237,8 @@ class _StandbyCompanionPill extends ConsumerWidget {
             const SizedBox(width: 2),
             // Exit Standby
             IconButton(
-              icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 18),
+              icon: const Icon(Icons.close_rounded,
+                  color: Colors.white38, size: 18),
               tooltip: 'Exit Standby',
               padding: const EdgeInsets.all(4),
               constraints: const BoxConstraints(),
@@ -271,7 +285,8 @@ class _ModeButton extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               label,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color),
+              style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w800, color: color),
               textAlign: TextAlign.center,
             ),
           ],

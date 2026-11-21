@@ -260,3 +260,19 @@ These phases address the concrete real-world operational problems discovered on 
 * `[x]` Kiosk Watchdog: Engineered `launcher/kiosk_watchdog.ps1` for unattended 3:00 AM maintenance, session/cache cleaning, binary updates, and automatic relaunch in `--kiosk --fullscreen --disable-pinch` mode.
 * `[x]` Kiosk Security: Created `frontend_flutter/lib/src/features/kiosk/presentation/kiosk_inactivity_wrapper.dart` implementing a 45-second idle listener, 10-second warning countdown dialog, and instant session/JWT purge on timeout.
 * `[x]` Automated Verification: 6 unit tests in `backend/tests/test_phase5_deployment_updates.py` passing 100%.
+
+### [x] Phase 6: Floating Standby Companion & Web Voice Interop Stabilization
+*Goal: Provide uninterrupted conversational voice guidance across form flows and eradicate web voice asset load failures.*
+* `[x]` Frontend: Riverpod `standbyCounselorProvider` in `standby_counselor_state.dart` maintaining dialog history and active topic state.
+* `[x]` Frontend: `_StandbyCompanionPill` in `assistant_fab.dart` with push-to-talk mic and expand-chat triggers.
+* `[x]` Frontend: Inlined `voice_interop.js` directly into `<head>` of `index.html` preventing service worker asset misses.
+* `[x]` Backend: Accelerated Ollama model inference (`keep_alive: 60m`, `num_predict: 85`, `temperature: 0.1`) in `local_llm_service.py`.
+
+### [x] Phase 7: Enterprise Password Security, Multi-Turn Context Recall & Resilient Serving
+*Goal: Enforce credential authentication with PIN validation and ensure persistent procedure memory across sequential user inquiries.*
+* `[x]` Backend: Added `password` validation to `StudentLoginRequest` & `StaffLoginRequest` in `backend/models/schemas.py` and `backend/routes/auth.py`.
+* `[x]` Backend: Upgraded `_resolve_active_procedure_from_history` and `_extract_step_target` in `backend/services/policy_search_service.py` to preserve multi-turn context (steps, documents, fees, submission office, deadlines).
+* `[x]` Backend: Configured absolute root path resolution and dual-mount fallback (Flutter Web + static `frontend/`) in `backend/main.py` eliminating 404 `"Not Found"` errors on localhost:8000.
+* `[x]` Frontend (Flutter): Added `Password / PIN` field with visibility toggle in `login_screen.dart` and `auth_provider.dart`.
+* `[x]` Frontend (HTML/JS): Added `Password / PIN` field with visibility toggle and credential dispatch in `frontend/index.html` and `frontend/js/app.js`.
+* `[x]` Automated Verification: 100% passing automated tests across password auth, multi-turn procedural memory, and Flutter analyze.

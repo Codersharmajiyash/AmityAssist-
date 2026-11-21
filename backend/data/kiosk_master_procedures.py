@@ -278,6 +278,47 @@ MASTER_PROCEDURES: dict[str, dict[str, Any]] = {
         "action_label": "Download Leave Application",
         "action_url": "/forms",
     },
+
+    "provisional_certificate": {
+        "form_code": "PROC-FORM-15-PROV",
+        "official_name": "Format for Obtaining Provisional Certificate",
+        "hindi_name": "अनंतिम प्रमाण पत्र (प्रोविजनल सर्टिफिकेट) आवेदन प्रपत्र",
+        "category": "Examinations",
+        "kiosk_access": "Download directly right here on this UniAssist screen or from Forms Catalog (/forms).",
+        "kiosk_access_hindi": "इसी स्क्रीन पर नीचे दिए गए बटन से तुरंत डाउनलोड करें।",
+        "kiosk_access_hinglish": "Yahin screen par niche diye gaye button se turant download karein.",
+        "eligibility": "Students who have successfully passed all examinations and require an official provisional degree before the annual convocation.",
+        "fee_details": "Prescribed provisional certificate processing fee (payable at University Accounts Desk).",
+        "required_documents": [
+            "Photocopy of final semester grade sheet / all semester marks cards",
+            "University No-Dues Clearance certificate",
+            "Valid Student Identity Card proof"
+        ],
+        "submission_office": "Controller of Examinations (Degree & Certificate Cell)",
+        "deadline_sla": "Processed within 7 to 10 working days upon successful verification of no dues.",
+        "action_label": "Download Provisional Certificate Form",
+        "action_url": "/forms/15.%20FORMAT%20FOR%20OBTAINING%20PROVISIONAL%20CERTIFICATE%20(1).pdf",
+    },
+
+    "local_conveyance": {
+        "form_code": "PROC-FORM-CONV",
+        "official_name": "Local Conveyance & Travel Reimbursement Form",
+        "hindi_name": "स्थानीय यात्रा एवं वाहन भत्ता प्रतिपूर्ति प्रपत्र",
+        "category": "Finance",
+        "kiosk_access": "Download directly right here on this screen or from Forms Catalog (/forms).",
+        "kiosk_access_hindi": "इसी स्क्रीन पर नीचे दिए गए बटन से तुरंत डाउनलोड करें।",
+        "kiosk_access_hinglish": "Yahin screen par niche diye gaye button se turant download karein.",
+        "eligibility": "Faculty and staff members claiming reimbursement for local travel and transport incurred during official university duty.",
+        "required_documents": [
+            "Official duty slip or administrative visit approval",
+            "Original travel tickets / toll receipts / fuel cash memos",
+            "Vehicle details and purpose of journey justification"
+        ],
+        "submission_office": "Finance & Accounts Department (Room 105, Admin Block)",
+        "deadline_sla": "Processed and credited within 5 to 7 working days following HOD endorsement.",
+        "action_label": "Download Local Conveyance Form",
+        "action_url": "/forms/Locaal%20Conveyance%20Dr.%20RK.pdf",
+    },
 }
 
 
@@ -293,6 +334,12 @@ def get_procedure_by_keyword(query: str) -> dict[str, Any] | None:
 
     if any(w in q_low for w in ["rechecking", "re-evaluation", "reevaluation", "पुनर्मूल्यांकन"]):
         return MASTER_PROCEDURES["rechecking_reevaluation"]
+
+    if any(w in q_low for w in ["provisional", "प्रोविजनल", "अनंतिम"]):
+        return MASTER_PROCEDURES["provisional_certificate"]
+
+    if any(w in q_low for w in ["conveyance", "local travel", "ta da", "यात्रा भत्ता", "कन्वेयंस"]):
+        return MASTER_PROCEDURES["local_conveyance"]
 
     if any(w in q_low for w in ["degree", "convocation", "डिग्री", "दीक्षांत"]):
         return MASTER_PROCEDURES["degree_application"]

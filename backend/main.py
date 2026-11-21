@@ -134,25 +134,35 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # ── Web Frontend Mount & SPA Fallback ─────────────────────────────────────────
-web_dir = Path("frontend_flutter/build/web")
-if web_dir.exists() and (web_dir / "index.html").exists():
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+flutter_web_dir = PROJECT_ROOT / "frontend_flutter" / "build" / "web"
+static_web_dir = PROJECT_ROOT / "frontend"
+
+active_web_dir = None
+if flutter_web_dir.exists() and (flutter_web_dir / "index.html").exists():
+    active_web_dir = flutter_web_dir
+elif static_web_dir.exists() and (static_web_dir / "index.html").exists():
+    active_web_dir = static_web_dir
+
+if active_web_dir:
     @app.exception_handler(StarletteHTTPException)
     async def spa_fallback_handler(request: Request, exc: StarletteHTTPException):
         if exc.status_code == 404 and not request.url.path.startswith("/api/") and not request.url.path.startswith("/forms/"):
-            index_path = web_dir / "index.html"
+            index_path = active_web_dir / "index.html"
             if index_path.exists():
                 return FileResponse(str(index_path))
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
-    app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="frontend_web")
+    app.mount("/", StaticFiles(directory=str(active_web_dir), html=True), name="frontend_web")
 
 from fastapi.responses import RedirectResponse
 
 @app.get("/", include_in_schema=False)
 async def root():
-    web_index = web_dir / "index.html"
-    if web_index.exists():
-        return FileResponse(str(web_index))
+    if active_web_dir:
+        web_index = active_web_dir / "index.html"
+        if web_index.exists():
+            return FileResponse(str(web_index))
     return RedirectResponse(url="/api/docs")
 
 @app.get("/docs", include_in_schema=False)

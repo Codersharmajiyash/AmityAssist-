@@ -367,11 +367,13 @@ async function verifyStudent(payload) {
     return res.json();
 }
 
-async function loginStaff(username) {
+async function loginStaff(username, password) {
+    const payload = { username };
+    if (password) payload.password = password;
     return apiJson("/api/auth/staff/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify(payload),
     });
 }
 
@@ -394,6 +396,7 @@ verifyForm.addEventListener("submit", async (e) => {
     const role = document.querySelector('input[name="role"]:checked')?.value || "student";
     const rawId = studentIdInput ? studentIdInput.value.trim() : "";
     const rawEmail = emailInput ? emailInput.value.trim() : "";
+    const rawPassword = $("login-password-input") ? $("login-password-input").value.trim() : "";
 
     if (!rawId && !rawEmail && role === "student") {
         showVerifyError("Please enter your Student ID or institutional email.");
@@ -410,7 +413,7 @@ verifyForm.addEventListener("submit", async (e) => {
             return;
         }
         try {
-            const data = await loginStaff(rawId);
+            const data = await loginStaff(rawId, rawPassword);
             state.isVerified = true;
             state.accessToken = data.token;
             state.role = data.role;
@@ -449,6 +452,27 @@ verifyForm.addEventListener("submit", async (e) => {
     if (rawEmail) payload.email = rawEmail;
 
     try {
+        // First verify credentials via /api/auth/login if student_id is provided
+        if (payload.student_id) {
+            const loginRes = await fetch(`${API_BASE}/api/auth/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    student_id: payload.student_id,
+                    password: rawPassword || "1234",
+                }),
+            });
+            if (!loginRes.ok) {
+                const errData = await loginRes.json().catch(() => ({}));
+                showVerifyError(errData.detail || "Student authentication failed. Check ID and password.");
+                setVerifyLoading(false);
+                return;
+            }
+            const tokenData = await loginRes.json();
+            state.accessToken = tokenData.token;
+            state.role = "Student";
+        }
+
         const data = await verifyStudent(payload);
         if (!data.verified) {
             showVerifyError(data.message);
@@ -581,25 +605,51 @@ function clearVerifyError() {
     verifyError.textContent = "";
 }
 
+window.togglePasswordVisibility = function() {
+    const pwd = $("login-password-input");
+    const btn = $("toggle-password-btn");
+    if (pwd) {
+        if (pwd.type === "password") {
+            pwd.type = "text";
+            if (btn) btn.textContent = "🙈";
+        } else {
+            pwd.type = "password";
+            if (btn) btn.textContent = "👁️";
+        }
+    }
+};
+
 window.updateRoleView = function(role) {
     const label = $("login-input-label");
+    const pwdLabel = $("login-password-label");
+    const pwdInput = $("login-password-input");
     const demoStudent = $("quick-demo-student");
     const demoStaff = $("quick-demo-staff");
     clearVerifyError();
 
     if (role === "staff") {
         if (label) label.textContent = "Staff Username";
+        if (pwdLabel) pwdLabel.textContent = "Staff Password";
         if (studentIdInput) {
             studentIdInput.placeholder = "e.g. registrar_staff, finance_staff";
             studentIdInput.value = "registrar_staff";
+        }
+        if (pwdInput) {
+            pwdInput.placeholder = "Default: admin123";
+            pwdInput.value = "admin123";
         }
         if (demoStudent) demoStudent.style.display = "none";
         if (demoStaff) demoStaff.style.display = "flex";
     } else {
         if (label) label.textContent = "Student ID or Email";
+        if (pwdLabel) pwdLabel.textContent = "Password / PIN";
         if (studentIdInput) {
             studentIdInput.placeholder = "e.g. STU001 or aisha.malik@uniassist.edu";
             studentIdInput.value = "STU001";
+        }
+        if (pwdInput) {
+            pwdInput.placeholder = "Default PIN: 1234";
+            pwdInput.value = "1234";
         }
         if (demoStudent) demoStudent.style.display = "flex";
         if (demoStaff) demoStaff.style.display = "none";
@@ -613,6 +663,8 @@ window.quickFillStudent = function(id) {
         updateRoleView("student");
     }
     if (studentIdInput) studentIdInput.value = id;
+    const pwdInput = $("login-password-input");
+    if (pwdInput) pwdInput.value = "1234";
     if (verifyForm) verifyForm.dispatchEvent(new Event("submit"));
 };
 
@@ -623,6 +675,8 @@ window.quickFillStaff = function(username) {
         updateRoleView("staff");
     }
     if (studentIdInput) studentIdInput.value = username;
+    const pwdInput = $("login-password-input");
+    if (pwdInput) pwdInput.value = "admin123";
     if (verifyForm) verifyForm.dispatchEvent(new Event("submit"));
 };
 

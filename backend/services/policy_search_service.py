@@ -1515,20 +1515,56 @@ class PolicySearchService:
     def _resolve_active_procedure_from_history(
         cls, history: list[dict[str, Any]] | None, all_procs: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
-        """Stage 2: Resolves active procedure from previous conversational turns."""
+        """Stage 2: Resolves active procedure from previous conversational turns (both user and assistant)."""
         if not history:
             return None
 
-        for h in reversed(history):
-            if str(h.get("role", "")).lower() not in ("user",):
-                continue
+        from ..data.kiosk_master_procedures import get_procedure_by_keyword
+
+        # Scan recent turns backwards (up to last 6 turns)
+        for h in reversed(history[-6:]):
             content = str(h.get("content") or h.get("text") or "").lower()
             if not content:
                 continue
 
+            # 1. Match against known catalog procedures
             matched = cls._match_procedure_in_query(content, all_procs)
             if matched:
                 return matched
+
+            # 2. Check metadata fields on turn if available
+            topic = str(h.get("topic") or h.get("recommended_action") or h.get("action_label") or "").lower()
+            if topic:
+                matched_topic = cls._match_procedure_in_query(topic, all_procs)
+                if matched_topic:
+                    return matched_topic
+
+            # 3. Match against master procedures registry
+            mp = get_procedure_by_keyword(content)
+            if mp:
+                m_code = mp.get("code")
+                for p in all_procs:
+                    if p.get("id") == m_code or (p.get("title") and p.get("title").lower() in mp.get("official_name", "").lower()):
+                        return p
+                # Adapt master procedure if not in all_procs
+                return {
+                    "id": mp.get("code", "proc-master"),
+                    "title": mp.get("official_name", "Official Procedure"),
+                    "department": mp.get("submission_office", "University Office"),
+                    "sla_days": mp.get("deadline_days") or 7,
+                    "required_docs": mp.get("required_documents") or ["Student ID Card Copy", "Application Form"],
+                    "action_label": mp.get("action_label") or f"View {mp.get('official_name')}",
+                    "action_url": mp.get("action_url") or "/forms",
+                    "fee_details": mp.get("fee_details"),
+                    "refund_slabs": mp.get("refund_slabs"),
+                    "submission_office": mp.get("submission_office"),
+                    "steps": [
+                        {"step_number": 1, "title": f"Fill and verify {mp.get('action_label') or 'application'}", "responsible_desk": mp.get("submission_office", "Counter"), "sla_days": 2},
+                        {"step_number": 2, "title": "Obtain departmental clearance and fee verification", "responsible_desk": "Accounts Desk", "sla_days": 2},
+                        {"step_number": 3, "title": "Final sanction and digital acknowledgment dispatch", "responsible_desk": "Registrar Office", "sla_days": 3},
+                    ],
+                    "total_steps": 3,
+                }
 
         return None
 
@@ -1540,6 +1576,18 @@ class PolicySearchService:
 
         if any(w in q_lower for w in ["how long", "kitna time", "processing time", "timeline", "duration", "how many days", "kitne din", "कितना समय", "कितने दिन"]):
             return (None, "sla")
+
+        if any(w in q_lower for w in ["fee", "fees", "cost", "charge", "charges", "refund", "paisa", "paise", "rupaye", "inr", "amount", "kitna lagega", "kitna paisa", "फीस", "रिफंड"]):
+            return (None, "fee")
+
+        if any(w in q_lower for w in ["where to submit", "where do i submit", "where should i submit", "where can i submit", "where do we submit", "where to go", "where do i go", "which office", "which counter", "which window", "which room", "submission desk", "submission office", "kahan jana", "kaha jana", "kahan submit", "kaha jama", "kis counter", "किस काउंटर", "कहाँ"]):
+            return (None, "office")
+
+        if any(w in q_lower for w in ["which form", "what form", "form number", "kaun sa form", "kaunsa form", "form kahan", "form download", "फॉर्म"]):
+            return (None, "form")
+
+        if any(w in q_lower for w in ["repeat", "tell again", "what did you say", "fir se", "phir se", "dobara", "ek baar aur", "bata do fir se", "what was that", "फिर से"]):
+            return (None, "repeat")
 
         if any(w in q_lower for w in ["first step", "1st step", "step 1", "step one", "pehla step", "pehla charan", "initial step", "starting step", "पहला स्टेप", "पहला चरण", "प्रथम चरण"]):
             return (1, "steps")
@@ -1573,6 +1621,9 @@ class PolicySearchService:
         if any(w in q_lower for w in ["how to apply", "workflow", "steps", "charan", "tarika", "kaise apply", "kaise karein"]):
             return (None, "steps")
 
+        if any(w in q_lower for w in ["for this", "is ke liye", "iske liye", "what about this", "iss procedure", "is process", "is mein", "ismein", "explain more", "details"]):
+            return (None, "overview")
+
         return (None, None)
 
     @classmethod
@@ -1594,6 +1645,57 @@ class PolicySearchService:
             return cls._synthesize_procedure_aspect(active_proc, "documents", student_name, language)
         if aspect == "sla":
             return cls._synthesize_procedure_aspect(active_proc, "sla", student_name, language)
+
+        if aspect == "fee":
+            fee_info = active_proc.get("fee_details") or "Standard nominal verification fee applies (if applicable)."
+            refund_info = active_proc.get("refund_slabs") or ""
+            fee_text = f"Fee Details for {proc_title}: {fee_info}"
+            if refund_info:
+                fee_text += f" Refund policy: {refund_info}"
+            return {
+                "answer": fee_text,
+                "domain": proc_dept,
+                "citations": [],
+                "recommended_action": active_proc.get("action_label") or f"View {proc_title}",
+                "action_url": active_proc.get("action_url") or "/services",
+                "voice_speech_text": fee_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+
+        if aspect == "office":
+            desk = active_proc.get("submission_office") or proc_dept
+            office_text = f"You can submit your documents and complete {proc_title} at the {desk} desk."
+            return {
+                "answer": office_text,
+                "domain": proc_dept,
+                "citations": [],
+                "recommended_action": active_proc.get("action_label") or f"View {proc_title}",
+                "action_url": active_proc.get("action_url") or "/services",
+                "voice_speech_text": office_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+
+        if aspect == "form":
+            action_label = active_proc.get("action_label") or "Download Form"
+            form_text = f"For {proc_title}, please access and fill {action_label} from the Forms catalog or designated office counter."
+            return {
+                "answer": form_text,
+                "domain": proc_dept,
+                "citations": [],
+                "recommended_action": action_label,
+                "action_url": active_proc.get("action_url") or "/forms",
+                "voice_speech_text": form_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+
+        if aspect in ("repeat", "overview"):
+            return cls._synthesize_procedure_aspect(active_proc, "overview", student_name, language)
 
         req_step: int | None = None
         if step_target == "final":
@@ -2916,8 +3018,8 @@ class PolicySearchService:
             return non_exist_res
 
         # Rule 2: If NO procedure was named in the current query, is this a multi-turn step / aspect follow-up?
-        # (e.g. "What is the first step?", "What is next step?", "What are the documents?")
-        if step_target is not None or step_aspect in ("documents", "steps", "sla"):
+        # (e.g. "What is the first step?", "What is next step?", "What are the documents?", "Where do I submit?", "What is the fee?")
+        if step_target is not None or step_aspect is not None:
             active_proc = cls._resolve_active_procedure_from_history(history, all_procs)
             if active_proc:
                 return cls._handle_multi_turn_step_resolution(active_proc, step_target, step_aspect, student_name, language)

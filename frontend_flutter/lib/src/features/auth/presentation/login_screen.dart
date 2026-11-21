@@ -16,7 +16,11 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _studentIdController = TextEditingController(text: 'STU001');
+  final _studentPasswordController = TextEditingController(text: '1234');
   final _staffUsernameController = TextEditingController(text: 'registrar_staff');
+  final _staffPasswordController = TextEditingController(text: 'admin123');
+  bool _obscureStudentPassword = true;
+  bool _obscureStaffPassword = true;
   bool _isStaffMode = false;
   String _selectedRole = 'Registrar';
 
@@ -65,12 +69,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void dispose() {
     _studentIdController.dispose();
+    _studentPasswordController.dispose();
     _staffUsernameController.dispose();
+    _staffPasswordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleStudentLogin() async {
-    final success = await ref.read(authProvider.notifier).login(_studentIdController.text.trim());
+    final success = await ref.read(authProvider.notifier).login(
+      _studentIdController.text.trim(),
+      _studentPasswordController.text.trim(),
+    );
     if (success && mounted) context.go('/dashboard');
   }
 
@@ -78,6 +87,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final success = await ref.read(authProvider.notifier).staffLogin(
           _staffUsernameController.text.trim(),
           _selectedRole,
+          _staffPasswordController.text.trim(),
         );
     if (success && mounted) context.go('/staff');
   }
@@ -131,11 +141,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             isStaffMode: _isStaffMode,
                             authState: authState,
                             studentIdController: _studentIdController,
+                            studentPasswordController: _studentPasswordController,
                             staffUsernameController: _staffUsernameController,
+                            staffPasswordController: _staffPasswordController,
+                            obscureStudentPassword: _obscureStudentPassword,
+                            obscureStaffPassword: _obscureStaffPassword,
                             selectedRole: _selectedRole,
                             staffRoles: _staffRoles,
                             onModeChanged: (value) => setState(() => _isStaffMode = value),
                             onRoleChanged: _onRoleChanged,
+                            onToggleStudentPassword: () => setState(() => _obscureStudentPassword = !_obscureStudentPassword),
+                            onToggleStaffPassword: () => setState(() => _obscureStaffPassword = !_obscureStaffPassword),
                             onStudentLogin: _handleStudentLogin,
                             onStaffLogin: _handleStaffLogin,
                           ).animate().fadeIn(delay: 80.ms, duration: 350.ms).slideX(begin: 0.03),
@@ -145,11 +161,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           isStaffMode: _isStaffMode,
                           authState: authState,
                           studentIdController: _studentIdController,
+                          studentPasswordController: _studentPasswordController,
                           staffUsernameController: _staffUsernameController,
+                          staffPasswordController: _staffPasswordController,
+                          obscureStudentPassword: _obscureStudentPassword,
+                          obscureStaffPassword: _obscureStaffPassword,
                           selectedRole: _selectedRole,
                           staffRoles: _staffRoles,
                           onModeChanged: (value) => setState(() => _isStaffMode = value),
                           onRoleChanged: _onRoleChanged,
+                          onToggleStudentPassword: () => setState(() => _obscureStudentPassword = !_obscureStudentPassword),
+                          onToggleStaffPassword: () => setState(() => _obscureStaffPassword = !_obscureStaffPassword),
                           onStudentLogin: _handleStudentLogin,
                           onStaffLogin: _handleStaffLogin,
                         ).animate().fadeIn(delay: 80.ms, duration: 350.ms).slideX(begin: 0.03),
@@ -214,11 +236,17 @@ class _LoginPanel extends StatelessWidget {
     required this.isStaffMode,
     required this.authState,
     required this.studentIdController,
+    required this.studentPasswordController,
     required this.staffUsernameController,
+    required this.staffPasswordController,
+    required this.obscureStudentPassword,
+    required this.obscureStaffPassword,
     required this.selectedRole,
     required this.staffRoles,
     required this.onModeChanged,
     required this.onRoleChanged,
+    required this.onToggleStudentPassword,
+    required this.onToggleStaffPassword,
     required this.onStudentLogin,
     required this.onStaffLogin,
   });
@@ -226,11 +254,17 @@ class _LoginPanel extends StatelessWidget {
   final bool isStaffMode;
   final AuthState authState;
   final TextEditingController studentIdController;
+  final TextEditingController studentPasswordController;
   final TextEditingController staffUsernameController;
+  final TextEditingController staffPasswordController;
+  final bool obscureStudentPassword;
+  final bool obscureStaffPassword;
   final String selectedRole;
   final List<String> staffRoles;
   final ValueChanged<bool> onModeChanged;
   final ValueChanged<String> onRoleChanged;
+  final VoidCallback onToggleStudentPassword;
+  final VoidCallback onToggleStaffPassword;
   final VoidCallback onStudentLogin;
   final VoidCallback onStaffLogin;
 
@@ -262,6 +296,7 @@ class _LoginPanel extends StatelessWidget {
                         TextField(
                           controller: staffUsernameController,
                           enabled: !authState.isLoading,
+                          textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
                             labelText: 'Staff username',
                             prefixIcon: Icon(Icons.badge_outlined),
@@ -277,19 +312,62 @@ class _LoginPanel extends StatelessWidget {
                           items: staffRoles.map((role) => DropdownMenuItem(value: role, child: Text(role))).toList(),
                           onChanged: authState.isLoading ? null : (value) => onRoleChanged(value ?? selectedRole),
                         ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: staffPasswordController,
+                          enabled: !authState.isLoading,
+                          obscureText: obscureStaffPassword,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => onStaffLogin(),
+                          decoration: InputDecoration(
+                            labelText: 'Staff password',
+                            hintText: 'Default: admin123',
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureStaffPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              ),
+                              tooltip: obscureStaffPassword ? 'Show password' : 'Hide password',
+                              onPressed: onToggleStaffPassword,
+                            ),
+                          ),
+                        ),
                       ],
                     )
-                  : TextField(
+                  : Column(
                       key: const ValueKey('student'),
-                      controller: studentIdController,
-                      enabled: !authState.isLoading,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => onStudentLogin(),
-                      decoration: const InputDecoration(
-                        labelText: 'Student ID',
-                        hintText: 'Example: STU001',
-                        prefixIcon: Icon(Icons.account_circle_outlined),
-                      ),
+                      children: [
+                        TextField(
+                          controller: studentIdController,
+                          enabled: !authState.isLoading,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Student ID',
+                            hintText: 'Example: STU001',
+                            prefixIcon: Icon(Icons.account_circle_outlined),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: studentPasswordController,
+                          enabled: !authState.isLoading,
+                          obscureText: obscureStudentPassword,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => onStudentLogin(),
+                          decoration: InputDecoration(
+                            labelText: 'Password / PIN',
+                            hintText: 'Default PIN: 1234',
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                obscureStudentPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              ),
+                              tooltip: obscureStudentPassword ? 'Show password' : 'Hide password',
+                              onPressed: onToggleStudentPassword,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
             ),
             const SizedBox(height: 24),

@@ -37,12 +37,18 @@ def get_connection() -> sqlite3.Connection:
     """
     if not hasattr(_local, "conn") or _local.conn is None:
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _local.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+        _local.conn = sqlite3.connect(str(DB_PATH), timeout=10.0, check_same_thread=False)
         _local.conn.row_factory = sqlite3.Row
+        _local.conn.execute("PRAGMA busy_timeout = 10000")
         # Enforce referential integrity
         _local.conn.execute("PRAGMA foreign_keys = ON")
-        # Write-ahead logging: better concurrent read performance
-        _local.conn.execute("PRAGMA journal_mode = WAL")
+        # Write-ahead logging: check current mode before setting to prevent blocking lock
+        try:
+            cur_mode = _local.conn.execute("PRAGMA journal_mode").fetchone()
+            if cur_mode and str(cur_mode[0]).lower() != "wal":
+                _local.conn.execute("PRAGMA journal_mode = WAL")
+        except Exception:
+            pass
     return _local.conn
 
 

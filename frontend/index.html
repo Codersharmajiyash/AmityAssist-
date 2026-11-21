@@ -170,6 +170,14 @@
                   <input id="student-id-input" type="text" class="form-input" placeholder="e.g. STU001 or aisha.malik@uniassist.edu" maxlength="50" autocomplete="username" style="margin-bottom: 0.6rem;" value="STU001" />
                 </div>
 
+                <div class="form-group" id="password-fields-group">
+                  <label for="login-password-input" style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.3rem;" id="login-password-label">Password / PIN</label>
+                  <div style="position: relative; display: flex; align-items: center;">
+                    <input id="login-password-input" type="password" class="form-input" placeholder="Default PIN: 1234" maxlength="50" autocomplete="current-password" style="margin-bottom: 0.6rem; width: 100%; padding-right: 2.5rem;" value="1234" />
+                    <button type="button" id="toggle-password-btn" onclick="togglePasswordVisibility()" style="position: absolute; right: 0.6rem; top: calc(50% - 0.3rem); transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; padding: 0.2rem;" aria-label="Toggle password visibility">👁️</button>
+                  </div>
+                </div>
+
                 <!-- 1-Click Quick Demo Access -->
                 <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(99, 102, 241, 0.08); border-radius: var(--radius-sm); border: 1px dashed var(--accent, #6366f1);">
                   <p style="font-size: 0.75rem; font-weight: 700; color: var(--accent, #6366f1); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.04em;">⚡ 1-Click Quick Demo Sign In:</p>
