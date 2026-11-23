@@ -347,17 +347,22 @@ DEFAULT_POLICIES = [
     {
         "doc_id": "PROC-FORM-DEGREE",
         "category": "Examinations",
-        "title": "Degree Application & Convocation Format",
-        "clause_code": "PROC-FORM-22",
+        "title": "Degree Certificate Application Procedure (Passed Out Batches Up to 2025)",
+        "clause_code": "FORM-DEG-09",
         "content": (
-            "After downloading the Degree Application Format, follow these steps: "
-            "1. Attach attested photocopies of final cumulative grade sheet (all semesters passed), 10th class passing certificate "
-            "(for date-of-birth verification), university no-dues clearance certificate, and Rupees 1,500 convocation fee receipt. "
-            "2. Submit the dossier to the Controller of Examinations (Degree Cell Window 1). Turnaround SLA is 15 working days "
-            "for provisional degree and convocation roll inclusion."
+            "Official procedure for applying for Degree Certificate:\n"
+            "1. Before applying for Degree certificate No Dues should be cleared.\n"
+            "2. Students of passed out batches up to 2025 who are required degree may apply for obtaining the degree certificate.\n"
+            "3. Candidate must submit the duly filled in application form after it is signed by him/her.\n"
+            "4. Fee of Rs. 1100/- for Degree Certificate to be paid through online (Google Pay, PhonePe, NEFT) in the account of "
+            "Amity University Madhya Pradesh. Account Details: Account Name: Amity University Madhya Pradesh, Account No. 911010033371991, "
+            "Bank Name: Axis Bank Ltd, Bank Branch: City Centre, Gwalior, IFSC Code: UTIB0000158.\n"
+            "5. If the Degree certificate required by post the Courier charges of Rs. 400/- also to be paid (Total: Rs. 1,500/-).\n"
+            "6. The degree certificate shall be given to the candidate or to his/her parent only (if collecting in person).\n"
+            "7. Candidate must acknowledge the receipt of degree through email."
         ),
-        "action_url": "/forms",
-        "action_label": "Download Degree Application",
+        "action_url": "/forms/09.%20Degree%20Application%20Format%20(1).pdf",
+        "action_label": "Download Degree Application Form",
     },
     {
         "doc_id": "PROC-FORM-EXAM-BLANK",
@@ -1515,20 +1520,56 @@ class PolicySearchService:
     def _resolve_active_procedure_from_history(
         cls, history: list[dict[str, Any]] | None, all_procs: list[dict[str, Any]]
     ) -> dict[str, Any] | None:
-        """Stage 2: Resolves active procedure from previous conversational turns."""
+        """Stage 2: Resolves active procedure from previous conversational turns (both user and assistant)."""
         if not history:
             return None
 
-        for h in reversed(history):
-            if str(h.get("role", "")).lower() not in ("user",):
-                continue
+        from ..data.kiosk_master_procedures import get_procedure_by_keyword
+
+        # Scan recent turns backwards (up to last 6 turns)
+        for h in reversed(history[-6:]):
             content = str(h.get("content") or h.get("text") or "").lower()
             if not content:
                 continue
 
+            # 1. Match against known catalog procedures
             matched = cls._match_procedure_in_query(content, all_procs)
             if matched:
                 return matched
+
+            # 2. Check metadata fields on turn if available
+            topic = str(h.get("topic") or h.get("recommended_action") or h.get("action_label") or "").lower()
+            if topic:
+                matched_topic = cls._match_procedure_in_query(topic, all_procs)
+                if matched_topic:
+                    return matched_topic
+
+            # 3. Match against master procedures registry
+            mp = get_procedure_by_keyword(content)
+            if mp:
+                m_code = mp.get("code")
+                for p in all_procs:
+                    if p.get("id") == m_code or (p.get("title") and p.get("title").lower() in mp.get("official_name", "").lower()):
+                        return p
+                # Adapt master procedure if not in all_procs
+                return {
+                    "id": mp.get("code", "proc-master"),
+                    "title": mp.get("official_name", "Official Procedure"),
+                    "department": mp.get("submission_office", "University Office"),
+                    "sla_days": mp.get("deadline_days") or 7,
+                    "required_docs": mp.get("required_documents") or ["Student ID Card Copy", "Application Form"],
+                    "action_label": mp.get("action_label") or f"View {mp.get('official_name')}",
+                    "action_url": mp.get("action_url") or "/forms",
+                    "fee_details": mp.get("fee_details"),
+                    "refund_slabs": mp.get("refund_slabs"),
+                    "submission_office": mp.get("submission_office"),
+                    "steps": [
+                        {"step_number": 1, "title": f"Fill and verify {mp.get('action_label') or 'application'}", "responsible_desk": mp.get("submission_office", "Counter"), "sla_days": 2},
+                        {"step_number": 2, "title": "Obtain departmental clearance and fee verification", "responsible_desk": "Accounts Desk", "sla_days": 2},
+                        {"step_number": 3, "title": "Final sanction and digital acknowledgment dispatch", "responsible_desk": "Registrar Office", "sla_days": 3},
+                    ],
+                    "total_steps": 3,
+                }
 
         return None
 
@@ -1540,6 +1581,18 @@ class PolicySearchService:
 
         if any(w in q_lower for w in ["how long", "kitna time", "processing time", "timeline", "duration", "how many days", "kitne din", "कितना समय", "कितने दिन"]):
             return (None, "sla")
+
+        if any(w in q_lower for w in ["fee", "fees", "cost", "charge", "charges", "refund", "paisa", "paise", "rupaye", "inr", "amount", "kitna lagega", "kitna paisa", "फीस", "रिफंड"]):
+            return (None, "fee")
+
+        if any(w in q_lower for w in ["where to submit", "where do i submit", "where should i submit", "where can i submit", "where do we submit", "where to go", "where do i go", "which office", "which counter", "which window", "which room", "submission desk", "submission office", "kahan jana", "kaha jana", "kahan submit", "kaha jama", "kis counter", "किस काउंटर", "कहाँ"]):
+            return (None, "office")
+
+        if any(w in q_lower for w in ["which form", "what form", "form number", "kaun sa form", "kaunsa form", "form kahan", "form download", "फॉर्म"]):
+            return (None, "form")
+
+        if any(w in q_lower for w in ["repeat", "tell again", "what did you say", "fir se", "phir se", "dobara", "ek baar aur", "bata do fir se", "what was that", "फिर से"]):
+            return (None, "repeat")
 
         if any(w in q_lower for w in ["first step", "1st step", "step 1", "step one", "pehla step", "pehla charan", "initial step", "starting step", "पहला स्टेप", "पहला चरण", "प्रथम चरण"]):
             return (1, "steps")
@@ -1573,6 +1626,9 @@ class PolicySearchService:
         if any(w in q_lower for w in ["how to apply", "workflow", "steps", "charan", "tarika", "kaise apply", "kaise karein"]):
             return (None, "steps")
 
+        if any(w in q_lower for w in ["for this", "is ke liye", "iske liye", "what about this", "iss procedure", "is process", "is mein", "ismein", "explain more", "details"]):
+            return (None, "overview")
+
         return (None, None)
 
     @classmethod
@@ -1594,6 +1650,57 @@ class PolicySearchService:
             return cls._synthesize_procedure_aspect(active_proc, "documents", student_name, language)
         if aspect == "sla":
             return cls._synthesize_procedure_aspect(active_proc, "sla", student_name, language)
+
+        if aspect == "fee":
+            fee_info = active_proc.get("fee_details") or "Standard nominal verification fee applies (if applicable)."
+            refund_info = active_proc.get("refund_slabs") or ""
+            fee_text = f"Fee Details for {proc_title}: {fee_info}"
+            if refund_info:
+                fee_text += f" Refund policy: {refund_info}"
+            return {
+                "answer": fee_text,
+                "domain": proc_dept,
+                "citations": [],
+                "recommended_action": active_proc.get("action_label") or f"View {proc_title}",
+                "action_url": active_proc.get("action_url") or "/services",
+                "voice_speech_text": fee_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+
+        if aspect == "office":
+            desk = active_proc.get("submission_office") or proc_dept
+            office_text = f"You can submit your documents and complete {proc_title} at the {desk} desk."
+            return {
+                "answer": office_text,
+                "domain": proc_dept,
+                "citations": [],
+                "recommended_action": active_proc.get("action_label") or f"View {proc_title}",
+                "action_url": active_proc.get("action_url") or "/services",
+                "voice_speech_text": office_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+
+        if aspect == "form":
+            action_label = active_proc.get("action_label") or "Download Form"
+            form_text = f"For {proc_title}, please access and fill {action_label} from the Forms catalog or designated office counter."
+            return {
+                "answer": form_text,
+                "domain": proc_dept,
+                "citations": [],
+                "recommended_action": action_label,
+                "action_url": active_proc.get("action_url") or "/forms",
+                "voice_speech_text": form_text,
+                "screen_instruction": None,
+                "highlight_target": None,
+                "engine": "UniAssist Policy Engine",
+            }
+
+        if aspect in ("repeat", "overview"):
+            return cls._synthesize_procedure_aspect(active_proc, "overview", student_name, language)
 
         req_step: int | None = None
         if step_target == "final":
@@ -2916,8 +3023,8 @@ class PolicySearchService:
             return non_exist_res
 
         # Rule 2: If NO procedure was named in the current query, is this a multi-turn step / aspect follow-up?
-        # (e.g. "What is the first step?", "What is next step?", "What are the documents?")
-        if step_target is not None or step_aspect in ("documents", "steps", "sla"):
+        # (e.g. "What is the first step?", "What is next step?", "What are the documents?", "Where do I submit?", "What is the fee?")
+        if step_target is not None or step_aspect is not None:
             active_proc = cls._resolve_active_procedure_from_history(history, all_procs)
             if active_proc:
                 return cls._handle_multi_turn_step_resolution(active_proc, step_target, step_aspect, student_name, language)
@@ -5829,38 +5936,62 @@ class PolicySearchService:
             degree_policy = next((p for p in policies if p["doc_id"] == "PROC-FORM-DEGREE"), DEFAULT_POLICIES[4])
             if language == "hi-IN":
                 answer = (
-                    f"{student_name}, आधिकारिक उपाधि / डिग्री प्रमाण पत्र (Degree Certificate) प्राप्त करने की प्रक्रिया यह है:\n\n"
-                    "1. कियोस्क से फॉर्म 22 (Degree Application & Convocation Format) डाउनलोड करें।\n"
-                    "2. आवश्यक दस्तावेज: विश्वविद्यालय नो-ड्यूज (No-Dues) पर्ची, सभी सेमेस्टर मार्कशीट की फोटोकॉपी, और प्रोविजनल सर्टिफिकेट संलग्न करें।\n"
-                    "3. जमा करने का स्थान: रजिस्ट्रार कार्यालय (खिड़की संख्या 2, प्रशासनिक भवन)।\n"
-                    "4. जारी करने की समय सीमा: आवेदन के 7 से 10 कार्य दिवसों के भीतर डिग्री तैयार कर डाक द्वारा भेजी जाती है या व्यक्तिगत रूप से दी जाती है।"
+                    f"{student_name}, डिग्री प्रमाण पत्र (Degree Certificate) आवेदन करने की आधिकारिक प्रक्रिया निम्नलिखित है:\n\n"
+                    "1. **नो-ड्यूज क्लीयरेंस**: डिग्री प्रमाण पत्र के लिए आवेदन करने से पहले सभी नो-ड्यूज (No Dues) क्लीयर होने चाहिए।\n"
+                    "2. **पात्रता**: वर्ष 2025 तक के पास आउट बैचों के छात्र, जिन्हें डिग्री की आवश्यकता है, डिग्री प्रमाण पत्र प्राप्त करने के लिए आवेदन कर सकते हैं।\n"
+                    "3. **आवेदन पत्र**: अभ्यर्थी को अपने हस्ताक्षर युक्त पूर्ण रूप से भरा हुआ आवेदन पत्र जमा करना अनिवार्य है।\n"
+                    "4. **डिग्री शुल्क**: डिग्री प्रमाण पत्र के लिए ₹1,100/- का शुल्क ऑनलाइन (Google Pay, PhonePe, NEFT) द्वारा एमिटी यूनिवर्सिटी मध्य प्रदेश के खाते में जमा करना होगा:\n"
+                    "   • **खाता नाम (Account Name)**: Amity University Madhya Pradesh\n"
+                    "   • **खाता संख्या (Account No.)**: 911010033371991\n"
+                    "   • **बैंक (Bank Name)**: Axis Bank Ltd\n"
+                    "   • **शाखा (Branch)**: City Centre, Gwalior\n"
+                    "   • **IFSC कोड**: UTIB0000158\n"
+                    "5. **डाक / कूरियर शुल्क**: यदि डिग्री डाक द्वारा चाहिए, तो ₹400/- कूरियर शुल्क भी देना होगा (कुल ₹1,500/-)।\n"
+                    "6. **डिग्री वितरण**: डिग्री प्रमाण पत्र केवल अभ्यर्थी या उसके माता-पिता को ही दिया जाएगा (व्यक्तिगत रूप से संग्रह न कर पाने की स्थिति में डाक द्वारा भेजा जाएगा)।\n"
+                    "7. **ईमेल पावती**: डिग्री प्राप्त होने के बाद अभ्यर्थी को ईमेल द्वारा प्राप्ति की पुष्टि (acknowledgement) करना अनिवार्य है।"
                 )
-                voice_text = f"{student_name}, डिग्री प्रमाण पत्र के लिए फॉर्म 22 भरकर, सभी मार्कशीट और नो-ड्यूज पर्ची के साथ रजिस्ट्रार खिड़की 2 में जमा करें।"
+                voice_text = f"{student_name}, डिग्री प्रमाण पत्र के लिए नो-ड्यूज क्लीयर होना जरूरी है। वर्ष 2025 तक के पास आउट छात्र फॉर्म भरकर एक्सिस बैंक खाते में 1100 रुपये शुल्क ऑनलाइन जमा करें। डाक से मंगाने पर 400 रुपये अतिरिक्त कूरियर शुल्क लगेगा।"
             elif language == "hi-Latn":
                 answer = (
-                    f"{student_name}, official Degree Certificate ke liye verified steps yeh hain:\n\n"
-                    "1. Kiosk se Form 22 (Degree Application Form) download karein.\n"
-                    "2. Attachments: University No-Dues clearance slip, sabhi semester marksheets ki copies, aur provisional certificate.\n"
-                    "3. Submission: Registrar Office (Window 2, Administrative Block).\n"
-                    "4. Delivery SLA: 7 se 10 working days me degree dispatch ya collect kar sakte hain."
+                    f"{student_name}, Degree Certificate apply karne ki official procedure yeh hai:\n\n"
+                    "1. **No Dues Clearance**: Degree certificate apply karne se pehle sabhi No Dues clear hone chahiye.\n"
+                    "2. **Eligibility**: Passed out batches up to 2025 ke students jinko degree required hai, woh apply kar sakte hain.\n"
+                    "3. **Application Form**: Candidate ko duly filled aur signed application form submit karna hoga.\n"
+                    "4. **Degree Fee (Rs. 1,100/-)**: Online (Google Pay, PhonePe, NEFT) se Amity University Madhya Pradesh ke bank account me pay karein:\n"
+                    "   • **Account Name**: Amity University Madhya Pradesh\n"
+                    "   • **Account No.**: 911010033371991\n"
+                    "   • **Bank Name**: Axis Bank Ltd\n"
+                    "   • **Branch**: City Centre, Gwalior\n"
+                    "   • **IFSC Code**: UTIB0000158\n"
+                    "5. **Courier Charges**: Agar degree by post chahiye toh Rs. 400/- courier charges bhi pay karne honge (Total Rs. 1,500/-).\n"
+                    "6. **Collection / Handover**: Degree certificate candidate ya uske parents ko hi hand over kiya jayega (in person na lene par post se bheja jayega).\n"
+                    "7. **Email Acknowledgement**: Candidate ko degree milne par email ke through receipt acknowledge karna mandatory hai."
                 )
-                voice_text = f"{student_name}, degree certificate ke liye Form 22 fill karke No-Dues slip ke sath Registrar Window 2 me submit karein. Yeh 7 se 10 din me mil jayegi."
+                voice_text = f"{student_name}, degree certificate ke liye No Dues clear hona zaroori hai. 2025 tak ke passed out batches online 1100 rupees Axis Bank account me pay karke signed form submit karein. Post se lene par 400 rupees courier charge lagega."
             else:
                 answer = (
-                    f"{student_name}, to apply for your official Degree Certificate under University Ordinance:\n\n"
-                    "1. Application Form: Download Form 22 (Degree Application & Convocation Format) from this kiosk.\n"
-                    "2. Mandatory Attachments: Complete University No-Dues clearance slip, copies of all semester grade marksheets, and provisional degree.\n"
-                    "3. Submission Desk: Registrar Office Window 2 (Ground Floor, Admin Block).\n"
-                    "4. Turnaround SLA: Official degree certificate is issued within 7 to 10 working days (available via registered post or in-person collection)."
+                    f"{student_name}, the official procedure for applying for your Degree Certificate is furnished below:\n\n"
+                    "1. **No Dues Clearance**: Before applying for Degree certificate, University No Dues should be cleared.\n"
+                    "2. **Batch Eligibility**: Students of passed out batches up to 2025 who require degree may apply for obtaining the degree certificate.\n"
+                    "3. **Application Form**: Candidate must submit the duly filled in application form after it is signed by him/her.\n"
+                    "4. **Online Fee Payment (Rs. 1,100/-)**: Fee of Rs. 1,100/- for Degree Certificate to be paid online (Google Pay, PhonePe, NEFT) in the account of Amity University Madhya Pradesh:\n"
+                    "   • **Account Name**: Amity University Madhya Pradesh\n"
+                    "   • **Account No.**: 911010033371991\n"
+                    "   • **Bank Name**: Axis Bank Ltd\n"
+                    "   • **Bank Branch**: City Centre, Gwalior\n"
+                    "   • **IFSC Code**: UTIB0000158\n"
+                    "5. **Courier Charges**: If the Degree certificate is required by post, Courier charges of Rs. 400/- also to be paid (Total: Rs. 1,500/-).\n"
+                    "6. **Certificate Handover**: The degree certificate shall be given to the candidate or to his/her parent only (if collecting in person, or dispatched via courier).\n"
+                    "7. **Email Acknowledgement**: Candidate must acknowledge the receipt of degree through email."
                 )
-                voice_text = f"{student_name}, to obtain your degree certificate, submit Form 22 along with your marksheet copies and No-Dues slip to Registrar Window 2. It takes 7 to 10 working days."
+                voice_text = f"{student_name}, before applying for your degree certificate, ensure No Dues are cleared. Passed out batches up to 2025 can submit the signed form and pay 1100 rupees online to Amity University Axis Bank account, plus 400 rupees if courier is required."
 
             res = {
                 "answer": answer,
                 "domain": "Academic Records",
                 "citations": [degree_policy],
-                "recommended_action": "Download Degree Application Form (Form 22)",
-                "action_url": "/forms",
+                "recommended_action": "Download Degree Application Form",
+                "action_url": "/forms/09.%20Degree%20Application%20Format%20(1).pdf",
                 "voice_speech_text": voice_text,
                 "engine": "UniAssist Policy Engine",
             }

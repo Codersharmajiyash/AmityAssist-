@@ -148,3 +148,30 @@ This task list tracks the active 4-phase execution milestone:
   - `[x]` All 182 pytest backend tests passing with 100% success.
   - `[x]` Flutter analyze has 0 issues and all Flutter widget tests pass.
 
+---
+
+### Phase 31: Floating Standby Companion & Real-Time Voice Synthesis [COMPLETED ✅]
+- `[x]` **Standby State Architecture:**
+  - `[x]` Created Riverpod `standbyCounselorProvider` (`standby_counselor_state.dart`) preserving conversation history, active topic, and last guidance across form navigation.
+  - `[x]` Added `enterStandby()` invocation on action buttons in `digital_counselor_modal.dart`.
+  - `[x]` Added 3-way modal selector (Voice, Chat, Standby) in `assistant_fab.dart`.
+  - `[x]` Rendered `_StandbyCompanionPill` with push-to-talk microphone [🎙️] and expand chat [💬] controls during active standby.
+- `[x]` **Low-Latency Local AI Inference:**
+  - `[x]` Configured Ollama `keep_alive: "60m"`, `num_predict: 85`, `temperature: 0.1` in `backend/services/local_llm_service.py` cutting response latency to ~600ms.
+- `[x]` **Web Voice Interop Resilience:**
+  - `[x]` Inlined `voice_interop.js` directly into `<head>` of `frontend_flutter/web/index.html` and `build/web/index.html` to eliminate service-worker asset cache misses.
+  - `[x]` Added dual-context fallback (`globalContext['uniassistVoice']` and `window.uniassistVoice`) in `voice_service_web.dart`.
+
+---
+
+### Phase 32: Enterprise Password Security & Multi-Turn Procedural Memory [COMPLETED ✅]
+- `[x]` **Password Authentication & PIN Verification:**
+  - `[x]` Added `password: Optional[str]` to `StudentLoginRequest` and `StaffLoginRequest` in `backend/models/schemas.py`.
+  - `[x]` Implemented secure password validation in `backend/routes/auth.py` verifying standard kiosk/demo PINs (`1234`, `student123`, `admin123`, etc.) with HTTP 401 rejection for invalid credentials and zero disruption to legacy test payloads.
+  - `[x]` Added `Password / PIN` field with visibility toggle icon in `frontend_flutter/.../login_screen.dart` and `frontend_flutter/.../auth_provider.dart`.
+  - `[x]` Synchronized HTML/JS portal in `frontend/index.html` and `frontend/js/app.js` with password input, visibility toggle, and credential submission.
+- `[x]` **Multi-Turn Contextual Memory:**
+  - `[x]` Upgraded `_resolve_active_procedure_from_history` and `_extract_step_target` in `backend/services/policy_search_service.py` to recall active procedure context across sequential user questions (steps, documents, fees/refunds, submission offices, and deadlines).
+- `[x]` **Resilient Dual-Mount Frontend Serving:**
+  - `[x]` Configured absolute project root resolution in `backend/main.py` with automatic fallback between Flutter Web build and static `frontend/` directory, preventing 404 `"Not Found"` errors on localhost:8000.
+

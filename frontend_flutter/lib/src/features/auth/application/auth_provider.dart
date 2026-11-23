@@ -91,13 +91,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   // ── Student JWT login ─────────────────────────────────────
-  Future<bool> login(String studentId) async {
+  Future<bool> login(String studentId, [String? password]) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _dio.post('/auth/login', data: {
+      final payload = <String, dynamic>{
         'student_id': studentId,
-      });
+      };
+      if (password != null && password.trim().isNotEmpty) {
+        payload['password'] = password.trim();
+      }
+
+      final response = await _dio.post('/auth/login', data: payload);
 
       if (response.statusCode == 200) {
         final data = response.data;
@@ -162,13 +167,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   // ── Staff JWT login ───────────────────────────────────────
-  Future<bool> staffLogin(String username, String role) async {
+  Future<bool> staffLogin(String username, String role, [String? password]) async {
     state = state.copyWith(isLoading: true, error: null);
 
     try {
-      final response = await _dio.post('/auth/staff/login', data: {
+      final payload = <String, dynamic>{
         'username': username,
-      });
+      };
+      if (password != null && password.trim().isNotEmpty) {
+        payload['password'] = password.trim();
+      }
+
+      final response = await _dio.post('/auth/staff/login', data: payload);
 
       if (response.statusCode == 200) {
         final data = response.data;

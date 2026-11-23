@@ -96,24 +96,97 @@ MASTER_PROCEDURES: dict[str, dict[str, Any]] = {
     },
 
     "degree_application": {
-        "form_code": "PROC-FORM-22",
-        "official_name": "Degree Application & Convocation Format",
-        "hindi_name": "डिग्री एवं दीक्षांत समारोह आवेदन प्रपत्र",
+        "form_code": "FORM-DEG-09",
+        "official_name": "Degree Certificate Application Procedure (Passed Out Batches Up to 2025)",
+        "hindi_name": "डिग्री प्रमाण पत्र आवेदन प्रक्रिया (पास आउट बैच 2025 तक)",
         "category": "Examinations",
-        "kiosk_access": "Download directly right here on this UniAssist screen or from Forms Catalog (/forms).",
-        "kiosk_access_hindi": "इसी स्क्रीन पर नीचे दिए गए बटन से तुरंत डाउनलोड करें।",
-        "kiosk_access_hinglish": "Yahin screen par niche diye gaye button se turant download karein.",
-        "eligibility": "Graduating students who have passed all semesters and cleared institutional dues.",
-        "fee_details": "INR 1,500 convocation & degree processing fee.",
-        "required_documents": [
-            "Attested photocopies of cumulative grade sheet (all semesters passed)",
-            "10th passing certificate for date of birth verification",
-            "University No-Dues Clearance slip"
+        "kiosk_access": (
+            "You can download the official Degree Application Form directly right here on this UniAssist screen using the button below, "
+            "or access it from the Forms Catalog (/forms)."
+        ),
+        "kiosk_access_hindi": (
+            "आप आधिकारिक डिग्री आवेदन प्रपत्र इसी स्क्रीन पर नीचे दिए गए 'Download Degree Application Form' बटन पर क्लिक करके तुरंत यहीं से डाउनलोड कर सकते हैं।"
+        ),
+        "kiosk_access_hinglish": (
+            "Aap official Degree Application Form yahin screen par niche diye gaye 'Download Degree Application Form' button se turant download kar sakte hain."
+        ),
+        "eligibility": "Students of passed out batches up to 2025 who require degree certificate and have cleared all University No Dues.",
+        "fee_details": (
+            "Fee of Rs. 1,100/- for Degree Certificate. If required by post, Courier charges of Rs. 400/- also to be paid (Total: Rs. 1,500/-). "
+            "Pay online (Google Pay, PhonePe, NEFT) to Account Name: Amity University Madhya Pradesh, "
+            "Account No.: 911010033371991, Bank Name: Axis Bank Ltd, Branch: City Centre, Gwalior, IFSC Code: UTIB0000158."
+        ),
+        "bank_account_details": {
+            "account_name": "Amity University Madhya Pradesh",
+            "account_no": "911010033371991",
+            "bank_name": "Axis Bank Ltd",
+            "branch": "City Centre, Gwalior",
+            "ifsc_code": "UTIB0000158",
+        },
+        "courier_charges": "Rs. 400/- (if Degree certificate is required by post)",
+        "collection_rule": "Degree certificate shall be given to the candidate or to his/her parent only (if collecting in person). Dispatched by courier if courier charges are paid.",
+        "acknowledgement_rule": "Candidate must acknowledge the receipt of degree through email upon delivery.",
+        "steps": [
+            {
+                "step_number": 1,
+                "title": "Clear University No Dues",
+                "description": "Before applying for Degree certificate, all university and department No Dues must be cleared.",
+                "responsible_desk": "Finance & Clearance Desk",
+                "sla_days": 1,
+            },
+            {
+                "step_number": 2,
+                "title": "Batch Eligibility Verification",
+                "description": "Students of passed out batches up to 2025 who require degree may apply for obtaining the degree certificate.",
+                "responsible_desk": "Examination Records Desk",
+                "sla_days": 1,
+            },
+            {
+                "step_number": 3,
+                "title": "Fill & Sign Application Form",
+                "description": "Candidate must submit the duly filled in application form after it is signed by him/her.",
+                "responsible_desk": "Student / Candidate",
+                "sla_days": 1,
+            },
+            {
+                "step_number": 4,
+                "title": "Pay Degree Fee Online (Rs. 1,100/-)",
+                "description": "Fee of Rs. 1100/- for Degree Certificate to be paid online (Google Pay, PhonePe, NEFT) to: Amity University Madhya Pradesh, A/C: 911010033371991, Axis Bank Ltd, City Centre Gwalior, IFSC: UTIB0000158.",
+                "responsible_desk": "Online Payment / Accounts",
+                "sla_days": 1,
+            },
+            {
+                "step_number": 5,
+                "title": "Pay Courier Charges (Rs. 400/- if by Post)",
+                "description": "If the Degree certificate is required by post, Courier charges of Rs. 400/- also to be paid to the same university account.",
+                "responsible_desk": "Online Payment / Dispatch",
+                "sla_days": 1,
+            },
+            {
+                "step_number": 6,
+                "title": "Submit Dossier & Degree Handover / Dispatch",
+                "description": "The degree certificate shall be given to the candidate or to his/her parent only. If not able to collect in person, it is dispatched via courier.",
+                "responsible_desk": "Controller of Examinations (Degree Cell)",
+                "sla_days": 7,
+            },
+            {
+                "step_number": 7,
+                "title": "Acknowledge Receipt via Email",
+                "description": "Candidate must acknowledge the receipt of degree through email to the examination cell.",
+                "responsible_desk": "Student / Examination Cell",
+                "sla_days": 1,
+            },
         ],
-        "submission_office": "Controller of Examinations (Degree Cell Window 1)",
-        "deadline_sla": "Turnaround SLA is 15 working days for provisional degree and convocation roll inclusion.",
-        "action_label": "Download Degree Application",
-        "action_url": "/forms",
+        "required_documents": [
+            "Duly filled in application form signed by candidate (09. Degree Application Format)",
+            "University No-Dues Clearance slip",
+            "Online fee payment transaction receipt (Rs. 1,100 / Rs. 1,500)",
+            "Photo ID proof of candidate or parent (if collecting in person)"
+        ],
+        "submission_office": "Controller of Examinations (Degree Cell Window, Admin Block)",
+        "deadline_sla": "Processed and dispatched/issued within 7 to 10 working days upon verification of payment and clearance.",
+        "action_label": "Download Degree Application Form",
+        "action_url": "/forms/09.%20Degree%20Application%20Format%20(1).pdf",
     },
 
     # -------------------------------------------------------------------------
@@ -278,6 +351,47 @@ MASTER_PROCEDURES: dict[str, dict[str, Any]] = {
         "action_label": "Download Leave Application",
         "action_url": "/forms",
     },
+
+    "provisional_certificate": {
+        "form_code": "PROC-FORM-15-PROV",
+        "official_name": "Format for Obtaining Provisional Certificate",
+        "hindi_name": "अनंतिम प्रमाण पत्र (प्रोविजनल सर्टिफिकेट) आवेदन प्रपत्र",
+        "category": "Examinations",
+        "kiosk_access": "Download directly right here on this UniAssist screen or from Forms Catalog (/forms).",
+        "kiosk_access_hindi": "इसी स्क्रीन पर नीचे दिए गए बटन से तुरंत डाउनलोड करें।",
+        "kiosk_access_hinglish": "Yahin screen par niche diye gaye button se turant download karein.",
+        "eligibility": "Students who have successfully passed all examinations and require an official provisional degree before the annual convocation.",
+        "fee_details": "Prescribed provisional certificate processing fee (payable at University Accounts Desk).",
+        "required_documents": [
+            "Photocopy of final semester grade sheet / all semester marks cards",
+            "University No-Dues Clearance certificate",
+            "Valid Student Identity Card proof"
+        ],
+        "submission_office": "Controller of Examinations (Degree & Certificate Cell)",
+        "deadline_sla": "Processed within 7 to 10 working days upon successful verification of no dues.",
+        "action_label": "Download Provisional Certificate Form",
+        "action_url": "/forms/15.%20FORMAT%20FOR%20OBTAINING%20PROVISIONAL%20CERTIFICATE%20(1).pdf",
+    },
+
+    "local_conveyance": {
+        "form_code": "PROC-FORM-CONV",
+        "official_name": "Local Conveyance & Travel Reimbursement Form",
+        "hindi_name": "स्थानीय यात्रा एवं वाहन भत्ता प्रतिपूर्ति प्रपत्र",
+        "category": "Finance",
+        "kiosk_access": "Download directly right here on this screen or from Forms Catalog (/forms).",
+        "kiosk_access_hindi": "इसी स्क्रीन पर नीचे दिए गए बटन से तुरंत डाउनलोड करें।",
+        "kiosk_access_hinglish": "Yahin screen par niche diye gaye button se turant download karein.",
+        "eligibility": "Faculty and staff members claiming reimbursement for local travel and transport incurred during official university duty.",
+        "required_documents": [
+            "Official duty slip or administrative visit approval",
+            "Original travel tickets / toll receipts / fuel cash memos",
+            "Vehicle details and purpose of journey justification"
+        ],
+        "submission_office": "Finance & Accounts Department (Room 105, Admin Block)",
+        "deadline_sla": "Processed and credited within 5 to 7 working days following HOD endorsement.",
+        "action_label": "Download Local Conveyance Form",
+        "action_url": "/forms/Locaal%20Conveyance%20Dr.%20RK.pdf",
+    },
 }
 
 
@@ -293,6 +407,12 @@ def get_procedure_by_keyword(query: str) -> dict[str, Any] | None:
 
     if any(w in q_low for w in ["rechecking", "re-evaluation", "reevaluation", "पुनर्मूल्यांकन"]):
         return MASTER_PROCEDURES["rechecking_reevaluation"]
+
+    if any(w in q_low for w in ["provisional", "प्रोविजनल", "अनंतिम"]):
+        return MASTER_PROCEDURES["provisional_certificate"]
+
+    if any(w in q_low for w in ["conveyance", "local travel", "ta da", "यात्रा भत्ता", "कन्वेयंस"]):
+        return MASTER_PROCEDURES["local_conveyance"]
 
     if any(w in q_low for w in ["degree", "convocation", "डिग्री", "दीक्षांत"]):
         return MASTER_PROCEDURES["degree_application"]

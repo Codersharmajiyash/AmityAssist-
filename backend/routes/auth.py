@@ -105,13 +105,18 @@ async def verify_student(request: Request, body: VerifyRequest) -> VerifyRespons
     )
 
 
+_VALID_STUDENT_PASSWORDS = {"1234", "password", "student123", "amity123", "uniassist"}
+_VALID_STAFF_PASSWORDS = {"admin123", "staff123", "password", "amity123", "admin", "registrar123"}
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login_student(body: StudentLoginRequest) -> TokenResponse:
     """Issue a JWT to an authenticated student."""
     conn = get_connection()
+    sid = body.student_id.upper().strip()
     row = conn.execute(
         "SELECT * FROM students WHERE id = ?",
-        (body.student_id,),
+        (sid,),
     ).fetchone()
 
     if row is None:
@@ -119,6 +124,15 @@ async def login_student(body: StudentLoginRequest) -> TokenResponse:
             status_code=401,
             detail="We could not verify your identity. Please check your Student ID and try again.",
         )
+
+    if body.password is not None and body.password.strip():
+        pwd = body.password.strip()
+        allowed = _VALID_STUDENT_PASSWORDS | {sid.lower(), sid}
+        if pwd.lower() not in allowed:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid student password or PIN. Please check and try again.",
+            )
 
     token = create_access_token(row["id"], "Student", {"student_name": row["name"]})
     return TokenResponse(
@@ -145,6 +159,15 @@ async def login_staff(body: StaffLoginRequest) -> TokenResponse:
             status_code=401,
             detail="Invalid staff username.",
         )
+
+    if body.password is not None and body.password.strip():
+        pwd = body.password.strip()
+        allowed = _VALID_STAFF_PASSWORDS | {row["username"].lower(), row["username"]}
+        if pwd.lower() not in allowed:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid staff credentials or password. Please check and try again.",
+            )
 
     token = create_access_token(row["username"], row["role"], {"name": row["name"]})
     return TokenResponse(

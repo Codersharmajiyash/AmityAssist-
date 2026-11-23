@@ -63,6 +63,7 @@ class VerifyResponse(BaseModel):
 
 class StudentLoginRequest(BaseModel):
     student_id: str = Field(..., min_length=3, max_length=20)
+    password: Optional[str] = Field(None, max_length=100)
 
     @field_validator("student_id", mode="before")
     @classmethod
@@ -74,6 +75,7 @@ class StudentLoginRequest(BaseModel):
 
 class StaffLoginRequest(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
+    password: Optional[str] = Field(None, max_length=100)
 
     @field_validator("username", mode="before")
     @classmethod

@@ -4,10 +4,23 @@ import 'dart:js_interop_unsafe';
 
 /// Bridge between Flutter Web and browser native Web Speech API.
 class WebVoiceBridge {
+  static JSObject? _resolveVoice() {
+    try {
+      final voice = globalContext['uniassistVoice'] as JSObject?;
+      if (voice != null) return voice;
+      if (globalContext.has('window'.toJS)) {
+        final win = globalContext['window'] as JSObject?;
+        final winVoice = win?['uniassistVoice'] as JSObject?;
+        if (winVoice != null) return winVoice;
+      }
+    } catch (_) {}
+    return null;
+  }
+
   static bool get isSupported {
     if (!kIsWeb) return false;
     try {
-      final voice = globalContext['uniassistVoice'] as JSObject?;
+      final voice = _resolveVoice();
       if (voice == null) return false;
       final fn = voice['isSpeechSupported'] as JSFunction?;
       if (fn == null) return false;
@@ -28,9 +41,9 @@ class WebVoiceBridge {
       return;
     }
     try {
-      final voice = globalContext['uniassistVoice'] as JSObject?;
+      final voice = _resolveVoice();
       if (voice == null) {
-        onError('Voice service not loaded in browser.');
+        onError('Voice service not loaded in browser. Please refresh the page.');
         return;
       }
       final fn = voice['startListening'] as JSFunction?;
@@ -60,7 +73,7 @@ class WebVoiceBridge {
   static void stopListening() {
     if (!kIsWeb) return;
     try {
-      final voice = globalContext['uniassistVoice'] as JSObject?;
+      final voice = _resolveVoice();
       final fn = voice?['stopListening'] as JSFunction?;
       fn?.callAsFunction(voice);
     } catch (_) {}
@@ -74,7 +87,7 @@ class WebVoiceBridge {
   }) {
     if (!kIsWeb) return;
     try {
-      final voice = globalContext['uniassistVoice'] as JSObject?;
+      final voice = _resolveVoice();
       final fn = voice?['speak'] as JSFunction?;
       if (fn == null) return;
 
@@ -96,7 +109,7 @@ class WebVoiceBridge {
   static void stopSpeaking() {
     if (!kIsWeb) return;
     try {
-      final voice = globalContext['uniassistVoice'] as JSObject?;
+      final voice = _resolveVoice();
       final fn = voice?['stopSpeaking'] as JSFunction?;
       fn?.callAsFunction(voice);
     } catch (_) {}
